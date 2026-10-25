@@ -143,6 +143,11 @@
     margin: 0 auto;
     padding: 16px 16px 88px;
   }
+  /* Reserva a faixa da barra lateral recolhida (52px) só enquanto ela cabe por cima do conteúdo. */
+  @media (max-width: 830px) {
+    #app { padding-right: 60px; }
+    html[data-nav-side="left"] #app { padding-right: 16px; padding-left: 60px; }
+  }
 
   h1, h2, h3 { margin: 0 0 8px; }
   h1 { font-size: 20px; }
@@ -382,34 +387,75 @@
   .kind-toggle button { flex: 1; background: var(--surface); color: var(--text); border: 1px solid var(--border); }
   .kind-toggle button.active { background: var(--primary); color: var(--primary-contrast); border-color: var(--primary); }
 
+  /* Barra lateral de abas: recolhida mostra só os ícones; segurar/passar o mouse
+     (ver setupSidebar_ em JavaScript.html) expande por cima do conteúdo e mostra os
+     nomes. Fica à direita por padrão (html[data-nav-side="left"] troca de lado).
+     z-index 35: o overlay do swipe entre abas (z-index:30) não pode cobrir a barra. */
   nav.tabbar {
     position: fixed;
-    bottom: 0;
-    left: 0;
+    top: 50%;
     right: 0;
-    background: var(--surface);
-    border-top: 1px solid var(--border);
+    transform: translateY(-50%);
+    width: 52px;
+    overflow: hidden;
     display: flex;
-    max-width: 720px;
-    margin: 0 auto;
-    /* Sem isso, o overlay do swipe entre abas (z-index:30, ver JavaScript.html) pintaria
-       por CIMA da barra durante o arrasto — ela precisa continuar visível/fixa enquanto
-       o conteúdo desliza por baixo. */
+    flex-direction: column;
+    padding: 6px 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-right: 0;
+    border-radius: 14px 0 0 14px;
+    box-shadow: var(--shadow);
+    transition: width .15s ease, box-shadow .15s ease;
     z-index: 35;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  html[data-nav-side="left"] nav.tabbar {
+    right: auto;
+    left: 0;
+    border-right: 1px solid var(--border);
+    border-left: 0;
+    border-radius: 0 14px 14px 0;
+  }
+  nav.tabbar.expanded {
+    width: 176px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
   }
   nav.tabbar button {
-    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    height: 44px;
     background: none;
     color: var(--text-muted);
     border-radius: 0;
-    padding: 12px 4px;
-    font-size: 12px;
+    /* (52px - 22px de ícone) / 2: o ícone fica no mesmo lugar recolhido ou expandido */
+    padding: 0 15px;
+    font-size: 14px;
+    text-align: left;
+    white-space: nowrap;
   }
+  nav.tabbar button .tab-ico {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  nav.tabbar button .tab-label { opacity: 0; transition: opacity .12s ease; }
+  nav.tabbar.expanded button .tab-label { opacity: 1; }
   nav.tabbar button.active { color: var(--primary); font-weight: 600; }
 
   .fab {
     position: fixed;
-    bottom: 72px;
+    bottom: 24px;
     left: 50%;
     transform: translateX(-50%);
     width: 56px;
@@ -510,7 +556,7 @@
     position: fixed;
     left: 12px;
     right: 80px;
-    bottom: 68px;
+    bottom: 20px;
     z-index: 36;
     display: flex;
     align-items: center;
@@ -1200,19 +1246,19 @@
   
 
   <nav class="tabbar">
-    <button data-view="dashboard" class="active">Início</button>
-    <button data-view="transactions">Extrato</button>
-    <button data-view="accounts">Contas</button>
-    <button data-view="categories">Categorias</button>
-    <button data-view="budgets">Planejamento</button>
-    <button data-view="refunds">Reembolsos</button>
+    <button data-view="dashboard" class="active" aria-label="Início"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg><span class="tab-label">Início</span></button>
+    <button data-view="transactions" aria-label="Extrato"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span class="tab-label">Extrato</span></button>
+    <button data-view="accounts" aria-label="Contas"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg><span class="tab-label">Contas</span></button>
+    <button data-view="categories" aria-label="Categorias"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1"/></svg><span class="tab-label">Categorias</span></button>
+    <button data-view="budgets" aria-label="Planejamento"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span class="tab-label">Planejamento</span></button>
+    <button data-view="refunds" aria-label="Reembolsos"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><span class="tab-label">Reembolsos</span></button>
   </nav>
 
   <div id="modal-root"></div>
 
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=1de780e6b3"></script>
+  <script src="cacau-web.js?v=dd3c038fe2"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -3538,7 +3584,7 @@
     btn.id = 'scroll-to-top-btn';
     btn.title = 'Voltar ao topo';
     btn.textContent = '↑';
-    btn.style.cssText = 'position:fixed;bottom:72px;right:16px;width:44px;height:44px;border-radius:50%;' +
+    btn.style.cssText = 'position:fixed;bottom:24px;right:16px;width:44px;height:44px;border-radius:50%;' +
       'font-size:20px;line-height:1;box-shadow:0 4px 10px rgba(0,0,0,0.25);opacity:0;pointer-events:none;' +
       'transition:opacity .15s ease;z-index:40';
     document.body.appendChild(btn);
@@ -11247,10 +11293,12 @@
    */
   function setupHoldToReveal_(anchorEl, options) {
     options = options || {};
-    // Só o HOVER é configurável. O toque longo continua em HOLD_REVEAL_DELAY_MS de
-    // propósito: com 200ms, um toque normal no "+" (que deve abrir o Novo lançamento)
-    // já contaria como toque longo e abriria o menu no lugar da ação.
+    // O toque longo fica em HOLD_REVEAL_DELAY_MS por padrão de propósito: com 200ms, um
+    // toque normal no "+" (que deve abrir o Novo lançamento) já contaria como toque
+    // longo e abriria o menu no lugar da ação. Só a barra lateral baixa isso
+    // (touchDelayMs), porque lá o toque rápido só troca de aba.
     var hoverDelay = options.hoverDelayMs || HOLD_REVEAL_DELAY_MS;
+    var touchDelay = options.touchDelayMs || HOLD_REVEAL_DELAY_MS;
     var leaveGrace = options.leaveGraceMs || HOLD_REVEAL_LEAVE_GRACE_MS;
     var isOpen = false;
     var revealTimer = null;
@@ -11312,7 +11360,12 @@
         touchStartX = t.clientX; touchStartY = t.clientY;
         lastPointerX = t.clientX;
         pendingHoldReveal_ = handle_;
-        revealTimer = setTimeout(function () { revealTimer = null; pendingHoldReveal_ = null; suppressNextClick = true; open_(); }, HOLD_REVEAL_DELAY_MS);
+        revealTimer = setTimeout(function () {
+          revealTimer = null; pendingHoldReveal_ = null;
+          // já aberto: o toque nem abriu nada agora, então o clique que vem depois é do usuário
+          if (!isOpen) suppressNextClick = true;
+          open_();
+        }, touchDelay);
       }, { passive: true });
       anchorEl.addEventListener('touchmove', function (e) {
         if (!revealTimer) return;
@@ -12055,6 +12108,7 @@
     // ver isSwipeBlocked_) só significa "não começa um NOVO" — não mexe em nada que já
     // esteja em andamento por outra fonte (ex: um wheel ainda se acomodando).
     if (e.touches.length !== 1 || isSwipeBlocked_()) return;
+    if (e.target && e.target.closest && e.target.closest('nav.tabbar')) return; // a barra lateral tem os próprios gestos
     var t = e.touches[0];
     swipe_ = { source: 'touch', phase: 'undecided', startX: t.clientX, startY: t.clientY, dx: 0 };
   }
@@ -12291,8 +12345,6 @@
     var viewportW = document.documentElement.clientWidth;
     s.paneWidth = Math.min(viewportW, 720); // mesma largura de coluna que #app usa (max-width:720px)
     var paneLeft = (viewportW - s.paneWidth) / 2;
-    var tabbar = document.querySelector('nav.tabbar');
-    var tabbarH = tabbar ? tabbar.getBoundingClientRect().height : 0;
     // Copia o padding computado de #app em vez de repetir os valores dele à mão aqui —
     // sem isso, o conteúdo movido pro painel (que não tinha mais o padding que só #app
     // fornecia) ficava mais LARGO que o normal durante a troca — os cards pareciam
@@ -12301,7 +12353,7 @@
 
     s.overlay = document.createElement('div');
     s.overlay.id = 'swipe-overlay';
-    s.overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:' + tabbarH + 'px;overflow:hidden;z-index:30;background:var(--bg);';
+    s.overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;overflow:hidden;z-index:30;background:var(--bg);';
     document.body.appendChild(s.overlay);
 
     // Em janelas mais largas que a coluna de conteúdo (max-width:720px, ver #app),
@@ -12525,8 +12577,6 @@
     if (!appEl) return;
     var viewportW = document.documentElement.clientWidth;
     var appRect = appEl.getBoundingClientRect();
-    var tabbar = document.querySelector('nav.tabbar');
-    var tabbarH = tabbar ? tabbar.getBoundingClientRect().height : 0;
     [{ id: 'margin-zone-left', width: appRect.left, left: 0 },
       { id: 'margin-zone-right', width: viewportW - appRect.right, left: appRect.right }
     ].forEach(function (z) {
@@ -12535,7 +12585,7 @@
       var w = Math.max(0, z.width);
       el.style.width = w + 'px';
       el.style.left = z.left + 'px';
-      el.style.bottom = tabbarH + 'px';
+      el.style.bottom = '0px';
       el.style.pointerEvents = w >= MARGIN_ZONE_MIN_WIDTH_PX_ ? 'auto' : 'none';
     });
   }
@@ -12868,9 +12918,15 @@
       (result && result.url ? '<a href="' + escapeHtml(result.url) + '" target="_top">Abrir o app com a planilha nova</a>' : 'Recarregue a página.');
   }
 
+  /** A coleta de uso só existe na versão do Apps Script; na web o módulo nem é carregado. */
+  function analytics_() {
+    return typeof CacauAnalytics !== 'undefined' ? CacauAnalytics : { enabled: function () { return false; }, optedOut: function () { return true; }, setOptOut: function () {} };
+  }
+
   function openSettingsModal_() {
     var multiuser = typeof FINANCAS_MULTIUSER !== 'undefined' && FINANCAS_MULTIUSER;
     var inApp = !!androidBridge_();
+    var webBackend = window.CacauBackend && typeof window.CacauBackend.switchSheet === 'function' ? window.CacauBackend : null;
     var theme = '';
     try { theme = localStorage.getItem('financas-theme') || ''; } catch (e) { theme = ''; }
 
@@ -12880,6 +12936,8 @@
       html += '<div class="settings-section"><h3>Conta e planilha</h3>' +
         '<div class="muted">Conta: <b id="st-email">…</b></div>' +
         (inApp ? '' : '<div style="margin-top:6px"><a id="st-sheet-link" href="#" target="_blank" rel="noopener" hidden>Abrir a planilha no Google Planilhas</a></div>') +
+        (webBackend ?
+          '<div class="settings-row"><div class="grow muted">Escolher ou criar outra planilha (a atual não é apagada).</div><button class="secondary" id="st-switchsheet">Trocar de planilha</button></div>' :
         '<details style="margin-top:8px"><summary class="muted">Trocar de planilha</summary>' +
           '<div id="st-sheet-actions">' +
             '<div class="field" style="margin-top:8px"><label>Reconectar a uma planilha que você já tem</label>' +
@@ -12887,8 +12945,8 @@
             '<div class="settings-row"><div class="grow"></div><button class="secondary" id="st-reconnect">Reconectar</button></div>' +
             '<div class="muted">Ou comece do zero: cria uma planilha nova com as categorias padrão. A atual não é apagada.</div>' +
             '<div class="settings-row"><div class="grow"></div><button class="secondary" id="st-newsheet">Criar planilha nova</button></div>' +
-          '</div></details>' +
-        (inApp ? '<div class="settings-row"><div class="grow muted">Entrar com outra conta Google.</div><button class="secondary" id="st-signout">Sair da conta</button></div>' : '') +
+          '</div></details>') +
+        ((inApp || webBackend) ? '<div class="settings-row"><div class="grow muted">Entrar com outra conta Google.</div><button class="secondary" id="st-signout">Sair da conta</button></div>' : '') +
         '</div>';
     }
 
@@ -12897,6 +12955,10 @@
         '<option value="">Igual ao sistema</option>' +
         '<option value="light"' + (theme === 'light' ? ' selected' : '') + '>Claro</option>' +
         '<option value="dark"' + (theme === 'dark' ? ' selected' : '') + '>Escuro</option>' +
+      '</select></div>' +
+      '<div class="field" style="margin-top:10px"><label>Lado da barra de abas</label><select id="st-nav-side">' +
+        '<option value="right"' + (navSide_() === 'right' ? ' selected' : '') + '>Direita</option>' +
+        '<option value="left"' + (navSide_() === 'left' ? ' selected' : '') + '>Esquerda</option>' +
       '</select></div></div>';
 
     html += '<div class="settings-section"><h3>Preferências</h3>' +
@@ -12908,10 +12970,10 @@
       '<div class="settings-row"><div class="grow"></div>' +
         '<button class="secondary" id="st-goal-remove"' + (STATE.balanceGoal ? '' : ' disabled') + '>Remover meta</button>' +
         '<button id="st-goal-save">Salvar meta</button></div>' +
-      (CacauAnalytics.enabled() ?
+      (analytics_().enabled() ?
         '<div class="settings-row" style="margin-top:10px"><div class="grow"><div>Ajudar a melhorar o Cacau</div>' +
         '<div class="muted">Envia, de forma anônima, quais telas você usa e por quanto tempo. Nunca envia valores, nomes ou descrições dos seus lançamentos.</div></div>' +
-        '<label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="st-analytics"' + (CacauAnalytics.optedOut() ? '' : ' checked') + '></label></div>' : '') +
+        '<label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="st-analytics"' + (analytics_().optedOut() ? '' : ' checked') + '></label></div>' : '') +
       '</div>';
 
     if (inApp) {
@@ -12921,7 +12983,7 @@
     html += '<div class="settings-section"><h3>Dados e ajuda</h3>' +
       (inApp ? '' : '<div class="settings-row"><div class="grow"><div>Baixar lançamentos</div><div class="muted">Arquivo CSV que abre no Excel ou Planilhas.</div></div><button class="secondary" id="st-csv">Baixar CSV</button></div>') +
       '<div class="muted" style="margin:6px 0">Seus lançamentos ficam só na planilha do seu Google Drive' +
-      (CacauAnalytics.enabled() ? '; só o uso anônimo do app (telas e cliques, sem dados dos lançamentos) vai para a equipe, e você pode desligar em Preferências. ' : '. ') +
+      (analytics_().enabled() ? '; só o uso anônimo do app (telas e cliques, sem dados dos lançamentos) vai para a equipe, e você pode desligar em Preferências. ' : '. ') +
       'Para o app deixar de ter acesso à sua conta, <a href="https://myaccount.google.com/connections" target="_blank" rel="noopener">revogue o acesso na sua conta Google</a>. ' +
       'Dúvidas ou problemas: fale com quem te convidou para o beta.</div></div>';
 
@@ -12939,21 +13001,27 @@
         var link = document.getElementById('st-sheet-link');
         if (link) { link.href = info.sheetUrl; link.hidden = false; }
       }).catch(function () { /* o resto da janela funciona sem isso */ });
-      document.getElementById('st-reconnect').onclick = function () {
+      var reconnectBtn = document.getElementById('st-reconnect');
+      if (reconnectBtn) reconnectBtn.onclick = function () {
         var value = document.getElementById('st-reconnect-input').value;
         run('reconnectUserSpreadsheet', value).then(showSheetSwitched_).catch(function (err) {
           showToast((err && err.message) || String(err), true);
         });
       };
-      document.getElementById('st-newsheet').onclick = function (e) {
+      var newSheetBtn = document.getElementById('st-newsheet');
+      if (newSheetBtn) newSheetBtn.onclick = function (e) {
         confirmPopover(e.currentTarget, 'Criar uma planilha nova? A atual continua no seu Drive, só deixa de ser usada.', function () {
           run('recreateUserSpreadsheet').then(showSheetSwitched_).catch(function (err) {
             showToast((err && err.message) || String(err), true);
           });
         });
       };
+      var switchBtn = document.getElementById('st-switchsheet');
+      if (switchBtn) switchBtn.onclick = function () { webBackend.switchSheet(); };
       var signOut = document.getElementById('st-signout');
-      if (signOut) signOut.onclick = function () { window.FinancasApp.signOut(); };
+      if (signOut) signOut.onclick = function () {
+        if (webBackend) webBackend.signOut(); else window.FinancasApp.signOut();
+      };
     }
 
     // Aparência
@@ -12967,6 +13035,8 @@
       updateThemeToggleIcon_();
       render();
     };
+
+    document.getElementById('st-nav-side').onchange = function (e) { setNavSide_(e.target.value); };
 
     // Preferências
     document.getElementById('st-budget-view').onchange = function (e) {
@@ -12996,7 +13066,7 @@
 
     var analyticsToggle = document.getElementById('st-analytics');
     if (analyticsToggle) analyticsToggle.onchange = function (e) {
-      CacauAnalytics.setOptOut(!e.target.checked);
+      analytics_().setOptOut(!e.target.checked);
       showToast(e.target.checked ? 'Obrigado por ajudar!' : 'Coleta de uso desligada');
     };
 
@@ -13028,10 +13098,41 @@
     });
   }
 
-  // ---------- boot ----------
-  document.addEventListener('DOMContentLoaded', function () {
-    document.querySelectorAll('nav.tabbar button').forEach(function (btn) {
+  // ---------- barra lateral de abas ----------
+  var NAV_SIDE_KEY_ = 'financas-nav-side';
+  // Toque/hover por mais que isso expande a barra (mostra os nomes); mais rápido é toque
+  // simples e troca de aba. Mesmo tempo no mouse e no dedo. Ajustável aqui.
+  var SIDEBAR_HOLD_MS_ = 100;
+
+  /** Lado da barra de abas: 'right' (padrão, favorece destros no celular) ou 'left'. */
+  function navSide_() {
+    try { return localStorage.getItem(NAV_SIDE_KEY_) === 'left' ? 'left' : 'right'; } catch (e) { return 'right'; }
+  }
+  function applyNavSide_() {
+    document.documentElement.setAttribute('data-nav-side', navSide_());
+  }
+  function setNavSide_(side) {
+    try { localStorage.setItem(NAV_SIDE_KEY_, side === 'left' ? 'left' : 'right'); } catch (e) { /* segue sem salvar */ }
+    applyNavSide_();
+  }
+
+  function setupSidebar_() {
+    var nav = document.querySelector('nav.tabbar');
+    if (!nav) return;
+    var hold = setupHoldToReveal_(nav, { hoverDelayMs: SIDEBAR_HOLD_MS_, touchDelayMs: SIDEBAR_HOLD_MS_, leaveGraceMs: 150 });
+    var stopOutsideClick_ = null;
+    hold.onOpen(function () {
+      nav.classList.add('expanded');
+      stopOutsideClick_ = dismissOnOutsideClick(nav, hold.close);
+    });
+    hold.onClose(function () {
+      nav.classList.remove('expanded');
+      if (stopOutsideClick_) { stopOutsideClick_(); stopOutsideClick_ = null; }
+    });
+    nav.querySelectorAll('button').forEach(function (btn) {
       btn.onclick = function () {
+        if (hold.consumeSuppressedClick()) return;
+        hold.close();
         // Ignora clique no meio da breve animação de acomodação do swipe entre abas
         // (#swipe-overlay ainda presente) -- nesse instante #view-root não está no
         // lugar de sempre dentro de #app (ver finishSwipeTransition_), e um render()
@@ -13041,6 +13142,12 @@
         render();
       };
     });
+  }
+
+  // ---------- boot ----------
+  document.addEventListener('DOMContentLoaded', function () {
+    applyNavSide_();
+    setupSidebar_();
     setupFabSpeedDial_();
     setupMarginSwitchZones_();
     setupScrollToTopButton_();

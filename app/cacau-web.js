@@ -4873,5 +4873,11 @@ var CacauBackend = (function () {
   }
   document.addEventListener('DOMContentLoaded', start);
 
-  return { call: call, signOut: signOut, stats: stats, createSheet: createSheet_ };
+  /** Esquece a planilha guardada e volta à tela de entrada (a planilha antiga não é apagada). */
+  function switchSheet() {
+    try { localStorage.removeItem(SHEET_KEY); } catch (e) { /* segue */ }
+    location.reload();
+  }
+
+  return { call: call, signOut: signOut, stats: stats, createSheet: createSheet_, switchSheet: switchSheet };
 })();
