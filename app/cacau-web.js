@@ -4352,11 +4352,12 @@ var CacauBackend = (function () {
   /** Painel de diagnóstico + um botão discreto (sempre presente) que mostra/oculta o painel; a escolha fica guardada. */
   function mountDiag_() {
     var hidden = false;
-    try { hidden = localStorage.getItem(DIAG_KEY) === '1'; } catch (e) { /* segue */ }
+    hidden = true;
+    try { hidden = localStorage.getItem(DIAG_KEY) !== '0'; } catch (e) { /* segue */ }
     var box = document.createElement('div');
     box.id = 'cacau-diag';
     box.setAttribute('style', 'position:fixed;left:8px;bottom:40px;z-index:200;max-width:92vw;background:rgba(0,0,0,.78);color:#fff;font:11px/1.35 monospace;padding:6px 8px;border-radius:8px');
-    box.innerHTML = '<div class="d-body"></div><a href="#" class="d-x" style="color:#9cf">ocultar</a> · <a href="#" class="d-mode" style="color:#9cf">trocar modo</a> · <a href="#" class="d-out" style="color:#9cf">sair da conta</a>';
+    box.innerHTML = '<div class="d-body"></div><a href="#" class="d-x" style="color:#9cf">ocultar</a> · <a href="#" class="d-mode" style="color:#9cf">trocar modo</a> · <a href="#" class="d-sheet" style="color:#9cf">trocar planilha</a> · <a href="#" class="d-out" style="color:#9cf">sair da conta</a>';
     var toggle = document.createElement('button');
     toggle.id = 'cacau-diag-toggle';
     toggle.type = 'button';
@@ -4367,13 +4368,19 @@ var CacauBackend = (function () {
     function show_(on) {
       if (on) { if (!box.parentNode) document.body.appendChild(box); renderDiag_(); } else if (box.parentNode) box.parentNode.removeChild(box);
       toggle.style.opacity = on ? '.9' : '.5';
-      try { if (on) localStorage.removeItem(DIAG_KEY); else localStorage.setItem(DIAG_KEY, '1'); } catch (e) { /* segue */ }
+      try { localStorage.setItem(DIAG_KEY, on ? '0' : '1'); } catch (e) { /* segue */ }
     }
     toggle.onclick = function () { show_(!box.parentNode); };
     box.querySelector('.d-mode').onclick = function (e) {
       e.preventDefault();
       if (!writeMode_() && !confirm('Ligar o MODO GRAVAÇÃO? Lançamentos, edições e exclusões passam a valer na planilha escolhida. Use uma CÓPIA para testar.')) return;
       setWriteMode_(!writeMode_());
+      location.reload();
+    };
+    box.querySelector('.d-sheet').onclick = function (e) {
+      e.preventDefault();
+      if (!confirm('Trocar de planilha? Você vai escolher ou criar outra na próxima tela (a atual não é apagada).')) return;
+      try { localStorage.removeItem(SHEET_KEY); } catch (err) { /* segue */ }
       location.reload();
     };
     box.querySelector('.d-x').onclick = function (e) { e.preventDefault(); show_(false); };
@@ -4590,7 +4597,6 @@ var CacauBackend = (function () {
   function showGate_(message, onDone) {
     var saved = '';
     try { saved = localStorage.getItem(SHEET_KEY) || ''; } catch (e) { /* segue */ }
-    var native = nativeLogin_();
     var gate = document.getElementById('cacau-gate');
     if (gate) gate.remove();
     gate = document.createElement('div');
@@ -4600,8 +4606,8 @@ var CacauBackend = (function () {
     var primary = btn + ';background:var(--accent,#8a4b25);color:#fff;border:0';
     var secondary = btn + ';background:transparent;color:inherit;border:1px solid rgba(0,0,0,.25)';
     var newPickHtml =
-      '<button id="cacau-new" style="' + (saved ? secondary : primary) + '">Entrar e criar ' + (saved ? 'outra planilha' : 'minha planilha') + '</button>' +
-      '<button id="cacau-pick" style="' + secondary + '">Entrar e escolher ' + (saved ? 'outra planilha' : 'uma planilha que já tenho') + '</button>';
+      '<button id="cacau-new" style="' + primary + '">Entrar e criar minha planilha</button>' +
+      '<button id="cacau-pick" style="' + secondary + '">Entrar e escolher uma planilha que já tenho</button>';
     gate.innerHTML =
       '<div style="max-width:380px;width:100%;display:flex;flex-direction:column;gap:12px;font-family:system-ui,sans-serif">' +
       '<h1 style="margin:0;font-size:30px">Cacau</h1>' +
@@ -4609,19 +4615,6 @@ var CacauBackend = (function () {
       (message ? '<p style="margin:0;color:#b00">' + message + '</p>' : '') +
       (saved ? '<button id="cacau-go" style="' + primary + '">Entrar</button>' : newPickHtml) +
       '<p id="cacau-gate-msg" style="margin:0;color:#b00;font-size:13px"></p>' +
-      '<details style="font-size:13px"><summary style="cursor:pointer;opacity:.7">Opções avançadas</summary>' +
-      '<div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">' +
-      (native ? '' : '<label>Permissão pedida ao Google</label>') +
-      '<select id="cacau-scope" style="font-size:14px;padding:8px' + (native ? ';display:none' : '') + '">' +
-      '<option value="file"' + (scopeMode_() === 'file' ? ' selected' : '') + '>Mínima (recomendada): só planilhas criadas ou escolhidas aqui</option>' +
-      '<option value="full"' + (scopeMode_() === 'full' ? ' selected' : '') + '>Completa: ver todas as planilhas da conta (Google avisa “não verificado”)</option>' +
-      '</select>' +
-      '<label>Código (ID) ou link da planilha</label>' +
-      '<input id="cacau-sheet" style="font-size:15px;padding:10px" placeholder="1AbC… ou link da planilha" value="' + saved.replace(/"/g, '&quot;') + '">' +
-      '<button id="cacau-use" style="' + secondary + '">Entrar com esta planilha</button>' +
-      (saved ? newPickHtml : '') +
-      '<label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="cacau-write"' + (writeMode_() ? ' checked' : '') + ' style="margin-top:3px"> <span><b>Modo gravação</b>: lançar, editar e apagar valem de verdade na planilha. Desligado, o app só lê.</span></label>' +
-      '</div></details>' +
       '</div>';
     document.body.appendChild(gate);
     var msg = gate.querySelector('#cacau-gate-msg');
@@ -4630,27 +4623,17 @@ var CacauBackend = (function () {
     function done_() { gate.remove(); onDone(); gateDone(); }
     function fail_(err) { busy_(false); msg.textContent = 'Não deu: ' + err.message; }
     function login_() {
-      setScopeMode_(gate.querySelector('#cacau-scope').value);
-      setWriteMode_(gate.querySelector('#cacau-write').checked);
+      setScopeMode_('file');
       msg.textContent = 'Abrindo o login do Google…';
       busy_(true);
       return requestToken_(everSignedIn ? '' : 'select_account');
     }
-    function sheetIdFrom_(raw) {
-      raw = (raw || '').trim();
-      var m = raw.match(/\/d\/([a-zA-Z0-9_-]{20,})/);
-      var id = m ? m[1] : raw;
-      return /^[a-zA-Z0-9_-]{20,}$/.test(id) ? id : '';
-    }
-    function enterWith_(raw) {
-      var id = sheetIdFrom_(raw);
-      if (!id) { msg.textContent = 'Esse código/link de planilha não parece válido.'; return; }
+    function enterWith_(id) {
       login_().then(function () { useSheet_(id); return fetchEmail_(); }).then(done_).catch(fail_);
     }
 
     var go = gate.querySelector('#cacau-go');
     if (go) go.onclick = function () { enterWith_(saved); };
-    gate.querySelector('#cacau-use').onclick = function () { enterWith_(gate.querySelector('#cacau-sheet').value); };
     var nw = gate.querySelector('#cacau-new');
     if (nw) nw.onclick = function () {
       login_().then(fetchEmail_).then(function () {
