@@ -449,19 +449,24 @@
     stroke-linecap: round;
     stroke-linejoin: round;
   }
-  nav.tabbar button .tab-label { opacity: 0; transition: opacity .12s ease; }
+  /* translateY(2px): a fonte Utendo tem a caixa de linha mais alta que a tinta das letras
+     (medido: tinta ~2px acima do centro da caixa, mesmo problema do "+" do .fab-icon),
+     então só centralizar a caixa deixava o texto acima do ícone. */
+  nav.tabbar button .tab-label { opacity: 0; transform: translateY(2px); transition: opacity .12s ease; }
   nav.tabbar.expanded button .tab-label { opacity: 1; }
   nav.tabbar button.active { color: var(--primary); font-weight: 600; }
 
+  /* "+" logo abaixo da barra lateral (que tem 278px de altura, centrada na tela, e 52px
+     de largura): o centro do "+" (48px, a 2px da borda) cai no centro da barra. Em tela
+     muito baixa o min() segura o botão dentro da tela. */
   .fab {
     position: fixed;
-    bottom: 24px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 56px;
-    height: 56px;
+    top: min(calc(50% + 151px), calc(100% - 64px));
+    right: 2px;
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
-    font-size: 28px;
+    font-size: 26px;
     line-height: 1;
     padding: 0;
     /* Centraliza o "+" de verdade (mesmo padrão de .theme-toggle-btn/.icon-picker-option)
@@ -508,10 +513,12 @@
     stroke-linejoin: round;
   }
   svg.inline-icon { width: 1.1em; height: 1.1em; vertical-align: -0.2em; }
+  /* Tema (em cima) e configurações (embaixo) empilhados no canto do lado da barra
+     lateral; 8px de borda + 36px de largura = centro a 26px, o mesmo da barra. */
   .theme-toggle-btn {
     position: fixed;
     top: 12px;
-    right: 12px;
+    right: 8px;
     z-index: 45;
     width: 36px;
     height: 36px;
@@ -526,6 +533,13 @@
     justify-content: center;
     box-shadow: var(--shadow);
   }
+
+  #settings-btn { top: 56px; }
+  html[data-nav-side="left"] .fab { right: auto; left: 2px; }
+  html[data-nav-side="left"] .theme-toggle-btn { right: auto; left: 8px; }
+  /* Voltar ao topo fica do lado de dentro do "+" (longe da barra). */
+  #scroll-to-top-btn { right: 64px; }
+  html[data-nav-side="left"] #scroll-to-top-btn { right: auto; left: 64px; }
 
   /* Janela de configuração (engrenagem, ver openSettingsModal_ em JavaScript.html). */
   .settings-section { border-top: 1px solid var(--border); padding: 12px 0; }
@@ -807,6 +821,40 @@
      de soltar o botão. */
   .week-cal-dragging .mini-cal-day { pointer-events: none; }
   .week-cal-column { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; }
+
+  /* Calendário do Extrato em barras (ver buildDayBarsHtml_, JavaScript.html): cada dia é
+     uma célula de 14px (mesma largura da legenda da grade) com uma barra fina de 6px. O
+     eixo (valor máximo, metade e zero) é o 1º filho do container, sticky à esquerda. */
+  .day-bars-axis { position: sticky; left: 0; z-index: 2; background: var(--surface); flex-shrink: 0; width: 34px; padding-right: 4px; }
+  .day-bars-axis-plot { position: relative; }
+  .day-bars-axis-plot span {
+    position: absolute;
+    right: 4px;
+    transform: translateY(-50%);
+    font-size: 9px;
+    line-height: 1;
+    color: var(--text-muted);
+  }
+  .day-bars-plot { display: flex; flex-shrink: 0; }
+  .day-bar-cell { position: relative; width: 14px; flex-shrink: 0; }
+  .day-bar-clickable { cursor: pointer; }
+  .day-bar-clickable:hover { background: var(--border); }
+  .week-cal-dragging .day-bar-cell { pointer-events: none; }
+  .day-bar-col {
+    position: relative;
+    background:
+      linear-gradient(var(--border), var(--border)) top / 100% 1px no-repeat,
+      linear-gradient(var(--border), var(--border)) center / 100% 1px no-repeat,
+      linear-gradient(var(--border), var(--border)) bottom / 100% 1px no-repeat;
+  }
+  .day-bar { position: absolute; bottom: 0; left: 4px; width: 6px; border-radius: 2px 2px 0 0; }
+  /* Dia acima da escala (cortado no topo): risquinho claro marca que a barra continua. */
+  .day-bar-over::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--surface); }
+  .day-bar-num { margin-top: 3px; text-align: center; font-size: 9px; line-height: 1; color: var(--text-muted); }
+  .day-bar-today .day-bar-num { color: var(--primary); font-weight: 700; }
+  .day-bar-day1 { box-shadow: inset 1px 0 0 var(--border); }
+  .day-bar-month { position: relative; height: 18px; }
+  .day-bar-month span { position: absolute; left: 1px; top: 2px; font-size: 10px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
 
   /* aspect-ratio 1.5 (não 1) -- pedido explícito do usuário pra diminuir a altura dos
      quadrados; deixam de ser quadrados de propósito. width fixo (antes vinha de
@@ -1238,7 +1286,7 @@
   <button class="fab" id="fab-add"><span class="fab-icon">+</span></button>
   <button class="theme-toggle-btn" id="theme-toggle" title="Alternar tema claro/escuro"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
   
-  <button class="theme-toggle-btn" id="settings-btn" title="Configurações" style="right:56px"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+  <button class="theme-toggle-btn" id="settings-btn" title="Configurações"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
   <div class="setup-banner" id="setup-banner" hidden>
     <span>Falta configurar a captura de notificações.</span>
     <button id="setup-banner-btn">Configurar</button>
@@ -1279,6 +1327,7 @@
     txFiltersExpanded: false, // card "Filtrar lançamentos" do Extrato começa fechado; fica aberto entre re-renders até o usuário fechar de novo
     txVisibleCount: 50, // quantos lançamentos (não cards) o Extrato renderiza antes de "Carregar mais" — ver TX_PAGE_SIZE
     txCalendarExpanded: true, // card do calendário do Extrato começa aberto (diferente do de filtro) -- é o conteúdo mais visual da tela
+    txCalendarMode: 'expense', // o que as barras do calendário somam por dia: 'expense' | 'income' | 'balance'
     txCalendarScrollLeft: null, // posição de rolagem horizontal do calendário em semanas -- null até renderTxCalendarWeeks_ escolher um padrão (rolar até o fim, semanas mais recentes)
     pendingTransactions: [], // lançamentos otimistas, mostrados antes do servidor confirmar
     deletingIds: [], // lançamentos que o usuário já mandou excluir, ocultos até o servidor confirmar
@@ -3584,7 +3633,7 @@
     btn.id = 'scroll-to-top-btn';
     btn.title = 'Voltar ao topo';
     btn.textContent = '↑';
-    btn.style.cssText = 'position:fixed;bottom:24px;right:16px;width:44px;height:44px;border-radius:50%;' +
+    btn.style.cssText = 'position:fixed;bottom:24px;width:44px;height:44px;border-radius:50%;' +
       'font-size:20px;line-height:1;box-shadow:0 4px 10px rgba(0,0,0,0.25);opacity:0;pointer-events:none;' +
       'transition:opacity .15s ease;z-index:40';
     document.body.appendChild(btn);
@@ -5841,6 +5890,130 @@
     return '<div class="week-cal-legend">' + legendHtml + '</div><div class="week-cal-weeks">' + weeksHtml + '</div>';
   }
 
+  // ---------- calendário do Extrato em barras ----------
+  // Formato atual do calendário. 'grid' = a grade de quadrados por semana (buildWeekCalendarHtml_
+  // e cia., mantida intacta -- tag git reserva-calendario-grade); trocar esta constante volta
+  // pra ela. 'bars' = gráfico de barras finas por dia (buildDayBarsHtml_).
+  var TX_CALENDAR_FORMAT_ = 'bars';
+  var TX_CALENDAR_MODES_ = [
+    { key: 'expense', label: 'Despesas' },
+    { key: 'income', label: 'Receitas' },
+    { key: 'balance', label: 'Saldo' }
+  ];
+  var DAY_BARS_HEIGHT_PX_ = 88;
+
+  /** { 'YYYY-MM-DD': valor } por dia, conforme o modo: despesas (soma), receitas (soma) ou
+   *  saldo (receitas - despesas, ver computeCalendarDayNets_). Mesmas regras de sempre do
+   *  calendário: transferência não conta e "Não considerar em análises" fica de fora. Só os
+   *  dias que têm algo do tipo pedido aparecem. */
+  function computeCalendarDayTotals_(combined, mode) {
+    if (mode === 'balance') return computeCalendarDayNets_(combined);
+    var kind = mode === 'income' ? 'income' : 'expense';
+    var totals = {};
+    combined.forEach(function (t) {
+      if (!t.date || t.excludeFromAnalysis || t.kind !== kind) return;
+      totals[t.date] = (totals[t.date] || 0) + t.amount;
+    });
+    return totals;
+  }
+
+  /** Valor que enche a altura do gráfico: o P75 (mesmo critério que dá o tom máximo de
+   *  verde/vermelho da grade, ver renderTxCalendarWeeks_) dos totais diários -- em módulo,
+   *  pra o saldo negativo e positivo dividirem a MESMA escala. Dia acima disso é cortado no
+   *  topo (marcado, ver buildDayBarsHtml_), pra um dia de salário não achatar todos os outros. */
+  function computeDayBarsRef_(totals) {
+    var abs = Object.keys(totals).map(function (k) { return Math.abs(totals[k]); }).filter(function (v) { return v > 0; });
+    return computePercentile_(abs, 0.75);
+  }
+
+  /** Número curto pro eixo vertical: 850, 1,2k, 12k. */
+  function fmtAxisValue_(v) {
+    if (v >= 10000) return Math.round(v / 1000) + 'k';
+    if (v >= 1000) return (Math.round(v / 100) / 10).toString().replace('.', ',') + 'k';
+    return String(Math.round(v));
+  }
+
+  /**
+   * Barras finas, uma por dia (eixo horizontal = dias do período, vertical = total do dia,
+   * de 0 até ref -- ver computeDayBarsRef_). Despesas em vermelho, receitas em verde; no
+   * saldo a barra sempre sobe (eixo só positivo): verde se o saldo do dia é positivo,
+   * vermelho dessaturado se negativo. Dia com algo (inclusive só "fora das análises", sem
+   * barra) é clicável e leva ao card dele no Extrato. Rótulos: número do dia embaixo de
+   * cada barra e o nome do mês na coluna do dia 1.
+   */
+  function buildDayBarsHtml_(days, totals, ref, mode, flaggedOnlyDays) {
+    flaggedOnlyDays = flaggedOnlyDays || {};
+    var today = todayYmd();
+    var modeLabel = mode === 'income' ? 'Receitas' : (mode === 'balance' ? 'Saldo' : 'Despesas');
+    var axisHtml = '<div class="day-bars-axis">' +
+      '<div class="day-bars-axis-plot" style="height:' + DAY_BARS_HEIGHT_PX_ + 'px">' +
+        '<span style="top:0">' + (ref > 0 ? fmtAxisValue_(ref) : '') + '</span>' +
+        '<span style="top:50%">' + (ref > 0 ? fmtAxisValue_(ref / 2) : '') + '</span>' +
+        '<span style="top:100%">0</span>' +
+      '</div></div>';
+
+    var cellsHtml = days.map(function (dateStr) {
+      var dayNum = Number(dateStr.slice(8, 10));
+      var isDay1 = dayNum === 1;
+      var has = totals.hasOwnProperty(dateStr);
+      var clickable = has || flaggedOnlyDays[dateStr];
+      var barHtml = '';
+      var tooltip = '';
+      if (has) {
+        var value = totals[dateStr];
+        var fraction = ref > 0 ? Math.min(1, Math.abs(value) / ref) : (value !== 0 ? 1 : 0);
+        var color = mode === 'income' ? 'var(--income)' : mode === 'expense' ? 'var(--expense)' : (value >= 0 ? 'var(--income)' : 'var(--expense)');
+        var muted = mode === 'balance' && value < 0 ? 'opacity:.55;' : '';
+        var over = ref > 0 && Math.abs(value) > ref ? ' day-bar-over' : '';
+        if (fraction > 0) {
+          barHtml = '<div class="day-bar' + over + '" style="height:' + (fraction * 100).toFixed(1) + '%;background:' + color + ';' + muted + '"></div>';
+        }
+        var shown = mode === 'balance' ? fmtMoney(value) : fmtMoney(Math.abs(value));
+        tooltip = fmtDate(dateStr) + ' · ' + modeLabel + ': ' + shown + ' — clique para ver os lançamentos';
+      } else if (flaggedOnlyDays[dateStr]) {
+        tooltip = fmtDate(dateStr) + ' · só lançamentos fora das análises — clique para ver';
+      }
+      var classes = 'day-bar-cell' + (isDay1 ? ' day-bar-day1' : '') + (clickable ? ' day-bar-clickable' : '') + (dateStr === today ? ' day-bar-today' : '');
+      var attrs = clickable ? ' data-date="' + dateStr + '" data-tooltip="' + escapeHtml(tooltip) + '"' : '';
+      return '<div class="' + classes + '"' + attrs + '>' +
+        '<div class="day-bar-col" style="height:' + DAY_BARS_HEIGHT_PX_ + 'px">' + barHtml + '</div>' +
+        '<div class="day-bar-num">' + dayNum + '</div>' +
+        '<div class="day-bar-month">' + (isDay1 ? '<span>' + escapeHtml(capitalizeFirst_(MONTH_NAMES_PT[Number(dateStr.slice(5, 7)) - 1])) + '</span>' : '') + '</div>' +
+      '</div>';
+    }).join('');
+
+    return axisHtml + '<div class="day-bars-plot">' + cellsHtml + '</div>';
+  }
+
+  /** Datas (YYYY-MM-DD) de minDate a maxDate inclusive, uma por dia. */
+  function buildDayList_(minDate, maxDate) {
+    var days = [];
+    var cursor = parseYmdLocal_(minDate);
+    var end = parseYmdLocal_(maxDate);
+    while (cursor <= end) {
+      days.push(ymdFromDate_(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return days;
+  }
+
+  /** Seletor Despesas | Receitas | Saldo do calendário em barras: cápsulas no topo do card. */
+  function renderTxCalendarModeSelector_() {
+    var host = document.getElementById('tx-calendar-mode');
+    if (!host) return;
+    host.hidden = TX_CALENDAR_FORMAT_ !== 'bars';
+    host.innerHTML = TX_CALENDAR_MODES_.map(function (m) {
+      return '<button type="button" class="capsule' + (STATE.txCalendarMode === m.key ? ' active' : '') + '" data-mode="' + m.key + '">' + m.label + '</button>';
+    }).join('');
+    host.querySelectorAll('button').forEach(function (btn) {
+      btn.onclick = function () {
+        STATE.txCalendarMode = btn.dataset.mode;
+        renderTxCalendarModeSelector_();
+        renderTxCalendarWeeks_();
+      };
+    });
+  }
+
   /**
    * Arrastar com o mouse rola a faixa de semanas horizontalmente -- pedido explícito do
    * usuário, pra poder tirar a barra de rolagem visível (ver #tx-calendar-weeks-wrap,
@@ -5950,6 +6123,18 @@
     var combined = currentFilteredTransactionsCombined_();
     var nets = computeCalendarDayNets_(combined);
     var range = computeCalendarDateRange_();
+    if (TX_CALENDAR_FORMAT_ === 'bars') {
+      var totals = computeCalendarDayTotals_(combined, STATE.txCalendarMode);
+      var days = buildDayList_(range.minDate, range.maxDate);
+      container.innerHTML = buildDayBarsHtml_(days, totals, computeDayBarsRef_(totals), STATE.txCalendarMode, computeCalendarFlaggedOnlyDays_(combined, nets));
+      container.querySelectorAll('.day-bar-cell[data-date]').forEach(function (el) {
+        el.onclick = function () { scrollToTxDay_(el.dataset.date); };
+        wireTooltipTrigger_(el, 200);
+      });
+      container.onscroll = function () { STATE.txCalendarScrollLeft = container.scrollLeft; };
+      container.scrollLeft = STATE.txCalendarScrollLeft !== null ? STATE.txCalendarScrollLeft : container.scrollWidth;
+      return;
+    }
     var weekColumns = buildWeekColumns_(range.minDate, range.maxDate);
     var allValues = Object.keys(nets).map(function (k) { return nets[k]; });
     var posRef = computePercentile_(allValues.filter(function (v) { return v > 0; }), 0.75);
@@ -5970,6 +6155,7 @@
    *  rolar pras semanas mais recentes; qualquer outro re-render preserva a posição em
    *  que o usuário já estava). */
   function renderTxCalendar_() {
+    renderTxCalendarModeSelector_();
     renderTxCalendarWeeks_();
     renderTxCalendarFilteredStats_();
   }
@@ -5995,6 +6181,7 @@
       '</div>' +
       '<div id="tx-calendar-collapse" style="display:grid;grid-template-rows:' + (expanded ? '1fr' : '0fr') + ';transition:grid-template-rows 200ms ease">' +
         '<div style="overflow:hidden;min-height:0">' +
+          '<div id="tx-calendar-mode" class="capsule-field" style="margin:12px 0 0"></div>' +
           '<div id="tx-calendar-weeks-wrap" style="display:flex;overflow-x:auto;padding-top:12px"></div>' +
         '</div>' +
       '</div>' +
@@ -8823,6 +9010,7 @@
     }
   };
 
+  var balanceTrendAnimated_ = false;
   /** Chamar depois do innerHTML que inclui buildBalanceTrendHtml_ já estar no DOM (Início e Planejamento). */
   function renderBalanceTrendChart_() {
     // Toggle fica aqui (e não em quem monta o innerHTML) porque as DUAS telas que mostram
@@ -8922,6 +9110,11 @@
 
     var existingChart = Chart.getChart(canvas);
     if (existingChart) existingChart.destroy();
+    // O gráfico é recriado a cada render() (qualquer botão da tela), e a animação de
+    // entrada (linha e bonequinho subindo de baixo) repetia toda vez (bug relatado). Só a
+    // PRIMEIRA vez da sessão anima; depois já nasce no lugar.
+    var animateEntry = !balanceTrendAnimated_;
+    balanceTrendAnimated_ = true;
     new Chart(canvas.getContext('2d'), {
       type: 'line',
       data: {
@@ -8943,6 +9136,7 @@
         // LARGURA, nunca do próprio conteúdo) -- maintainAspectRatio:false deixa o canvas
         // preencher 100% desse container em vez de calcular a própria altura de novo.
         maintainAspectRatio: false,
+        animation: animateEntry ? {} : false,
         // Espaço extra em cima: sem isso, o texto "+R$X/mês" e os chips de Plano perto
         // do topo do gráfico (ver drawBalanceTrendRateLabel_/drawBalanceTrendPlanLabels_)
         // ficavam espremidos contra a borda do card ou cortados.
@@ -11439,15 +11633,14 @@
     var root = document.createElement('div');
     root.id = 'fab-speed-dial';
 
-    // padding-bottom cobre o vão até o fab: sem isso, esse pedacinho de tela (nem
-    // dentro do fab, nem dentro da pilha) não contava como "ainda em cima do menu" e
-    // passar o mouse por ali fechava tudo sozinho (bug reportado) — a pilha visualmente
-    // continua no mesmo lugar (o padding empurra as cápsulas pra cima), só a ÁREA que
-    // conta como "hover" cresce até encostar no fab.
+    // O "+" fica colado na barra lateral (na borda da tela), então o menu abre pro lado
+    // de DENTRO da tela: uma coluna só, com as outras criações em cima e "Novo lançamento"
+    // (a ação do toque normal, cápsula destacada) embaixo, na altura do "+". O padding do
+    // lado do "+" cobre o vão até ele: sem isso, passar o mouse por ali fechava tudo
+    // (bug antigo do menu) -- a ÁREA de hover cresce até encostar no botão.
     var stack = document.createElement('div');
-    stack.style.cssText = 'position:fixed;display:flex;flex-direction:column;align-items:flex-start;gap:8px;' +
-      'padding-bottom:' + HOLD_REVEAL_GAP_PX + 'px;opacity:0;transform:translateY(6px);' +
-      'transition:opacity .15s ease,transform .15s ease;pointer-events:none;z-index:45';
+    stack.style.cssText = 'position:fixed;display:flex;flex-direction:column;gap:8px;' +
+      'opacity:0;transition:opacity .15s ease,transform .15s ease;pointer-events:none;z-index:45';
     SPEED_DIAL_ACTIONS_.forEach(function (action) {
       var btn = document.createElement('button');
       btn.type = 'button';
@@ -11456,52 +11649,40 @@
       btn.onclick = function () { hold.close(); action.open(); };
       stack.appendChild(btn);
     });
-
-    // Mesma ideia do padding-bottom da pilha, só que na horizontal: o wrap tem
-    // padding-right cobrindo o vão até o fab, e a largura é medida (texto define) +
-    // esse padding, então o wrap sempre termina exatamente onde o fab começa.
-    var indicatorWrap = document.createElement('div');
-    indicatorWrap.style.cssText = 'position:fixed;display:flex;padding-right:' + HOLD_REVEAL_GAP_PX + 'px;' +
-      'opacity:0;transition:opacity .15s ease;pointer-events:none;z-index:45';
     var indicator = document.createElement('button');
     indicator.type = 'button';
     indicator.className = 'capsule active';
     indicator.textContent = 'Novo lançamento';
     indicator.onclick = function () { hold.close(); openTransactionModal(); };
-    indicatorWrap.appendChild(indicator);
+    stack.appendChild(indicator);
 
     root.appendChild(stack);
-    root.appendChild(indicatorWrap);
     document.body.appendChild(root);
     hold.joinHoverGroup(stack);
-    hold.joinHoverGroup(indicatorWrap);
 
     var stopOutsideClick_ = null;
     hold.onOpen(function () {
       var fabRect = fab.getBoundingClientRect();
-      var indicatorWidth = indicator.offsetWidth;
-      stack.style.left = fabRect.left + 'px';
-      stack.style.bottom = (window.innerHeight - fabRect.top) + 'px';
-      indicatorWrap.style.width = (indicatorWidth + HOLD_REVEAL_GAP_PX) + 'px';
-      indicatorWrap.style.left = (fabRect.left - indicatorWidth - HOLD_REVEAL_GAP_PX) + 'px';
-      indicatorWrap.style.top = (fabRect.top + fabRect.height / 2) + 'px';
-      indicatorWrap.style.transform = 'translateY(-50%)';
+      var onLeft = navSide_() === 'left';
+      var viewportW = document.documentElement.clientWidth;
+      stack.style.alignItems = onLeft ? 'flex-start' : 'flex-end';
+      stack.style.padding = '0';
+      stack.style[onLeft ? 'paddingLeft' : 'paddingRight'] = HOLD_REVEAL_GAP_PX + 'px';
+      stack.style.left = onLeft ? fabRect.right + 'px' : 'auto';
+      stack.style.right = onLeft ? 'auto' : (viewportW - fabRect.left) + 'px';
+      stack.style.bottom = (window.innerHeight - (fabRect.top + fabRect.height / 2) - indicator.offsetHeight / 2) + 'px';
+      stack.style.transform = 'translateX(' + (onLeft ? -6 : 6) + 'px)';
 
       stack.style.pointerEvents = 'auto';
-      indicatorWrap.style.pointerEvents = 'auto';
       requestAnimationFrame(function () {
         stack.style.opacity = '1';
-        stack.style.transform = 'translateY(0)';
-        indicatorWrap.style.opacity = '1';
+        stack.style.transform = 'translateX(0)';
       });
       stopOutsideClick_ = dismissOnOutsideClick(root, hold.close);
     });
     hold.onClose(function () {
       stack.style.opacity = '0';
-      stack.style.transform = 'translateY(6px)';
       stack.style.pointerEvents = 'none';
-      indicatorWrap.style.opacity = '0';
-      indicatorWrap.style.pointerEvents = 'none';
       if (stopOutsideClick_) { stopOutsideClick_(); stopOutsideClick_ = null; }
     });
 
