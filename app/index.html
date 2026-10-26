@@ -426,6 +426,10 @@
   }
   nav.tabbar button {
     display: flex;
+    /* Do lado direito a barra cresce pra esquerda: a ordem invertida (row-reverse) mantém o
+       ícone colado na borda da tela, e só o nome aparece à esquerda dele ao expandir. */
+    flex-direction: row-reverse;
+    justify-content: flex-start;
     align-items: center;
     gap: 12px;
     width: 100%;
@@ -439,6 +443,7 @@
     text-align: left;
     white-space: nowrap;
   }
+  html[data-nav-side="left"] nav.tabbar button { flex-direction: row; }
   nav.tabbar button .tab-ico {
     flex: none;
     width: 22px;
@@ -491,17 +496,46 @@
     transform: translateY(3px);
   }
 
-  /* Fica fixo no topo da tela ao rolar a aba Início, por cima dos cards — mesma ideia do .fab. */
-  .floating-review-btn {
+  /* "Revisar pendências": círculo logo abaixo do "+" (mesmo eixo), com o ícone de
+     checklist e a contagem num selo. Expande pro lado de dentro da tela ao passar o mouse /
+     segurar (ver setupReviewButton_), igual às abas da barra lateral; o ícone nunca sai do
+     lugar -- do lado direito a ordem é invertida (row-reverse) e o círculo cresce pra esquerda.
+     Só aparece na aba Início, com pendência (ver updateReviewButton_). Com ele na tela, o
+     "+" sobe um pouco em tela muito baixa pra caber os dois. */
+  .review-fab {
     position: fixed;
-    top: 12px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: calc(100% - 112px); /* deixa espaço nas pontas pro botão de tema no canto */
-    max-width: 400px;
-    z-index: 40;
+    top: min(calc(50% + 207px), calc(100% - 64px));
+    right: 2px;
+    width: 48px;
+    height: 48px;
+    box-sizing: border-box;
+    padding: 0 13px;
+    gap: 10px;
+    border-radius: 24px;
+    display: flex;
+    flex-direction: row-reverse;
+    align-items: center;
+    justify-content: flex-start;
+    overflow: hidden;
+    white-space: nowrap;
+    font-size: 14px;
     box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+    transition: width .15s ease;
+    z-index: 35;
   }
+  .review-fab[hidden] { display: none; }
+  html[data-nav-side="left"] .review-fab { right: auto; left: 2px; flex-direction: row; }
+  html.has-review-fab .fab { top: min(calc(50% + 151px), calc(100% - 120px)); }
+  .review-ico { position: relative; flex: none; width: 22px; height: 22px; display: block; }
+  .review-ico svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .review-badge {
+    position: absolute; top: -9px; right: -9px;
+    min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box;
+    border-radius: 8px; background: var(--expense); color: #fff;
+    font-size: 10px; font-weight: 700; line-height: 16px; text-align: center;
+  }
+  .review-fab .tab-label { opacity: 0; transform: translateY(2px); transition: opacity .12s ease; }
+  .review-fab.expanded .tab-label { opacity: 1; }
 
   .theme-toggle-btn svg, .modal svg.inline-icon, svg.inline-icon {
     width: 18px;
@@ -834,11 +868,17 @@
   .week-cal-dragging .day-bar-cell { pointer-events: none; }
   .day-bar-sun { margin-left: 8px; }
   .day-bars-plot > .day-bar-sun:first-child { margin-left: 0; }
-  .day-bar-sun::before, .day-bar-day1::before { content: ''; position: absolute; top: 0; bottom: 0; width: 1px; pointer-events: none; }
-  .day-bar-sun::before { left: -4px; background: var(--border); }
+  /* Virada de mês no domingo: sem o respiro extra entre o último e o primeiro dia do mês. */
+  .day-bar-day1.day-bar-sun { margin-left: 0; }
+  .day-bar-sun::before, .day-bar-day1::after { content: ''; position: absolute; width: 1px; pointer-events: none; }
+  /* Linha da semana (no respiro antes do domingo): do topo das barras até a linha dos
+     números dos dias -- não desce até a linha com o nome do mês (18px, ver .day-bar-month). */
+  .day-bar-sun::before { top: 0; bottom: 18px; left: -4px; background: var(--border); }
   .day-bars-plot > .day-bar-sun:first-child::before { display: none; }
-  .day-bar-day1::before { left: 0; background: var(--text-muted); opacity: .55; }
-  .day-bar-day1.day-bar-sun::before { left: -4px; display: block; }
+  .day-bar-day1.day-bar-sun::before { left: 0; }
+  /* Linha do mês: só da linha dos números pra baixo (até o nome do mês); entre as barras
+     ficam só as linhas de semana. --bars-h = altura da área das barras (ver buildDayBarsHtml_). */
+  .day-bar-day1::after { top: var(--bars-h); bottom: 0; left: 0; background: var(--text-muted); opacity: .55; }
   .day-bar-col { position: relative; }
   .day-bar { position: absolute; bottom: 0; left: 4px; width: 6px; border-radius: 2px 2px 0 0; }
   .day-bar { background: var(--bar-color); }
@@ -855,8 +895,11 @@
   .day-bar-target { position: absolute; left: 0; right: 0; height: 0; pointer-events: none; z-index: 1; }
   .day-bar-target-month { border-top: 1px dotted var(--text-muted); }
   .day-bar-target-week { border-top: 2px dotted var(--text); }
-  .day-bar-target-neg { border-top-color: var(--expense); }
-  .day-bars-legend { display: flex; align-items: center; gap: 4px; margin-top: 8px; font-size: 11px; color: var(--text-muted); }
+  /* Veredito do trecho (ver dayBarsTargetStatus_): cor da linha, mês e semana à parte. */
+  .day-bar-target-ok { border-top-color: var(--income); }
+  .day-bar-target-warn { border-top-color: var(--warning); }
+  .day-bar-target-bad { border-top-color: var(--expense); }
+  .day-bars-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 8px; font-size: 11px; color: var(--text-muted); }
   .day-bars-legend[hidden] { display: none; }
   .day-bars-legend-swatch { position: static; display: inline-block; width: 18px; height: 0; margin-left: 8px; }
   .day-bars-legend-swatch:first-child { margin-left: 0; }
@@ -1003,7 +1046,7 @@
     padding: 4px 8px;
     border-radius: 6px;
     font-size: 11px;
-    white-space: normal;
+    white-space: pre-line;
     z-index: 300;
     pointer-events: none;
     max-width: min(280px, calc(100vw - 24px));
@@ -1293,6 +1336,7 @@
   </div>
 
   <button class="fab" id="fab-add"><span class="fab-icon">+</span></button>
+  <button class="review-fab" id="review-pending" aria-label="Revisar pendências" hidden><span class="review-ico"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg><span class="review-badge"></span></span><span class="tab-label"></span></button>
   <button class="theme-toggle-btn" id="theme-toggle" title="Alternar tema claro/escuro"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
   
   <button class="theme-toggle-btn" id="settings-btn" title="Configurações"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
@@ -3620,6 +3664,7 @@
       window.scrollTo(restorePos.x, restorePos.y);
     }
     updateScrollToTopVisibility_();
+    updateReviewButton_();
   }
 
   // ---------- botão "voltar ao topo" (só no Extrato, por ora) ----------
@@ -3693,15 +3738,7 @@
     var budgetTimelineHtml = buildBudgetTimelineHtml(d);
     var expensesByCategory = netExpensesByCategory_(d);
 
-    var pendingCount = STATE.pendingEntries.length;
-    // O botão fica fixo (rola por cima dos cards, como o FAB de "+") — o div antes dele
-    // só reserva o espaço no fluxo normal da página pra não ficar escondido por trás.
-    var pendingCardHtml = pendingCount
-      ? '<div style="height:56px"></div><button class="floating-review-btn" id="review-pending">Revisar ' + pendingCount + (pendingCount === 1 ? ' pendência' : ' pendências') + '</button>'
-      : '';
-
     root.innerHTML =
-      pendingCardHtml +
       buildBalanceTrendHtml_() +
       budgetTimelineHtml +
       '<div class="card">' +
@@ -3771,14 +3808,52 @@
       });
     }
 
-    var reviewBtn = document.getElementById('review-pending');
+  }
+
+  // ---------- botão "Revisar pendências" (abaixo do "+") ----------
+  /** Mostra/esconde o botão e atualiza contagem e texto: só na aba Início e com pendência
+   *  (como era antes, quando ficava no topo da página). Chamada por render(). */
+  function updateReviewButton_() {
+    var btn = document.getElementById('review-pending');
+    if (!btn) return;
+    var n = STATE.pendingEntries.length;
+    var show = STATE.currentView === 'dashboard' && n > 0;
+    btn.hidden = !show;
+    document.documentElement.classList.toggle('has-review-fab', show);
+    if (!show) return;
+    var label = 'Revisar ' + n + (n === 1 ? ' pendência' : ' pendências');
+    btn.querySelector('.review-badge').textContent = n > 99 ? '99+' : String(n);
+    btn.querySelector('.tab-label').textContent = label;
+    btn.setAttribute('aria-label', label);
+  }
+  function setupReviewButton_() {
+    var btn = document.getElementById('review-pending');
+    if (!btn) return;
+    var hold = setupHoldToReveal_(btn, { hoverDelayMs: SIDEBAR_HOLD_MS_, touchDelayMs: SIDEBAR_HOLD_MS_, leaveGraceMs: 150 });
+    var stopOutsideClick_ = null;
+    hold.onOpen(function () {
+      // Largura natural: 13px de borda + ícone (22) + vão (10) + nome + 13px de borda.
+      var labelW = btn.querySelector('.tab-label').scrollWidth;
+      btn.style.width = (13 + 22 + 10 + labelW + 13) + 'px';
+      btn.classList.add('expanded');
+      stopOutsideClick_ = dismissOnOutsideClick(btn, hold.close);
+    });
+    hold.onClose(function () {
+      btn.style.width = '';
+      btn.classList.remove('expanded');
+      if (stopOutsideClick_) { stopOutsideClick_(); stopOutsideClick_ = null; }
+    });
     // Sem refreshAll() antes de abrir: getBootstrapData relê TODA a planilha (inclusive
     // a lista inteira de lançamentos, só pra jogar fora em seguida) e por isso demorava
     // vários segundos. É redundante — toda mutação (ex: salvar uma palavra-chave em
     // Categorias) já dispara um refreshAll() sozinha via afterMutation_, então STATE já
     // chega aqui atualizado; e listPendingEntries recalcula a sugestão de cada pendência
     // na hora que é chamada, nunca confiando num valor gravado na criação.
-    if (reviewBtn) reviewBtn.onclick = function () { openPendingReviewModal(0); };
+    btn.onclick = function () {
+      if (hold.consumeSuppressedClick()) return;
+      hold.close();
+      openPendingReviewModal(0);
+    };
   }
 
   // Lucide "eye-off" -- marca discreta de um lançamento "Não considerar em análises?" (pedido
@@ -5984,6 +6059,54 @@
     return { month: month, week: week };
   }
 
+  // Folga do amarelo: passou da meta em até 10% do valor esperado até hoje.
+  var DAY_BARS_WARN_TOLERANCE_ = 0.10;
+
+  /**
+   * Cor de cada linha de meta: 'ok' (dentro da meta), 'warn' (passou em até 10%) ou 'bad'
+   * (passou mais que isso); null = trecho que ainda nem começou (fica neutra). Vale por
+   * trecho: o mês inteiro (linha fina) e cada pedaço de semana (linha grossa, cortado no
+   * dia 1). Compara o REAL com o ESPERADO só dos dias até hoje -- o trecho em andamento é
+   * julgado pelo ritmo até agora e pode mudar de cor até fechar. Despesas: gasto
+   * orçamentário (targets.spent, mesma base da meta) contra a soma das metas por dia.
+   * Saldo: receita real - esse gasto contra a soma das metas (aqui passar da meta = sobrar
+   * menos do que o esperado, e a folga é 10% do módulo do esperado).
+   * incomeByDay: receitas reais por dia (só usado no Saldo). Função pura.
+   */
+  function dayBarsTargetStatus_(days, targets, incomeByDay, mode, today) {
+    var out = { month: {}, week: {} };
+    var groups = { month: {}, week: {} };
+    days.forEach(function (d) {
+      var sunday = parseYmdLocal_(d);
+      sunday.setDate(sunday.getDate() - sunday.getDay());
+      var ym = d.slice(0, 7);
+      var weekKey = ym + '|' + ymdFromDate_(sunday);
+      (groups.month[ym] = groups.month[ym] || []).push(d);
+      (groups.week[weekKey] = groups.week[weekKey] || []).push(d);
+    });
+    var spent = targets.spent || {};
+    function judge(list, targetByDay) {
+      var expected = 0, actual = 0, elapsed = 0;
+      list.forEach(function (d) {
+        if (d > today) return;
+        elapsed++;
+        expected += targetByDay[d];
+        actual += mode === 'balance' ? (incomeByDay[d] || 0) - (spent[d] || 0) : (spent[d] || 0);
+      });
+      if (!elapsed) return null;
+      var over = mode === 'balance' ? expected - actual : actual - expected;
+      if (over <= 0.005) return 'ok';
+      return over <= DAY_BARS_WARN_TOLERANCE_ * Math.abs(expected) + 0.005 ? 'warn' : 'bad';
+    }
+    ['month', 'week'].forEach(function (kind) {
+      Object.keys(groups[kind]).forEach(function (key) {
+        var status = judge(groups[kind][key], targets[kind]);
+        groups[kind][key].forEach(function (d) { out[kind][d] = status; });
+      });
+    });
+    return out;
+  }
+
   /** Lê o STATE e monta as metas do calendário (null = sem linha): só nos modos Despesas e
    *  Saldo; some com filtro de conta ou de texto (não dá pra mapear em orçamento) e quando
    *  não há teto nenhum (sem orçamento / sem histórico pra Automático). Filtro de categoria
@@ -6030,14 +6153,16 @@
       fixedIncomes.forEach(function (x) { if (Math.min(x.dayOfMonth, dim) === day) total += x.expectedAmount; });
       return total;
     }
-    return dayBarsTargetLines_(days, function (ym) { return daily * daysInMonth_(ym); }, incomeOn, spentByDay, mode, todayYmd());
+    var lines = dayBarsTargetLines_(days, function (ym) { return daily * daysInMonth_(ym); }, incomeOn, spentByDay, mode, todayYmd());
+    lines.spent = spentByDay; // pra dayBarsTargetStatus_ julgar na mesma base da meta
+    return lines;
   }
 
   /**
    * Barras finas, uma por dia (eixo horizontal = dias do período, vertical = total do dia,
-   * de 0 até ref -- ver computeDayBarsRef_). Despesas em vermelho, receitas em verde; no
-   * saldo a barra sempre sobe (eixo só positivo): verde se o saldo do dia é positivo,
-   * vermelho dessaturado se negativo. Dia com algo (inclusive só "fora das análises", sem
+   * de 0 até ref -- ver computeDayBarsRef_). Barras em cinza neutro (a cor fica por conta
+   * das linhas de meta); no saldo a barra sempre sobe (eixo só positivo), mais clara se o
+   * saldo do dia é negativo. Dia com algo (inclusive só "fora das análises", sem
    * barra) é clicável e leva ao card dele no Extrato. Rótulos: número do dia embaixo de
    * cada barra e o nome do mês na coluna do dia 1. Sem eixo vertical nem linhas de grade
    * (pedido explícito); a divisão fica por conta de linhas verticais (CSS): semana começa
@@ -6057,7 +6182,7 @@
       if (has) {
         var value = totals[dateStr];
         var fraction = ref > 0 ? Math.min(1, Math.abs(value) / ref) : (value !== 0 ? 1 : 0);
-        var color = mode === 'income' ? 'var(--income)' : mode === 'expense' ? 'var(--expense)' : (value >= 0 ? 'var(--income)' : 'var(--expense)');
+        var color = 'var(--text-muted)';
         var muted = mode === 'balance' && value < 0 ? 'opacity:.55;' : '';
         // Barra que não coube na escala ganha um triângulo no topo (mesma cor), pra mostrar
         // que ela continua (ver .day-bar-over no CSS).
@@ -6066,20 +6191,22 @@
           barHtml = '<div class="day-bar' + over + '" style="height:' + (fraction * 100).toFixed(1) + '%;--bar-color:' + color + ';' + muted + '"></div>';
         }
         var shown = mode === 'balance' ? fmtMoney(value) : fmtMoney(Math.abs(value));
-        tooltip = fmtDate(dateStr) + ' · ' + modeLabel + ': ' + shown + ' — clique para ver os lançamentos';
+        tooltip = fmtDate(dateStr) + '\n' + modeLabel + ': ' + shown;
       } else if (flaggedOnlyDays[dateStr]) {
-        tooltip = fmtDate(dateStr) + ' · só lançamentos fora das análises — clique para ver';
+        tooltip = fmtDate(dateStr) + '\nSó lançamentos fora das análises';
       }
       var targetHtml = '';
       if (targets && ref > 0) {
         var pct = function (v) { return (Math.min(1, Math.abs(v) / ref) * 100).toFixed(1); };
         // No Saldo a meta pode ser negativa (déficit esperado): desenhada pelo módulo, como as
-        // barras, e em vermelho nesse trecho.
-        var neg = function (v) { return v < 0 ? ' day-bar-target-neg' : ''; };
-        targetHtml = '<div class="day-bar-target day-bar-target-month' + neg(targets.month[dateStr]) + '" style="bottom:' + pct(targets.month[dateStr]) + '%"></div>' +
-          '<div class="day-bar-target day-bar-target-week' + neg(targets.week[dateStr]) + '" style="bottom:' + pct(targets.week[dateStr]) + '%"></div>';
+        // barras. A cor vem do veredito do trecho (ver dayBarsTargetStatus_); sem veredito,
+        // fica a cor neutra de sempre.
+        var st = targets.status || { month: {}, week: {} };
+        var tone = function (v) { return v ? ' day-bar-target-' + v : ''; };
+        targetHtml = '<div class="day-bar-target day-bar-target-month' + tone(st.month[dateStr]) + '" style="bottom:' + pct(targets.month[dateStr]) + '%"></div>' +
+          '<div class="day-bar-target day-bar-target-week' + tone(st.week[dateStr]) + '" style="bottom:' + pct(targets.week[dateStr]) + '%"></div>';
         if (clickable) {
-          tooltip += ' · meta por dia: mês ' + fmtMoney(targets.month[dateStr]) + ', semana ' + fmtMoney(targets.week[dateStr]);
+          tooltip += '\nMeta por dia do mês: ' + fmtMoney(targets.month[dateStr]) + '\nMeta por dia da semana: ' + fmtMoney(targets.week[dateStr]);
         }
       }
       var isSunday = parseYmdLocal_(dateStr).getDay() === 0;
@@ -6092,7 +6219,7 @@
       '</div>';
     }).join('');
 
-    return '<div class="day-bars-plot">' + cellsHtml + '</div>';
+    return '<div class="day-bars-plot" style="--bars-h:' + DAY_BARS_HEIGHT_PX_ + 'px">' + cellsHtml + '</div>';
   }
 
   /** Datas (YYYY-MM-DD) de minDate a maxDate inclusive, uma por dia. */
@@ -6237,12 +6364,17 @@
       var totals = computeCalendarDayTotals_(combined, STATE.txCalendarMode);
       var days = buildDayList_(range.minDate, range.maxDate);
       var targets = computeDayBarsTargets_(days, STATE.txCalendarMode);
+      if (targets) targets.status = dayBarsTargetStatus_(days, targets, STATE.txCalendarMode === 'balance' ? computeCalendarDayTotals_(combined, 'income') : {}, STATE.txCalendarMode, todayYmd());
       container.innerHTML = buildDayBarsHtml_(days, totals, computeDayBarsRef_(totals, targets), STATE.txCalendarMode, computeCalendarFlaggedOnlyDays_(combined, nets), targets);
       var legend = document.getElementById('tx-calendar-legend');
       if (legend) {
         legend.hidden = !targets;
+        var balance = STATE.txCalendarMode === 'balance';
         legend.innerHTML = '<span class="day-bars-legend-swatch day-bar-target-month"></span> meta/dia do mês' +
-          '<span class="day-bars-legend-swatch day-bar-target-week"></span> da semana (o que sobra)';
+          '<span class="day-bars-legend-swatch day-bar-target-week"></span> da semana (o que sobra)' +
+          '<span class="day-bars-legend-swatch day-bar-target-week day-bar-target-ok"></span> ' + (balance ? 'na meta' : 'dentro da meta') +
+          '<span class="day-bars-legend-swatch day-bar-target-week day-bar-target-warn"></span> ' + (balance ? 'até 10% abaixo' : 'até 10% acima') +
+          '<span class="day-bars-legend-swatch day-bar-target-week day-bar-target-bad"></span> ' + (balance ? 'abaixo' : 'acima');
       }
       container.querySelectorAll('.day-bar-cell[data-date]').forEach(function (el) {
         el.onclick = function () { scrollToTxDay_(el.dataset.date); };
@@ -13448,6 +13580,7 @@
     applyNavSide_();
     setupSidebar_();
     setupFabSpeedDial_();
+    setupReviewButton_();
     setupMarginSwitchZones_();
     setupScrollToTopButton_();
     setupDateTimePickerAutoOpen_();
