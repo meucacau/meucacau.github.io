@@ -855,6 +855,7 @@
   .day-bar-target { position: absolute; left: 0; right: 0; height: 0; pointer-events: none; z-index: 1; }
   .day-bar-target-month { border-top: 1px dotted var(--text-muted); }
   .day-bar-target-week { border-top: 2px dotted var(--text); }
+  .day-bar-target-neg { border-top-color: var(--expense); }
   .day-bars-legend { display: flex; align-items: center; gap: 4px; margin-top: 8px; font-size: 11px; color: var(--text-muted); }
   .day-bars-legend[hidden] { display: none; }
   .day-bars-legend-swatch { position: static; display: inline-block; width: 18px; height: 0; margin-left: 8px; }
@@ -5932,31 +5933,37 @@
   function computeDayBarsRef_(totals, targets) {
     var abs = Object.keys(totals).map(function (k) { return Math.abs(totals[k]); }).filter(function (v) { return v > 0; });
     var ref = computePercentile_(abs, 0.75);
-    // A linha da meta do mês nunca sai do gráfico: a escala sobe pra caber nela (pedido
-    // explícito). A da semana não entra -- perto do fim do mês ela dispara (sobra grande ÷
-    // poucos dias) e achataria as barras; essa fica presa no topo (ver buildDayBarsHtml_).
-    if (targets) Object.keys(targets.month).forEach(function (d) { ref = Math.max(ref, Math.abs(targets.month[d])); });
+    // A escala sobe pra caber a linha da meta do mês (pedido explícito) -- pelo P75 dos
+    // valores dela, não pelo máximo: no Saldo a meta tem um pico no dia do salário (receita
+    // prevista), que achataria o resto igual a um dia de salário nas barras. A da semana não
+    // entra (perto do fim do mês dispara: sobra grande ÷ poucos dias). O que passar do topo
+    // fica preso nele (ver buildDayBarsHtml_).
+    if (targets) {
+      var targetAbs = Object.keys(targets.month).map(function (d) { return Math.abs(targets.month[d]); }).filter(function (v) { return v > 0; });
+      ref = Math.max(ref, computePercentile_(targetAbs, 0.75));
+    }
     return ref;
   }
 
   /**
    * Metas diárias (linhas pontilhadas do calendário em barras), por dia:
-   *  - month[d]: média diária da meta do mês de d -- Despesas: teto mensal ÷ dias do mês;
-   *    Saldo: receita mensal prevista ÷ dias do mês − isso.
+   *  - month[d]: meta do dia segundo o mês de d -- Despesas: teto mensal ÷ dias do mês;
+   *    Saldo: receita prevista PRA AQUELE DIA (incomeOnFn, ver computeDayBarsTargets_) menos
+   *    isso -- negativa na maioria dos dias, com pico no dia do salário.
    *  - week[d]: "o que sobra" no trecho da semana (domingo a sábado, cortado no dia 1 do
    *    mês) que contém d: (teto do mês − gasto do mês até a véspera do trecho) ÷ dias que
    *    restam no mês a partir do início do trecho, nunca abaixo de 0. No Saldo é a receita
-   *    diária prevista menos isso. Passou do ritmo, a linha da semana cai.
-   * monthlyLimitFn/monthlyIncomeFn(ym) dão os valores mensais; spentByDay { ymd: gasto
+   *    prevista do dia menos isso. Passou do ritmo, a linha da semana cai.
+   * monthlyLimitFn(ym) dá o teto do mês e incomeOnFn(d, ym, diasDoMês) a receita esperada no dia d; spentByDay { ymd: gasto
    * orçamentário }; today (ymd) separa o que já aconteceu do que é projeção. Função pura -- ver computeDayBarsTargets_ pra de onde vêm.
    */
-  function dayBarsTargetLines_(days, monthlyLimitFn, monthlyIncomeFn, spentByDay, mode, today) {
+  function dayBarsTargetLines_(days, monthlyLimitFn, incomeOnFn, spentByDay, mode, today) {
     var month = {}, week = {};
     days.forEach(function (d) {
       var ym = d.slice(0, 7);
       var dim = daysInMonth_(ym);
       var limit = monthlyLimitFn(ym);
-      var incomeDaily = mode === 'balance' ? monthlyIncomeFn(ym) / dim : 0;
+      var incomeDaily = mode === 'balance' ? incomeOnFn(d, ym, dim) : 0;
       var sunday = parseYmdLocal_(d);
       sunday.setDate(sunday.getDate() - sunday.getDay());
       var segStart = ymdFromDate_(sunday);
@@ -6011,11 +6018,19 @@
       var eff = budgetEffectiveDate_(t);
       if (eff) spentByDay[eff] = (spentByDay[eff] || 0) + netAmountOfPassiveForBudget_(t);
     });
+    // Receita esperada por dia: recorrente mensal com dia fixo cai no dia dela (clampado ao
+    // último dia do mês, ver forecastDueDateInfo_); as demais (a cada N dias, vários meses,
+    // mensal sem dia) não têm data conhecida e ficam diluídas igualmente pelos dias do mês.
     var incomes = STATE.forecasts.filter(function (x) { return !x.archived && x.kind === 'income' && hit([x.categoryId]); });
-    return dayBarsTargetLines_(days,
-      function (ym) { return daily * daysInMonth_(ym); },
-      function (ym) { return incomes.reduce(function (sum, x) { return sum + forecastMonthlyAverage_(x, ym); }, 0); },
-      spentByDay, mode, todayYmd());
+    var fixedIncomes = incomes.filter(function (x) { return x.intervalUnit === 'months' && x.intervalDays === 1 && x.dayOfMonth; });
+    var spreadIncomes = incomes.filter(function (x) { return fixedIncomes.indexOf(x) === -1; });
+    function incomeOn(d, ym, dim) {
+      var day = Number(d.slice(8, 10));
+      var total = spreadIncomes.reduce(function (sum, x) { return sum + forecastMonthlyAverage_(x, ym) / dim; }, 0);
+      fixedIncomes.forEach(function (x) { if (Math.min(x.dayOfMonth, dim) === day) total += x.expectedAmount; });
+      return total;
+    }
+    return dayBarsTargetLines_(days, function (ym) { return daily * daysInMonth_(ym); }, incomeOn, spentByDay, mode, todayYmd());
   }
 
   /**
@@ -6058,8 +6073,11 @@
       var targetHtml = '';
       if (targets && ref > 0) {
         var pct = function (v) { return (Math.min(1, Math.abs(v) / ref) * 100).toFixed(1); };
-        targetHtml = '<div class="day-bar-target day-bar-target-month" style="bottom:' + pct(targets.month[dateStr]) + '%"></div>' +
-          '<div class="day-bar-target day-bar-target-week" style="bottom:' + pct(targets.week[dateStr]) + '%"></div>';
+        // No Saldo a meta pode ser negativa (déficit esperado): desenhada pelo módulo, como as
+        // barras, e em vermelho nesse trecho.
+        var neg = function (v) { return v < 0 ? ' day-bar-target-neg' : ''; };
+        targetHtml = '<div class="day-bar-target day-bar-target-month' + neg(targets.month[dateStr]) + '" style="bottom:' + pct(targets.month[dateStr]) + '%"></div>' +
+          '<div class="day-bar-target day-bar-target-week' + neg(targets.week[dateStr]) + '" style="bottom:' + pct(targets.week[dateStr]) + '%"></div>';
         if (clickable) {
           tooltip += ' · meta por dia: mês ' + fmtMoney(targets.month[dateStr]) + ', semana ' + fmtMoney(targets.week[dateStr]);
         }
