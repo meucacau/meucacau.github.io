@@ -823,38 +823,46 @@
   .week-cal-column { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; }
 
   /* Calendário do Extrato em barras (ver buildDayBarsHtml_, JavaScript.html): cada dia é
-     uma célula de 14px (mesma largura da legenda da grade) com uma barra fina de 6px. O
-     eixo (valor máximo, metade e zero) é o 1º filho do container, sticky à esquerda. */
-  .day-bars-axis { position: sticky; left: 0; z-index: 2; background: var(--surface); flex-shrink: 0; width: 34px; padding-right: 4px; }
-  .day-bars-axis-plot { position: relative; }
-  .day-bars-axis-plot span {
-    position: absolute;
-    right: 4px;
-    transform: translateY(-50%);
-    font-size: 9px;
-    line-height: 1;
-    color: var(--text-muted);
-  }
+     uma célula de 14px (mesma largura da legenda da grade) com uma barra fina de 6px, sem
+     eixo nem linhas de grade. Divisões por linhas verticais: semana (começa no domingo, que
+     ganha 8px de respiro à esquerda -- a linha fica no meio dele) em --border, e mês (a
+     célula do dia 1) em tom mais forte. */
   .day-bars-plot { display: flex; flex-shrink: 0; }
   .day-bar-cell { position: relative; width: 14px; flex-shrink: 0; }
   .day-bar-clickable { cursor: pointer; }
   .day-bar-clickable:hover { background: var(--border); }
   .week-cal-dragging .day-bar-cell { pointer-events: none; }
-  .day-bar-col {
-    position: relative;
-    background:
-      linear-gradient(var(--border), var(--border)) top / 100% 1px no-repeat,
-      linear-gradient(var(--border), var(--border)) center / 100% 1px no-repeat,
-      linear-gradient(var(--border), var(--border)) bottom / 100% 1px no-repeat;
-  }
+  .day-bar-sun { margin-left: 8px; }
+  .day-bars-plot > .day-bar-sun:first-child { margin-left: 0; }
+  .day-bar-sun::before, .day-bar-day1::before { content: ''; position: absolute; top: 0; bottom: 0; width: 1px; pointer-events: none; }
+  .day-bar-sun::before { left: -4px; background: var(--border); }
+  .day-bars-plot > .day-bar-sun:first-child::before { display: none; }
+  .day-bar-day1::before { left: 0; background: var(--text-muted); opacity: .55; }
+  .day-bar-day1.day-bar-sun::before { left: -4px; display: block; }
+  .day-bar-col { position: relative; }
   .day-bar { position: absolute; bottom: 0; left: 4px; width: 6px; border-radius: 2px 2px 0 0; }
-  /* Dia acima da escala (cortado no topo): risquinho claro marca que a barra continua. */
-  .day-bar-over::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--surface); }
+  .day-bar { background: var(--bar-color); }
+  /* Barra que não coube na escala: triângulo pra cima, da cor dela e um pouco mais estreito
+     (4px de base contra 6px), logo acima do topo -- indica que ela não terminou ali. */
+  .day-bar-over::after {
+    content: ''; position: absolute; left: 1px; bottom: 100%;
+    border-left: 2px solid transparent; border-right: 2px solid transparent;
+    border-bottom: 4px solid var(--bar-color);
+  }
+  /* Metas diárias: linhas pontilhadas por célula (mês fina e clara, semana mais grossa), por
+     cima das barras; a célula do domingo tem o respiro de 8px, então a linha da semana
+     quebra naturalmente entre uma semana e outra. */
+  .day-bar-target { position: absolute; left: 0; right: 0; height: 0; pointer-events: none; z-index: 1; }
+  .day-bar-target-month { border-top: 1px dotted var(--text-muted); }
+  .day-bar-target-week { border-top: 2px dotted var(--text); }
+  .day-bars-legend { display: flex; align-items: center; gap: 4px; margin-top: 8px; font-size: 11px; color: var(--text-muted); }
+  .day-bars-legend[hidden] { display: none; }
+  .day-bars-legend-swatch { position: static; display: inline-block; width: 18px; height: 0; margin-left: 8px; }
+  .day-bars-legend-swatch:first-child { margin-left: 0; }
   .day-bar-num { margin-top: 3px; text-align: center; font-size: 9px; line-height: 1; color: var(--text-muted); }
   .day-bar-today .day-bar-num { color: var(--primary); font-weight: 700; }
-  .day-bar-day1 { box-shadow: inset 1px 0 0 var(--border); }
   .day-bar-month { position: relative; height: 18px; }
-  .day-bar-month span { position: absolute; left: 1px; top: 2px; font-size: 10px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+  .day-bar-month span { position: absolute; left: 4px; top: 2px; font-size: 10px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
 
   /* aspect-ratio 1.5 (não 1) -- pedido explícito do usuário pra diminuir a altura dos
      quadrados; deixam de ser quadrados de propósito. width fixo (antes vinha de
@@ -5921,16 +5929,93 @@
    *  verde/vermelho da grade, ver renderTxCalendarWeeks_) dos totais diários -- em módulo,
    *  pra o saldo negativo e positivo dividirem a MESMA escala. Dia acima disso é cortado no
    *  topo (marcado, ver buildDayBarsHtml_), pra um dia de salário não achatar todos os outros. */
-  function computeDayBarsRef_(totals) {
+  function computeDayBarsRef_(totals, targets) {
     var abs = Object.keys(totals).map(function (k) { return Math.abs(totals[k]); }).filter(function (v) { return v > 0; });
-    return computePercentile_(abs, 0.75);
+    var ref = computePercentile_(abs, 0.75);
+    // A linha da meta do mês nunca sai do gráfico: a escala sobe pra caber nela (pedido
+    // explícito). A da semana não entra -- perto do fim do mês ela dispara (sobra grande ÷
+    // poucos dias) e achataria as barras; essa fica presa no topo (ver buildDayBarsHtml_).
+    if (targets) Object.keys(targets.month).forEach(function (d) { ref = Math.max(ref, Math.abs(targets.month[d])); });
+    return ref;
   }
 
-  /** Número curto pro eixo vertical: 850, 1,2k, 12k. */
-  function fmtAxisValue_(v) {
-    if (v >= 10000) return Math.round(v / 1000) + 'k';
-    if (v >= 1000) return (Math.round(v / 100) / 10).toString().replace('.', ',') + 'k';
-    return String(Math.round(v));
+  /**
+   * Metas diárias (linhas pontilhadas do calendário em barras), por dia:
+   *  - month[d]: média diária da meta do mês de d -- Despesas: teto mensal ÷ dias do mês;
+   *    Saldo: receita mensal prevista ÷ dias do mês − isso.
+   *  - week[d]: "o que sobra" no trecho da semana (domingo a sábado, cortado no dia 1 do
+   *    mês) que contém d: (teto do mês − gasto do mês até a véspera do trecho) ÷ dias que
+   *    restam no mês a partir do início do trecho, nunca abaixo de 0. No Saldo é a receita
+   *    diária prevista menos isso. Passou do ritmo, a linha da semana cai.
+   * monthlyLimitFn/monthlyIncomeFn(ym) dão os valores mensais; spentByDay { ymd: gasto
+   * orçamentário }; today (ymd) separa o que já aconteceu do que é projeção. Função pura -- ver computeDayBarsTargets_ pra de onde vêm.
+   */
+  function dayBarsTargetLines_(days, monthlyLimitFn, monthlyIncomeFn, spentByDay, mode, today) {
+    var month = {}, week = {};
+    days.forEach(function (d) {
+      var ym = d.slice(0, 7);
+      var dim = daysInMonth_(ym);
+      var limit = monthlyLimitFn(ym);
+      var incomeDaily = mode === 'balance' ? monthlyIncomeFn(ym) / dim : 0;
+      var sunday = parseYmdLocal_(d);
+      sunday.setDate(sunday.getDate() - sunday.getDay());
+      var segStart = ymdFromDate_(sunday);
+      if (segStart < ym + '-01') segStart = ym + '-01';
+      var startDay = Number(segStart.slice(8, 10));
+      var spentBefore = 0;
+      for (var i = 1; i < startDay; i++) {
+        var ymd = ym + '-' + String(i).padStart(2, '0');
+        // Dia ainda por vir: conta como gasto no ritmo do teto (senão toda semana futura
+        // herdaria a "sobra" de dias que nem aconteceram).
+        spentBefore += ymd <= today ? (spentByDay[ymd] || 0) : limit / dim;
+      }
+      var left = Math.max(0, (limit - spentBefore) / (dim - startDay + 1));
+      month[d] = incomeDaily - limit / dim;
+      week[d] = incomeDaily - left;
+      if (mode !== 'balance') { month[d] = limit / dim; week[d] = left; }
+    });
+    return { month: month, week: week };
+  }
+
+  /** Lê o STATE e monta as metas do calendário (null = sem linha): só nos modos Despesas e
+   *  Saldo; some com filtro de conta ou de texto (não dá pra mapear em orçamento) e quando
+   *  não há teto nenhum (sem orçamento / sem histórico pra Automático). Filtro de categoria
+   *  mantém só os orçamentos que tocam alguma das categorias filtradas (o "não orçamentado"
+   *  entra se alguma delas não tem orçamento) e as receitas recorrentes dessas categorias.
+   *  O teto diário é constante por orçamento (taxa) -- o de hoje, igual às barras de
+   *  Orçamentos (ver computeBudgetAutoMonthProgress_). Gasto = o mesmo dos orçamentos
+   *  (data efetiva, fora das análises e vinculados a recorrente de fora, líquido de
+   *  reembolso). */
+  function computeDayBarsTargets_(days, mode) {
+    if (mode === 'income') return null;
+    var f = STATE.txFilters || {};
+    if (f.accountId || f.text) return null;
+    var filterIds = f.categoryIds || [];
+    function hit(ids) { return !filterIds.length || ids.some(function (id) { return filterIds.indexOf(id) !== -1; }); }
+    var w = budgetAutoWindowDays_();
+    var ymNow = todayYmd().slice(0, 7);
+    var dimNow = daysInMonth_(ymNow);
+    var budgets = STATE.budgets.filter(function (b) { return !b.archived && !b.isUnbudgetedCatchAll && hit(b.categoryIds); });
+    var daily = budgets.reduce(function (sum, b) { return sum + budgetMonthlyAmount_(b, ymNow, w) / dimNow; }, 0);
+    var covered = {};
+    budgets.forEach(function (b) { b.categoryIds.forEach(function (id) { covered[id] = true; }); });
+    var catchIds = unbudgetedExpenseCategoryIds_();
+    if (w && catchIds.length && hit(catchIds)) {
+      daily += computeBudgetAutoProgress_(catchIds, w).shimBudget.amount / w;
+      catchIds.forEach(function (id) { covered[id] = true; });
+    }
+    if (daily <= 0) return null;
+    var spentByDay = {};
+    STATE.allTransactions.forEach(function (t) {
+      if (t.kind !== 'expense' || !covered[t.categoryId] || t.excludeFromAnalysis || t.forecastId) return;
+      var eff = budgetEffectiveDate_(t);
+      if (eff) spentByDay[eff] = (spentByDay[eff] || 0) + netAmountOfPassiveForBudget_(t);
+    });
+    var incomes = STATE.forecasts.filter(function (x) { return !x.archived && x.kind === 'income' && hit([x.categoryId]); });
+    return dayBarsTargetLines_(days,
+      function (ym) { return daily * daysInMonth_(ym); },
+      function (ym) { return incomes.reduce(function (sum, x) { return sum + forecastMonthlyAverage_(x, ym); }, 0); },
+      spentByDay, mode, todayYmd());
   }
 
   /**
@@ -5939,19 +6024,14 @@
    * saldo a barra sempre sobe (eixo só positivo): verde se o saldo do dia é positivo,
    * vermelho dessaturado se negativo. Dia com algo (inclusive só "fora das análises", sem
    * barra) é clicável e leva ao card dele no Extrato. Rótulos: número do dia embaixo de
-   * cada barra e o nome do mês na coluna do dia 1.
+   * cada barra e o nome do mês na coluna do dia 1. Sem eixo vertical nem linhas de grade
+   * (pedido explícito); a divisão fica por conta de linhas verticais (CSS): semana começa
+   * no domingo, com um respiro a mais entre sábado e domingo, e o dia 1 abre o mês.
    */
-  function buildDayBarsHtml_(days, totals, ref, mode, flaggedOnlyDays) {
+  function buildDayBarsHtml_(days, totals, ref, mode, flaggedOnlyDays, targets) {
     flaggedOnlyDays = flaggedOnlyDays || {};
     var today = todayYmd();
     var modeLabel = mode === 'income' ? 'Receitas' : (mode === 'balance' ? 'Saldo' : 'Despesas');
-    var axisHtml = '<div class="day-bars-axis">' +
-      '<div class="day-bars-axis-plot" style="height:' + DAY_BARS_HEIGHT_PX_ + 'px">' +
-        '<span style="top:0">' + (ref > 0 ? fmtAxisValue_(ref) : '') + '</span>' +
-        '<span style="top:50%">' + (ref > 0 ? fmtAxisValue_(ref / 2) : '') + '</span>' +
-        '<span style="top:100%">0</span>' +
-      '</div></div>';
-
     var cellsHtml = days.map(function (dateStr) {
       var dayNum = Number(dateStr.slice(8, 10));
       var isDay1 = dayNum === 1;
@@ -5964,25 +6044,37 @@
         var fraction = ref > 0 ? Math.min(1, Math.abs(value) / ref) : (value !== 0 ? 1 : 0);
         var color = mode === 'income' ? 'var(--income)' : mode === 'expense' ? 'var(--expense)' : (value >= 0 ? 'var(--income)' : 'var(--expense)');
         var muted = mode === 'balance' && value < 0 ? 'opacity:.55;' : '';
+        // Barra que não coube na escala ganha um triângulo no topo (mesma cor), pra mostrar
+        // que ela continua (ver .day-bar-over no CSS).
         var over = ref > 0 && Math.abs(value) > ref ? ' day-bar-over' : '';
         if (fraction > 0) {
-          barHtml = '<div class="day-bar' + over + '" style="height:' + (fraction * 100).toFixed(1) + '%;background:' + color + ';' + muted + '"></div>';
+          barHtml = '<div class="day-bar' + over + '" style="height:' + (fraction * 100).toFixed(1) + '%;--bar-color:' + color + ';' + muted + '"></div>';
         }
         var shown = mode === 'balance' ? fmtMoney(value) : fmtMoney(Math.abs(value));
         tooltip = fmtDate(dateStr) + ' · ' + modeLabel + ': ' + shown + ' — clique para ver os lançamentos';
       } else if (flaggedOnlyDays[dateStr]) {
         tooltip = fmtDate(dateStr) + ' · só lançamentos fora das análises — clique para ver';
       }
-      var classes = 'day-bar-cell' + (isDay1 ? ' day-bar-day1' : '') + (clickable ? ' day-bar-clickable' : '') + (dateStr === today ? ' day-bar-today' : '');
+      var targetHtml = '';
+      if (targets && ref > 0) {
+        var pct = function (v) { return (Math.min(1, Math.abs(v) / ref) * 100).toFixed(1); };
+        targetHtml = '<div class="day-bar-target day-bar-target-month" style="bottom:' + pct(targets.month[dateStr]) + '%"></div>' +
+          '<div class="day-bar-target day-bar-target-week" style="bottom:' + pct(targets.week[dateStr]) + '%"></div>';
+        if (clickable) {
+          tooltip += ' · meta por dia: mês ' + fmtMoney(targets.month[dateStr]) + ', semana ' + fmtMoney(targets.week[dateStr]);
+        }
+      }
+      var isSunday = parseYmdLocal_(dateStr).getDay() === 0;
+      var classes = 'day-bar-cell' + (isDay1 ? ' day-bar-day1' : '') + (isSunday ? ' day-bar-sun' : '') + (clickable ? ' day-bar-clickable' : '') + (dateStr === today ? ' day-bar-today' : '');
       var attrs = clickable ? ' data-date="' + dateStr + '" data-tooltip="' + escapeHtml(tooltip) + '"' : '';
       return '<div class="' + classes + '"' + attrs + '>' +
-        '<div class="day-bar-col" style="height:' + DAY_BARS_HEIGHT_PX_ + 'px">' + barHtml + '</div>' +
+        '<div class="day-bar-col" style="height:' + DAY_BARS_HEIGHT_PX_ + 'px">' + barHtml + targetHtml + '</div>' +
         '<div class="day-bar-num">' + dayNum + '</div>' +
         '<div class="day-bar-month">' + (isDay1 ? '<span>' + escapeHtml(capitalizeFirst_(MONTH_NAMES_PT[Number(dateStr.slice(5, 7)) - 1])) + '</span>' : '') + '</div>' +
       '</div>';
     }).join('');
 
-    return axisHtml + '<div class="day-bars-plot">' + cellsHtml + '</div>';
+    return '<div class="day-bars-plot">' + cellsHtml + '</div>';
   }
 
   /** Datas (YYYY-MM-DD) de minDate a maxDate inclusive, uma por dia. */
@@ -6126,7 +6218,14 @@
     if (TX_CALENDAR_FORMAT_ === 'bars') {
       var totals = computeCalendarDayTotals_(combined, STATE.txCalendarMode);
       var days = buildDayList_(range.minDate, range.maxDate);
-      container.innerHTML = buildDayBarsHtml_(days, totals, computeDayBarsRef_(totals), STATE.txCalendarMode, computeCalendarFlaggedOnlyDays_(combined, nets));
+      var targets = computeDayBarsTargets_(days, STATE.txCalendarMode);
+      container.innerHTML = buildDayBarsHtml_(days, totals, computeDayBarsRef_(totals, targets), STATE.txCalendarMode, computeCalendarFlaggedOnlyDays_(combined, nets), targets);
+      var legend = document.getElementById('tx-calendar-legend');
+      if (legend) {
+        legend.hidden = !targets;
+        legend.innerHTML = '<span class="day-bars-legend-swatch day-bar-target-month"></span> meta/dia do mês' +
+          '<span class="day-bars-legend-swatch day-bar-target-week"></span> da semana (o que sobra)';
+      }
       container.querySelectorAll('.day-bar-cell[data-date]').forEach(function (el) {
         el.onclick = function () { scrollToTxDay_(el.dataset.date); };
         wireTooltipTrigger_(el, 200);
@@ -6182,6 +6281,7 @@
       '<div id="tx-calendar-collapse" style="display:grid;grid-template-rows:' + (expanded ? '1fr' : '0fr') + ';transition:grid-template-rows 200ms ease">' +
         '<div style="overflow:hidden;min-height:0">' +
           '<div id="tx-calendar-mode" class="capsule-field" style="margin:12px 0 0"></div>' +
+          '<div id="tx-calendar-legend" class="day-bars-legend" hidden></div>' +
           '<div id="tx-calendar-weeks-wrap" style="display:flex;overflow-x:auto;padding-top:12px"></div>' +
         '</div>' +
       '</div>' +
