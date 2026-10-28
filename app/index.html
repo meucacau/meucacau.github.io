@@ -1391,7 +1391,7 @@
 
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=7b6a763cb7"></script>
+  <script src="cacau-web.js?v=8125025819"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -1753,7 +1753,7 @@
   window.addEventListener('scroll', hideTooltip_, true);
   function dismissOnOutsideClick(pop, cleanup) {
     function outsideClick(e) {
-      if (!pop.contains(e.target)) cleanup();
+      if (!pop.contains(e.target)) cleanup(e);
     }
     setTimeout(function () { document.addEventListener('mousedown', outsideClick, true); }, 0);
     return function () { document.removeEventListener('mousedown', outsideClick, true); };
@@ -2022,7 +2022,13 @@
    * nativo — reaproveita o mesmo popover de confirmPopover/errorPopover.
    * options: [{ value, label, selected }].
    */
+  // Clicar no botão que abriu o menu, com o menu já aberto, deve FECHAR (não reabrir): o
+  // mousedown fora do popover já fecha (dismissOnOutsideClick), mas o click que vem em
+  // seguida chamaria openDropdownMenu_ de novo -- esse marcador (válido só até o click
+  // terminar, ou 1,5 s) faz essa chamada ser ignorada.
+  var dropdownClosedByAnchor_ = null;
   function openDropdownMenu_(anchorEl, options, onSelect) {
+    if (dropdownClosedByAnchor_ === anchorEl) { dropdownClosedByAnchor_ = null; return; }
     closeActiveConfirmPopover_();
     var pop = document.createElement('div');
     pop.id = 'confirm-popover';
@@ -2048,7 +2054,15 @@
       document.removeEventListener('keydown', onKey, true);
       activeConfirmPopoverCleanup_ = null;
     }
-    stopListening = dismissOnOutsideClick(pop, cleanup);
+    stopListening = dismissOnOutsideClick(pop, function (e) {
+      if (e && anchorEl && anchorEl.contains(e.target)) {
+        dropdownClosedByAnchor_ = anchorEl;
+        var release = function () { dropdownClosedByAnchor_ = null; };
+        document.addEventListener('click', release, { once: true });
+        setTimeout(release, 1500);
+      }
+      cleanup();
+    });
     document.addEventListener('keydown', onKey, true);
     activeConfirmPopoverCleanup_ = cleanup;
     pop.querySelectorAll('.dropdown-option').forEach(function (el) {
@@ -11242,7 +11256,7 @@
 
     openModal(
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap">' +
-        '<h2 style="margin:0">Revisar (' + (index + 1) + '/' + queue.length + ')</h2>' +
+        '<h2 style="margin:0">Lançamentos a confirmar (' + (index + 1) + '/' + queue.length + ')</h2>' +
         '<div style="display:flex;gap:8px">' +
           '<button type="button" class="secondary" id="p-queue-toggle" style="padding:4px 10px;font-size:12px">Fila para confirmar</button>' +
           '<button type="button" class="secondary" id="p-sort-toggle" style="padding:4px 10px;font-size:12px">' + sortLabel + '</button>' +

@@ -2018,7 +2018,9 @@ function extractAmountFromText_(text) {
 /** Palpite de receita/despesa com base em palavras comuns de notificação bancária. */
 function guessKindFromText_(text) {
   var lower = (text || '').toLowerCase();
-  var incomeHints = ['recebeu', 'recebido', 'depósito', 'deposito', 'creditado', 'estorno', 'estornado'];
+  // "te enviou"/"te transferiu" = alguém mandou PRA você (receita); precisa vir antes de
+  // 'enviou' (despesa) -- por isso fica na lista de receita, checada primeiro.
+  var incomeHints = ['recebeu', 'recebido', 'recebida', 'te enviou', 'te transferiu', 'depósito', 'deposito', 'creditado', 'estorno', 'estornado'];
   var expenseHints = ['pagamento', 'pagou', 'compra', 'enviou', 'enviado', 'debitado', 'saque', 'fatura'];
   for (var i = 0; i < incomeHints.length; i++) if (lower.indexOf(incomeHints[i]) !== -1) return 'income';
   for (var i2 = 0; i2 < expenseHints.length; i2++) if (lower.indexOf(expenseHints[i2]) !== -1) return 'expense';
@@ -2040,9 +2042,193 @@ function counterpartyKey_(name) {
  */
 function guessCounterpartyFromNotificationText_(text) {
   if (!text) return '';
-  var match = text.match(/\bem\s+(.+?)\s+com\s+o\s+cart[ãa]o\s+final\s+\d+\b/i);
-  if (!match) return text.trim();
-  return titleCasePt_(match[1].trim());
+  return extractCounterpartyByRules_('', text) || text.trim();
+}
+
+/**
+ * Fim de um nome de estabelecimento/pessoa dentro de uma frase de notificação: "para o
+ * cartão…", "no valor…", "por R$…", horário/data, ponto final, ou o fim do texto.
+ */
+var NOTIFICATION_NAME_END_ = '(?=\\s+(?:para\\s+o\\s+cart|com\\s+o\\s+cart|no\\s+cart|do\\s+cart|no\\s+valor|por\\s+R\\$|de\\s+R\\$|R\\$|[àa]s\\s+\\d|em\\s+\\d{1,2}\\/|no\\s+dia|via\\s|\\()|\\s+[-–]\\s|[.!;]\\s|[.!;]?\\s*$)';
+
+/**
+ * Formatos de notificação conhecidos (Nubank, Pix/transferência de qualquer banco,
+ * RecargaPay…), em ordem de especificidade; a 1ª regra que acha um nome vence. onlyText:
+ * a regra ancora no INÍCIO do texto (ex: "Fulano te enviou…"), então não roda sobre
+ * título+texto juntos. Bancos/formatos que nenhuma regra cobre caem no aprendizado por
+ * similaridade (inferCounterpartyFromSiblings_).
+ */
+var NOTIFICATION_NAME_RULES_ = [
+  // Nubank: "Compra de R$ 45,90 APROVADA em PADARIA XYZ para o cartão com final 1234"
+  { re: new RegExp('\\b(?:aprovad[ao]|realizad[ao]|efetuad[ao]|no\\s+cr[eé]dito|no\\s+d[eé]bito)\\s+(?:em|no|na)\\s+(.+?)' + NOTIFICATION_NAME_END_, 'i') },
+  // RecargaPay: "Em WL STEAM P com o Cartão final 7072"
+  { re: /\bem\s+(.+?)\s+com\s+o\s+cart[ãa]o\s+final\s+\d+\b/i },
+  // Pix/transferência enviada: "Você enviou R$ 50,00 para João Silva", "Pix enviado para X no valor…"
+  { re: new RegExp('\\b(?:enviou|transferiu|pagou|enviad[ao]|transferid[ao])\\s+(?:(?:um|uma)\\s+)?(?:pix\\s+|transfer[eê]ncia\\s+)?(?:de\\s+)?(?:R\\$\\s*[\\d.,]+\\s+)?(?:para|pra|a)\\s+(.+?)' + NOTIFICATION_NAME_END_, 'i') },
+  { re: new RegExp('\\b(?:pix|transfer[eê]ncia|pagamento|boleto)\\b[^.]*?\\bpara\\s+(.+?)' + NOTIFICATION_NAME_END_, 'i') },
+  // Recebido: "Você recebeu R$ 100,00 de Maria", "Você recebeu um Pix de Maria"
+  { re: new RegExp('\\breceb\\w*\\s+(?:(?:um|uma)\\s+(?:pix|transfer[eê]ncia)\\s+)?(?:de\\s+)?(?:R\\$\\s*[\\d.,]+\\s+)?de\\s+(.+?)' + NOTIFICATION_NAME_END_, 'i') },
+  // "Maria Souza te enviou R$ 100,00"
+  { re: /^(.+?)\s+te\s+(?:enviou|transferiu|pagou)\b/i, onlyText: true }
+];
+
+/** "PADARIA XYZ." -> "Padaria Xyz"; nome já em caixa mista fica como veio. */
+function cleanCounterpartyName_(name) {
+  var cleaned = String(name || '').replace(/\s+/g, ' ').replace(/^[\s\-–:;,.!]+|[\s\-–:;,.!]+$/g, '');
+  if (!cleaned) return '';
+  if (cleaned === cleaned.toUpperCase() && /[A-ZÀ-Ý]/.test(cleaned)) return titleCasePt_(cleaned);
+  return cleaned;
+}
+
+/** Aplica NOTIFICATION_NAME_RULES_ ao título/texto; '' quando nenhuma regra acha um nome. */
+function extractCounterpartyByRules_(title, text) {
+  var combined = ((title || '') + ' ' + (text || '')).trim();
+  for (var i = 0; i < NOTIFICATION_NAME_RULES_.length; i++) {
+    var rule = NOTIFICATION_NAME_RULES_[i];
+    var m = String(rule.onlyText ? (text || '').trim() : combined).match(rule.re);
+    var name = m ? cleanCounterpartyName_(m[1]) : '';
+    if (name) return name;
+  }
+  return '';
+}
+
+/**
+ * Quebra a notificação em palavras comparáveis: números/valores/horários/finais de cartão
+ * viram o mesmo símbolo ('#') -- é o que varia de uma notificação pra outra do MESMO app e
+ * não deve atrapalhar o alinhamento; pontuação solta (travessão, "•••") é marcada à parte.
+ */
+function notificationTokens_(text) {
+  return String(text || '').split(/\s+/).filter(Boolean).map(function (raw) {
+    var core = raw.replace(/^[^\wÀ-ÿ$*]+|[^\wÀ-ÿ$]+$/g, '');
+    var lower = core.toLowerCase();
+    var numeric = /^(?:r\$)?\*?\d[\d.,:\/-]*$/.test(lower) || lower === 'r$';
+    return { core: core, norm: core ? (numeric ? '#' : lower) : '', numeric: numeric, punct: !core };
+  });
+}
+
+/** Marca quais palavras de `a` também aparecem (na ordem) em `b` -- maior subsequência comum. */
+function lcsMatchedFlags_(a, b) {
+  var n = a.length, m = b.length, i, j;
+  var dp = [];
+  for (i = 0; i <= n; i++) { dp.push(new Array(m + 1).fill(0)); }
+  for (i = n - 1; i >= 0; i--) {
+    for (j = m - 1; j >= 0; j--) {
+      dp[i][j] = a[i].norm === b[j].norm ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  var flags = a.map(function () { return false; });
+  i = 0; j = 0;
+  while (i < n && j < m) {
+    if (a[i].norm === b[j].norm) { flags[i] = true; i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) i++;
+    else j++;
+  }
+  return flags;
+}
+
+var NOTIFICATION_CONNECTORS_ = { de: true, da: true, do: true, das: true, dos: true, e: true, '&': true };
+
+/**
+ * Aprende o "molde" do app a partir de outras notificações DO MESMO APP: as palavras que
+ * se repetem nas notificações parecidas (ex: "Compra", "aprovada", "cartão", "final") são o
+ * esqueleto fixo; o que muda (fora números, que são valor/cartão/hora) é o nome do
+ * estabelecimento ou da pessoa. Funciona pra qualquer banco sem regra escrita à mão, desde
+ * que haja ao menos uma notificação parecida na fila. Notificações idênticas à atual
+ * exceto pelos números (mesmo estabelecimento de novo) são ignoradas -- senão o próprio
+ * estabelecimento pareceria "fixo". Devolve '' quando não dá pra afirmar nada.
+ */
+function inferCounterpartyFromSiblings_(text, siblingTexts) {
+  var target = notificationTokens_(text);
+  if (target.length < 3) return '';
+  var shapeOf = function (tokens) { return tokens.map(function (t) { return t.norm; }).join(' '); };
+  var targetShape = shapeOf(target);
+  var seen = {};
+  var scored = [];
+  (siblingTexts || []).forEach(function (s) {
+    var other = notificationTokens_(s);
+    var shape = shapeOf(other);
+    if (!other.length || shape === targetShape || seen[shape]) return;
+    seen[shape] = true;
+    var flags = lcsMatchedFlags_(target, other);
+    var matched = flags.filter(Boolean).length;
+    if (matched / target.length < 0.4) return;
+    scored.push({ flags: flags, score: matched / target.length });
+  });
+  if (!scored.length) return '';
+  scored.sort(function (x, y) { return y.score - x.score; });
+  scored = scored.slice(0, 8);
+  var fixed = target.map(function (_, idx) {
+    var votes = scored.filter(function (sc) { return sc.flags[idx]; }).length;
+    return votes * 2 > scored.length;
+  });
+  var isVariable = function (idx) { return !fixed[idx] && !target[idx].numeric && !target[idx].punct; };
+  var best = '', run = [];
+  var flush = function () {
+    while (run.length && !isVariable(run[run.length - 1])) run.pop(); // conector solto no fim não faz parte do nome
+    if (run.length) {
+      var name = run.map(function (idx) { return target[idx].core; }).join(' ');
+      if (name.replace(/[^A-Za-zÀ-ÿ0-9]/g, '').length > best.replace(/[^A-Za-zÀ-ÿ0-9]/g, '').length) best = name;
+    }
+    run = [];
+  };
+  for (var i = 0; i < target.length; i++) {
+    if (isVariable(i)) run.push(i);
+    else if (run.length && NOTIFICATION_CONNECTORS_[target[i].norm] && i + 1 < target.length && isVariable(i + 1)) run.push(i);
+    else flush();
+  }
+  flush();
+  return best.replace(/[^A-Za-zÀ-ÿ0-9]/g, '').length >= 2 ? cleanCounterpartyName_(best) : '';
+}
+
+/** Nome já confirmado pelo usuário (categoria/apelido lembrados) que aparece no texto, o mais longo. */
+function findKnownNameInText_(text, knownNames) {
+  var lower = String(text || '').toLowerCase();
+  var found = '';
+  (knownNames || []).forEach(function (name) {
+    var n = String(name || '').trim();
+    if (n.length >= 4 && n.length > found.length && lower.indexOf(n.toLowerCase()) !== -1) found = n;
+  });
+  return found;
+}
+
+/**
+ * Contexto compartilhado da listagem: textos das outras pendências cruas de cada app (base
+ * do aprendizado de molde) e os nomes que o usuário já confirmou antes. Montado UMA vez por
+ * listagem (ver listPendingEntries). Só pendências sem contraparte gravada entram -- as
+ * estruturadas (email, documento) não têm o texto de notificação que o molde analisa.
+ */
+function buildNotificationContext_(pendingRows, mappings, aliases) {
+  var byApp = {};
+  (pendingRows || []).forEach(function (r) {
+    if (r.Counterparty) return;
+    var key = String(r.App || '');
+    (byApp[key] = byApp[key] || []).push(((r.Title || '') + ' ' + (r.Text || '')).trim());
+  });
+  Object.keys(byApp).forEach(function (k) { byApp[k] = byApp[k].slice(-40); });
+  var names = [];
+  (mappings || []).forEach(function (m) { if (m.CounterpartyName) names.push(m.CounterpartyName); });
+  (aliases || []).forEach(function (a) { if (a.EstablishmentName) names.push(a.EstablishmentName); });
+  return { siblingsByApp: byApp, knownNames: names };
+}
+
+/**
+ * Nome do estabelecimento/pessoa de uma notificação crua, do mais seguro pro mais geral:
+ * (1) formato conhecido (NOTIFICATION_NAME_RULES_); (2) molde aprendido das outras
+ * notificações do mesmo app; (3) nome que o usuário já confirmou antes e aparece no
+ * texto; (4) o texto todo (como sempre foi -- melhor que nada, o usuário edita).
+ */
+function extractCounterpartyFromNotification_(row, context) {
+  var title = row.Title || '', text = row.Text || '';
+  var combined = (title + ' ' + text).trim();
+  var byRules = extractCounterpartyByRules_(title, text);
+  if (byRules) return byRules;
+  if (context) {
+    var inferred = inferCounterpartyFromSiblings_(combined, context.siblingsByApp[String(row.App || '')]);
+    if (inferred) return inferred;
+    var known = findKnownNameInText_(combined, context.knownNames);
+    if (known) return known;
+  }
+  return combined;
 }
 
 /** "WL STEAM P" -> "Wl Steam P" (capitaliza só a primeira letra de cada palavra). */
@@ -2073,11 +2259,11 @@ function captureRawNotification_(app, title, text) {
  * importação de documento) gravam estruturado desde a criação — aqui só entra em ação
  * quando falta, então nunca reprocessa o que já veio confiável.
  */
-function deriveNotificationFields_(row) {
+function deriveNotificationFields_(row, context) {
   var combinedText = ((row.Title || '') + ' ' + (row.Text || '')).trim();
   var amount = row.SuggestedAmount !== '' ? Number(row.SuggestedAmount) : extractAmountFromText_(combinedText);
   var kind = row.SuggestedKind || guessKindFromText_(combinedText);
-  var counterparty = row.Counterparty || guessCounterpartyFromNotificationText_(combinedText);
+  var counterparty = row.Counterparty || extractCounterpartyFromNotification_(row, context);
   return { combinedText: combinedText, amount: amount || null, kind: kind || '', counterparty: counterparty || '' };
 }
 
@@ -2435,13 +2621,16 @@ function listPendingEntries() {
   var allAliases = readAll_('CounterpartyAliases');
   var allBankAppMappings = readAll_('BankAppMappings');
 
-  var entries = readAll_('PendingEntries').map(function (p) {
+  var pendingRows = readAll_('PendingEntries');
+  var notificationContext = buildNotificationContext_(pendingRows, allMappings, allAliases);
+
+  var entries = pendingRows.map(function (p) {
     // Valor/tipo/contraparte: usa o que a fonte já gravou estruturado (email, importação
     // de documento); deriva do texto cru quando falta — sempre o caso do MacroDroid (ver
     // deriveNotificationFields_/captureRawNotification_) — recalculado a cada listagem,
     // então uma melhoria nessa lógica já vale pra pendências antigas também, sem precisar
     // recriar nada nem depender de qual versão o webhook do celular está rodando.
-    var derived = deriveNotificationFields_(p);
+    var derived = deriveNotificationFields_(p, notificationContext);
     // Mesma ideia pra conta lembrada (BankAppMappings): se não veio gravada, procura na
     // hora — sem isso, pendência crua de um app já mapeado nunca sugeriria a conta certa.
     var suggestedAccountId = p.SuggestedAccountID || (function () {
