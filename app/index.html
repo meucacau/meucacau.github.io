@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Cacau</title>
+  <title>Meu Cacau</title>
   <link rel="icon" type="image/png" href="../favicon.png">
   <script>
     // Aplica o tema salvo (se algum) ANTES do CSS pintar a página, pra não piscar
@@ -1445,7 +1445,7 @@
 
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=8125025819"></script>
+  <script src="cacau-web.js?v=8966e45376"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -3957,7 +3957,7 @@
             data: expensesByCategory.map(function (e) { return e.amount; }),
             // Claridade alinhada ao modo escuro (pedido explícito do usuário, ver
             // --primary/--income/etc em Stylesheet.html) -- mesmo ajuste aplicado aqui.
-            backgroundColor: ['#5a7fce', '#4ebc76', '#ce893b', '#cc6666', '#9069d3', '#349bb2', '#d16199', '#769b3b', '#d17847', '#6e69d3']
+            backgroundColor: [getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#7a4a2b', '#4ebc76', '#ce893b', '#cc6666', '#9069d3', '#349bb2', '#d16199', '#769b3b', '#d17847', '#6e69d3']
           }]
         },
         options: {
@@ -13371,7 +13371,7 @@
   function androidSectionHtml_(s) {
     var html = '';
     if (androidAccountMismatch_(s)) {
-      html += '<div class="settings-warning">O Cacau está na conta ' + escapeHtml(s.webEmail) +
+      html += '<div class="settings-warning">Meu Cacau está na conta ' + escapeHtml(s.webEmail) +
         ', mas a autorização da planilha é de ' + escapeHtml(s.authEmail) +
         '. Sem a mesma conta, o envio falha. Autorize de novo com a conta certa ou use "Sair da conta".</div>';
     }
@@ -13379,7 +13379,7 @@
       s.authOk ? 'Autorizado' + (s.authEmail ? ' (' + s.authEmail + ')' : '') : 'Deixa o app anexar as notificações na sua planilha.',
       s.authOk ? '' : 'Autorizar', 'st-auth');
     html += settingsRow_(s.listening, 'Acesso às notificações',
-      s.listening ? 'O app lê as notificações dos apps conectados.' : 'Ative "Cacau" na lista que abrir.',
+      s.listening ? 'O app lê as notificações dos apps conectados.' : 'Ative "Meu Cacau" na lista que abrir.',
       s.listening ? '' : 'Dar acesso', 'st-listen');
     html += settingsRow_(s.battery, 'Bateria sem restrição',
       s.battery ? 'O Android não vai parar o app em segundo plano.' : 'Recomendado, senão alguns celulares param de entregar notificações com a tela apagada.',
@@ -13387,7 +13387,7 @@
     html += settingsRow_(s.alertOn, 'Alerta diário às 8h',
       'Uma notificação por dia, só se houver algo a revisar.', s.alertOn ? 'Desligar' : 'Ligar', 'st-alert');
     html += settingsRow_(false, 'Apps conectados (' + s.watchedCount + ')',
-      'De quais apps o Cacau lê as notificações.', 'Escolher', 'st-watched');
+      'De quais apps o Meu Cacau lê as notificações.', 'Escolher', 'st-watched');
     html += '<div class="muted" style="margin-top:8px">Fila: ' + s.queue + ' item(ns) · Último envio: ' + escapeHtml(s.lastSendOk || '-') +
       (s.lastSendError ? '<br>Último erro: ' + escapeHtml(s.lastSendError) : '') + '</div>' +
       '<div class="settings-row"><div class="grow"></div><button class="secondary" id="st-send-now">Enviar fila agora</button></div>';
@@ -13461,7 +13461,7 @@
         help: 'O Google vai pedir sua autorização (pode aparecer um aviso de app não verificado: toque em "Avançado" e continue).',
         button: 'Autorizar', id: 'ob-auth', run: function (b) { b.authorizeSheets(); } },
       { ok: s.listening, title: 'Acesso às notificações',
-        help: 'Ative a chave do "Cacau" na tela que abrir. É assim que o app lê os avisos do banco.',
+        help: 'Ative a chave do "Meu Cacau" na tela que abrir. É assim que o app lê os avisos do banco.',
         button: 'Dar acesso', id: 'ob-listen', run: function (b) { b.openNotificationSettings(); } },
       { ok: s.battery, optional: true, title: 'Bateria sem restrição (recomendado)',
         help: 'Toque em "Permitir". Sem isso alguns celulares param de entregar notificações com a tela apagada.',
@@ -13474,7 +13474,7 @@
     steps.forEach(function (st) { if (!st.ok && !(st.optional && onboardingSkipped_[st.id]) && !current) current = st; });
     var html = '';
     if (androidAccountMismatch_(s)) {
-      html += '<div class="settings-warning">O Cacau está na conta ' + escapeHtml(s.webEmail) +
+      html += '<div class="settings-warning">Meu Cacau está na conta ' + escapeHtml(s.webEmail) +
         ', mas a autorização foi dada com ' + escapeHtml(s.authEmail) + '. Autorize de novo com a conta certa.</div>';
     }
     steps.forEach(function (st, i) {
@@ -13614,7 +13614,7 @@
         '<button class="secondary" id="st-goal-remove"' + (STATE.balanceGoal ? '' : ' disabled') + '>Remover meta</button>' +
         '<button id="st-goal-save">Salvar meta</button></div>' +
       (analytics_().enabled() ?
-        '<div class="settings-row" style="margin-top:10px"><div class="grow"><div>Ajudar a melhorar o Cacau</div>' +
+        '<div class="settings-row" style="margin-top:10px"><div class="grow"><div>Ajudar a melhorar o Meu Cacau</div>' +
         '<div class="muted">Envia, de forma anônima, quais telas você usa e por quanto tempo. Nunca envia valores, nomes ou descrições dos seus lançamentos.</div></div>' +
         '<label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="st-analytics"' + (analytics_().optedOut() ? '' : ' checked') + '></label></div>' : '') +
       '</div>';

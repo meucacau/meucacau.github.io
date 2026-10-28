@@ -801,12 +801,12 @@ function archiveAccount(id) {
 
 // ===== Branding.js =====
 /**
- * Nome e ícone do app. O beta multiusuário se chama "Cacau" (nome provisório); o app do
+ * Nome e ícone do app. O beta multiusuário se chama "Meu Cacau" (nome provisório); o app do
  * dono (produção) continua "Finanças". Funções, e não variáveis, porque o Apps Script
  * carrega os arquivos em ordem não garantida e MULTIUSER_MODE vem de Mode.js.
  */
 function appName_() {
-  return MULTIUSER_MODE ? 'Cacau' : 'Finanças';
+  return MULTIUSER_MODE ? 'Meu Cacau' : 'Finanças';
 }
 
 // Favicon só no beta; o do dono mantém o ícone padrão. O Apps Script deduz o tipo da imagem pela
@@ -3377,7 +3377,7 @@ function setupSpreadsheet() {
 }
 
 /**
- * Onboarding do beta multiusuário: no primeiro acesso cria a planilha ("Cacau") no Drive de quem
+ * Onboarding do beta multiusuário: no primeiro acesso cria a planilha ("Meu Cacau") no Drive de quem
  * está acessando, guarda o ID nas propriedades do usuário e semeia abas/categorias.
  * Devolve o ID. Chamadas seguintes só devolvem o ID guardado.
  *
@@ -4751,7 +4751,7 @@ var CacauBackend = (function () {
 
   // ---------- tela de entrada ----------
   var NEW_SHEET = {
-    properties: { title: 'Cacau', locale: 'pt_BR', timeZone: 'America/Sao_Paulo' },
+    properties: { title: 'Meu Cacau', locale: 'pt_BR', timeZone: 'America/Sao_Paulo' },
     // a aba que o Google cria junto já nasce com um nome do app: assim não sobra "Página1" para apagar
     sheets: [{ properties: { title: 'Accounts' } }]
   };
@@ -4779,7 +4779,7 @@ var CacauBackend = (function () {
           .setOAuthToken(token.value)
           .setDeveloperKey(cfg.apiKey)
           .setAppId(cfg.projectNumber || '')
-          .setTitle('Escolha a planilha do Cacau')
+          .setTitle('Escolha a planilha do Meu Cacau')
           .setCallback(function (data) {
             if (data.action === google.picker.Action.PICKED) resolve(data.docs[0].id);
             else if (data.action === google.picker.Action.CANCEL) resolve('');
@@ -4829,7 +4829,7 @@ var CacauBackend = (function () {
       '<button id="cacau-pick" style="' + secondary + '">Entrar e escolher uma planilha que já tenho</button>';
     gate.innerHTML =
       '<div style="max-width:380px;width:100%;display:flex;flex-direction:column;gap:12px;font-family:system-ui,sans-serif">' +
-      '<h1 style="margin:0;font-size:30px">Cacau</h1>' +
+      '<h1 style="margin:0;font-size:30px">Meu Cacau</h1>' +
       '<p style="margin:0;opacity:.8">Suas finanças numa planilha só sua, no seu Google Drive.</p>' +
       (message ? '<p style="margin:0;color:#b00">' + message + '</p>' : '') +
       (saved ? '<button id="cacau-go" style="' + primary + '">Entrar</button>' : newPickHtml) +
