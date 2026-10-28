@@ -867,14 +867,25 @@
   .day-bar-clickable:hover { background: var(--border); }
   .week-cal-dragging .day-bar-cell { pointer-events: none; }
   .day-bar-sun { margin-left: 8px; }
-  .day-bars-plot > .day-bar-sun:first-child { margin-left: 0; }
+  .day-bars-plot > .day-bar-sun:first-child, .day-bar-axis + .day-bar-sun { margin-left: 0; }
   /* Virada de mês no domingo: sem o respiro extra entre o último e o primeiro dia do mês. */
   .day-bar-day1.day-bar-sun { margin-left: 0; }
   .day-bar-sun::before, .day-bar-day1::after { content: ''; position: absolute; width: 1px; pointer-events: none; }
   /* Linha da semana (no respiro antes do domingo): do topo das barras até a linha dos
      números dos dias -- não desce até a linha com o nome do mês (18px, ver .day-bar-month). */
   .day-bar-sun::before { top: 0; bottom: 18px; left: -4px; background: var(--border); }
-  .day-bars-plot > .day-bar-sun:first-child::before { display: none; }
+  .day-bars-plot > .day-bar-sun:first-child::before, .day-bar-axis + .day-bar-sun::before { display: none; }
+  /* Eixo com só dois valores (base e topo da escala), girados na vertical; sticky pra
+     ficar no canto esquerdo enquanto o gráfico rola, com fundo pra cobrir as barras. */
+  .day-bar-axis {
+    position: sticky; left: 0; z-index: 2; flex-shrink: 0; align-self: flex-start;
+    width: 12px; margin-right: 2px; background: var(--surface);
+    display: flex; flex-direction: column; justify-content: space-between; align-items: center;
+  }
+  .day-bar-axis span {
+    writing-mode: vertical-rl; transform: rotate(180deg);
+    font-size: 8px; line-height: 1; color: var(--text-muted); white-space: nowrap;
+  }
   .day-bar-day1.day-bar-sun::before { left: 0; }
   /* Linha do mês: só da linha dos números pra baixo (até o nome do mês); entre as barras
      ficam só as linhas de semana. --bars-h = altura da área das barras (ver buildDayBarsHtml_). */
@@ -1336,7 +1347,7 @@
   </div>
 
   <button class="fab" id="fab-add"><span class="fab-icon">+</span></button>
-  <button class="review-fab" id="review-pending" aria-label="Revisar pendências" hidden><span class="review-ico"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg><span class="review-badge"></span></span><span class="tab-label"></span></button>
+  <button class="review-fab" id="review-pending" aria-label="Para confirmar" hidden><span class="review-ico"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg><span class="review-badge"></span></span><span class="tab-label"></span></button>
   <button class="theme-toggle-btn" id="theme-toggle" title="Alternar tema claro/escuro"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
   
   <button class="theme-toggle-btn" id="settings-btn" title="Configurações"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
@@ -1359,7 +1370,7 @@
 
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=dd3c038fe2"></script>
+  <script src="cacau-web.js?v=7b6a763cb7"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -3821,7 +3832,7 @@
     btn.hidden = !show;
     document.documentElement.classList.toggle('has-review-fab', show);
     if (!show) return;
-    var label = 'Revisar ' + n + (n === 1 ? ' pendência' : ' pendências');
+    var label = n + ' para confirmar';
     btn.querySelector('.review-badge').textContent = n > 99 ? '99+' : String(n);
     btn.querySelector('.tab-label').textContent = label;
     btn.setAttribute('aria-label', label);
@@ -6017,7 +6028,8 @@
       var targetAbs = Object.keys(targets.month).map(function (d) { return Math.abs(targets.month[d]); }).filter(function (v) { return v > 0; });
       ref = Math.max(ref, computePercentile_(targetAbs, 0.75));
     }
-    return ref;
+    // Topo da escala em múltiplo de 50 (é o "R$ X" escrito no eixo, ver buildDayBarsHtml_).
+    return ref > 0 ? Math.ceil(ref / 50 - 1e-9) * 50 : 0;
   }
 
   /**
@@ -6219,7 +6231,12 @@
       '</div>';
     }).join('');
 
-    return '<div class="day-bars-plot" style="--bars-h:' + DAY_BARS_HEIGHT_PX_ + 'px">' + cellsHtml + '</div>';
+    // Eixo mínimo: "R$ 0" na base e "R$ <topo da escala>" no topo, girados, colados à
+    // esquerda quando o gráfico rola (ver .day-bar-axis no CSS).
+    var axisHtml = ref > 0
+      ? '<div class="day-bar-axis" style="height:' + DAY_BARS_HEIGHT_PX_ + 'px"><span>R$ ' + Math.round(ref).toLocaleString('pt-BR') + '</span><span>R$ 0</span></div>'
+      : '';
+    return '<div class="day-bars-plot" style="--bars-h:' + DAY_BARS_HEIGHT_PX_ + 'px">' + axisHtml + cellsHtml + '</div>';
   }
 
   /** Datas (YYYY-MM-DD) de minDate a maxDate inclusive, uma por dia. */
@@ -6539,7 +6556,7 @@
       '</div>' +
       '<div style="display:flex;gap:8px">' +
         '<button class="secondary" id="doc-cancel2" style="flex:1">Cancelar</button>' +
-        '<button id="doc-confirm" style="flex:1">Criar pendências</button>' +
+        '<button id="doc-confirm" style="flex:1">Enviar para confirmar</button>' +
       '</div>'
     );
 
@@ -6554,7 +6571,7 @@
       cancelBtn.disabled = true;
       progressWrap.style.display = 'block';
       progressFill.style.width = '100%'; // uma chamada só agora — sem etapas intermediárias pra medir, só indica "em andamento"
-      statusEl.textContent = 'Criando ' + result.items.length + (result.items.length === 1 ? ' pendência…' : ' pendências…');
+      statusEl.textContent = 'Enviando ' + result.items.length + ' para confirmar…';
 
       var fixEl = document.getElementById('doc-fix-account');
       var payload = {
@@ -6566,7 +6583,7 @@
         statusEl.textContent = 'Atualizando…';
         return refreshAll().then(render).then(function () {
           closeModal();
-          var msg = summary.created + (summary.created === 1 ? ' pendência criada.' : ' pendências criadas.');
+          var msg = summary.created + ' para confirmar.';
           if (summary.skipped) msg += ' ' + summary.skipped + ' já existiam e foram puladas.';
           showToast(msg);
         });
@@ -6911,7 +6928,7 @@
         '</div></div>' +
         '<div class="field"><label>Categoria pai (opcional)</label><div id="m-parent-field" class="capsule-field"></div></div>') +
       '<div class="field"><label>Palavras-chave (opcional)</label><input id="m-keywords" value="' + (isEdit ? escapeHtml(existing.keywords || '') : '') + '" placeholder="ex: airbnb, booking.com">' +
-        '<div class="muted" style="font-size:12px;margin-top:-8px;margin-bottom:12px">Separadas por vírgula. Se o texto de um lançamento/pendência contiver uma delas, essa categoria já vem selecionada.</div>' +
+        '<div class="muted" style="font-size:12px;margin-top:-8px;margin-bottom:12px">Separadas por vírgula. Se o texto de um lançamento (ou de um "para confirmar") contiver uma delas, essa categoria já vem selecionada.</div>' +
       '</div>' +
       '<div class="field"><label>Descrição (opcional)</label>' +
         '<textarea id="m-description" rows="2" placeholder="Quais tipos de lançamento devem ser feitos nessa categoria?">' +
@@ -8022,7 +8039,7 @@
     var pinsHtml =
       '<div class="time-pin" style="left:' + (todayFraction * 100) + '%"></div>' +
       '<div class="time-pin-label" data-fraction="' + todayFraction + '" style="left:' + (todayFraction * 100) + '%">Hoje</div>' +
-      (pendenciasDate ? '<div class="time-pin" style="left:' + (pendenciasFraction * 100) + '%" data-tooltip="Pendência mais antiga, ' + escapeHtml(fmtDayMonth(pendenciasDate)) + '"></div>' : '');
+      (pendenciasDate ? '<div class="time-pin" style="left:' + (pendenciasFraction * 100) + '%" data-tooltip="Mais antigo para confirmar, ' + escapeHtml(fmtDayMonth(pendenciasDate)) + '"></div>' : '');
 
     return { pinsHtml: pinsHtml, referenceFraction: referenceFraction };
   }
@@ -11177,14 +11194,14 @@
 
     var sortLabel = pendingReviewSortOrder === 'desc' ? 'Mais recentes primeiro' : 'Mais antigas primeiro';
     var duplicateWarning = p.isDuplicate
-      ? '<div style="background:var(--expense);color:#fff;padding:8px;border-radius:8px;margin-bottom:12px;font-size:13px">' + UI_ICON_WARN_ + ' Possível duplicata de outra pendência na fila (mesmo valor, texto e horário) — confira antes de confirmar as duas.</div>'
+      ? '<div style="background:var(--expense);color:#fff;padding:8px;border-radius:8px;margin-bottom:12px;font-size:13px">' + UI_ICON_WARN_ + ' Possível duplicata de outro lançamento na fila (mesmo valor, texto e horário) — confira antes de confirmar as duas.</div>'
       : '';
 
     openModal(
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap">' +
         '<h2 style="margin:0">Revisar (' + (index + 1) + '/' + queue.length + ')</h2>' +
         '<div style="display:flex;gap:8px">' +
-          '<button type="button" class="secondary" id="p-queue-toggle" style="padding:4px 10px;font-size:12px">Fila de pendências</button>' +
+          '<button type="button" class="secondary" id="p-queue-toggle" style="padding:4px 10px;font-size:12px">Fila para confirmar</button>' +
           '<button type="button" class="secondary" id="p-sort-toggle" style="padding:4px 10px;font-size:12px">' + sortLabel + '</button>' +
         '</div>' +
       '</div>' +
@@ -13113,6 +13130,9 @@
   }
   function closeModal() {
     document.getElementById('modal-root').innerHTML = '';
+    // Ressincroniza o botão "para confirmar" (fora do #view-root, não é refeito por render()):
+    // fechar o popup nunca deve deixá-lo escondido com itens ainda na fila.
+    updateReviewButton_();
   }
 
   // ---------- ponte com o app Android (beta multiusuário) ----------
@@ -13314,7 +13334,7 @@
   function openOnboardingModal_() {
     if (!androidBridge_()) return;
     openModal('<h2>Ativar a captura de notificações</h2>' +
-      '<div class="muted" style="margin-bottom:8px">Poucos passos rápidos. O app lê os avisos dos seus apps de banco e cria as pendências na sua planilha.</div>' +
+      '<div class="muted" style="margin-bottom:8px">Poucos passos rápidos. O app lê os avisos dos seus apps de banco e deixa os lançamentos prontos para você confirmar.</div>' +
       '<div id="ob-steps"></div>' +
       '<button class="secondary" id="ob-close" style="width:100%;margin-top:8px">Agora não</button>');
     document.getElementById('ob-close').onclick = function () { closeModal(); updateSetupBanner_(); };

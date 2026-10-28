@@ -4285,6 +4285,7 @@ var CacauBackend = (function () {
   var NATIVE_ASK_TIMEOUT_MS = 3 * 60 * 1000;
   var SHEETS = 'https://sheets.googleapis.com/v4/spreadsheets/';
   var TOKEN_KEY = 'cacau-web-token';
+  var HINT_KEY = 'cacau-web-hint'; // { email, mode }: quem já entrou aqui (pra não perguntar a conta de novo)
   var WRITE_KEY = 'cacau-web-write';
   var CONFLICT_MESSAGE = 'A planilha foi alterada em outro lugar (outro aparelho ou aba) enquanto você editava. Nada foi gravado: recarregue e tente de novo.';
 
@@ -4316,7 +4317,7 @@ var CacauBackend = (function () {
     tokenClient = null;
     token = { value: '', expiresAt: 0, grantedAt: 0 };
     everSignedIn = false;
-    try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) { /* segue */ }
+    forgetToken_();
   }
 
   function writeMode_() {
@@ -4461,21 +4462,49 @@ var CacauBackend = (function () {
     return initClient_().then(function () {
       return new Promise(function (resolve, reject) {
         pendingToken = { resolve: resolve, reject: reject };
-        tokenClient.requestAccessToken({ prompt: prompt });
+        var opts = { prompt: prompt };
+        var hint = savedEmail_();
+        if (hint) opts.hint = hint;
+        tokenClient.requestAccessToken(opts);
       });
     });
   }
 
-  /** Guarda o token só na aba (sessionStorage): sobrevive ao F5, some ao fechar a aba. */
+  /** Guarda o token na aba (sessionStorage) e no navegador (localStorage): sobrevive ao F5 e, enquanto ainda
+   *  valer (o Google dá ~1 h), a fechar e reabrir o app sem pedir login de novo. */
   function saveToken_() {
-    try { sessionStorage.setItem(TOKEN_KEY, JSON.stringify(token)); } catch (e) { /* segue */ }
+    var raw = JSON.stringify(token);
+    try { sessionStorage.setItem(TOKEN_KEY, raw); } catch (e) { /* segue */ }
+    try { localStorage.setItem(TOKEN_KEY, raw); } catch (e) { /* segue */ }
+  }
+  function forgetToken_() {
+    try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) { /* segue */ }
+    try { localStorage.removeItem(TOKEN_KEY); } catch (e) { /* segue */ }
+  }
+  function readSavedToken_(store) {
+    try { return JSON.parse(store.getItem(TOKEN_KEY) || 'null'); } catch (e) { return null; }
   }
   function restoreToken_() {
-    try {
-      var saved = JSON.parse(sessionStorage.getItem(TOKEN_KEY) || 'null');
+    var stores = [];
+    try { stores.push(sessionStorage); } catch (e) { /* segue */ }
+    try { stores.push(localStorage); } catch (e) { /* segue */ }
+    for (var i = 0; i < stores.length; i++) {
+      var saved = readSavedToken_(stores[i]);
       if (saved && saved.value && Date.now() < saved.expiresAt && (saved.mode || 'file') === scopeMode_()) { token = saved; everSignedIn = true; return true; }
-    } catch (e) { /* segue */ }
+    }
     return false;
+  }
+
+  /** E-mail de quem já entrou neste navegador (com a permissão atual), ou ''. Com ele o Google não pergunta a conta
+   *  de novo (prompt vazio + dica) e o login vira só um clique. */
+  function savedEmail_() {
+    try {
+      var h = JSON.parse(localStorage.getItem(HINT_KEY) || 'null');
+      return h && h.email && h.mode === scopeMode_() ? h.email : '';
+    } catch (e) { return ''; }
+  }
+  function rememberEmail_(email) {
+    try { if (email) localStorage.setItem(HINT_KEY, JSON.stringify({ email: email, mode: scopeMode_() })); } catch (e) { /* segue */ }
   }
 
   function tokenValid_() { return token.value && Date.now() < token.expiresAt; }
@@ -4517,7 +4546,7 @@ var CacauBackend = (function () {
   function fetchEmail_() {
     return fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: 'Bearer ' + token.value } })
       .then(function (r) { return r.json(); })
-      .then(function (info) { CacauGAS.setEmail(info.email || ''); return info.email || ''; })
+      .then(function (info) { CacauGAS.setEmail(info.email || ''); rememberEmail_(info.email); return info.email || ''; })
       .catch(function () { return ''; });
   }
 
@@ -4526,7 +4555,8 @@ var CacauBackend = (function () {
     try { if (token.value && window.google) google.accounts.oauth2.revoke(token.value, function () {}); } catch (e) { /* segue */ }
     token = { value: '', expiresAt: 0, grantedAt: 0 };
     everSignedIn = false;
-    try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) { /* segue */ }
+    forgetToken_();
+    try { localStorage.removeItem(HINT_KEY); } catch (e) { /* segue */ }
     location.reload();
   }
 
@@ -4867,6 +4897,20 @@ var CacauBackend = (function () {
       CacauGAS.PropertiesService.getUserProperties().setProperty('SPREADSHEET_ID', sheetId);
       event_('sessão retomada após recarregar (token ainda valia)');
       fetchEmail_().then(function () { gateDone(); });
+      return;
+    }
+    if (savedEmail_()) everSignedIn = true; // já entrou aqui antes: login sem escolher conta
+    if (sheetId && nativeLogin_() && everSignedIn) {
+      // App Android: o login é do próprio app e a renovação não pede nada à pessoa -- tenta direto, sem a tela
+      // de entrada; se o app recusar, cai nela como antes.
+      event_('abrindo: pedindo o token ao app, sem tela de entrada');
+      requestNativeToken_().then(function () {
+        CacauGAS.PropertiesService.getUserProperties().setProperty('SPREADSHEET_ID', sheetId);
+        return fetchEmail_();
+      }).then(function () { gateDone(); }).catch(function (err) {
+        event_('entrada automática pelo app falhou: ' + err.message);
+        askUser_('');
+      });
       return;
     }
     askUser_('');
