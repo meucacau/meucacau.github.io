@@ -892,7 +892,8 @@
   .day-bar-day1::after { top: var(--bars-h); bottom: 0; left: 0; background: var(--text-muted); opacity: .55; }
   .day-bar-col { position: relative; }
   .day-bar { position: absolute; bottom: 0; left: 4px; width: 6px; border-radius: 2px 2px 0 0; }
-  .day-bar { background: var(--bar-color); }
+  /* Barras discretas (o destaque são as linhas de meta): cinza esmaecido; saldo negativo ainda mais. */
+  .day-bar { background: var(--bar-color); opacity: .4; }
   /* Barra que não coube na escala: triângulo pra cima, da cor dela e um pouco mais estreito
      (4px de base contra 6px), logo acima do topo -- indica que ela não terminou ali. */
   .day-bar-over::after {
@@ -903,9 +904,9 @@
   /* Metas diárias: linhas pontilhadas por célula (mês fina e clara, semana mais grossa), por
      cima das barras; a célula do domingo tem o respiro de 8px, então a linha da semana
      quebra naturalmente entre uma semana e outra. */
-  .day-bar-target { position: absolute; left: 0; right: 0; height: 0; pointer-events: none; z-index: 1; }
-  .day-bar-target-month { border-top: 1px dotted var(--text-muted); }
-  .day-bar-target-week { border-top: 2px dotted var(--text); }
+  .day-bar-target { position: absolute; left: 0; right: 0; height: 0; pointer-events: none; z-index: 2; }
+  .day-bar-target-month { border-top: 2px dotted var(--text-muted); }
+  .day-bar-target-week { border-top: 3px dotted var(--text); }
   /* Veredito do trecho (ver dayBarsTargetStatus_): cor da linha, mês e semana à parte. */
   .day-bar-target-ok { border-top-color: var(--income); }
   .day-bar-target-warn { border-top-color: var(--warning); }
@@ -1064,6 +1065,22 @@
   }
   /* Descrição de categoria escrita pelo usuário — itálico pra separar do texto do app. */
   .shared-tooltip-italic { font-style: italic; }
+  /* Tooltip com linhas (ver buildDayBarsHtml_): data em negrito, texto à esquerda e números à direita. */
+  .shared-tooltip-rich { white-space: normal; }
+  .shared-tooltip-rich .tt-date { font-weight: 700; margin-bottom: 3px; }
+  .shared-tooltip-rich .tt-row { display: flex; justify-content: space-between; gap: 16px; }
+  .shared-tooltip-rich .tt-val { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .shared-tooltip-rich .tt-ok { color: #4ade80; }
+  .shared-tooltip-rich .tt-warn { color: #fbbf24; }
+  .shared-tooltip-rich .tt-bad { color: #f87171; }
+  :root[data-theme="dark"] .shared-tooltip-rich .tt-ok { color: #15803d; }
+  :root[data-theme="dark"] .shared-tooltip-rich .tt-warn { color: #a16207; }
+  :root[data-theme="dark"] .shared-tooltip-rich .tt-bad { color: #b91c1c; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .shared-tooltip-rich .tt-ok { color: #15803d; }
+    :root:not([data-theme="light"]) .shared-tooltip-rich .tt-warn { color: #a16207; }
+    :root:not([data-theme="light"]) .shared-tooltip-rich .tt-bad { color: #b91c1c; }
+  }
 
   .capsule-field select { margin-bottom: 0; }
 
@@ -1688,6 +1705,8 @@
    * opts (todos opcionais):
    *   italic — mostra o texto em itálico (usado pela descrição de categoria, que é uma
    *            frase do usuário e não um rótulo do app).
+   *   html — HTML pronto (montado pelo app, já escapado) no lugar do texto puro, pra tooltips com
+   *          linhas rótulo/valor (ver buildDayBarsHtml_); o texto puro segue como alternativa.
    *   pointer — { x, y } da posição do mouse: centraliza o tooltip nela em vez de no meio
    *             do elemento. Numa LINHA de lista inteira (ver wireRowTooltip_) o centro do
    *             elemento fica longe do cursor; ao lado do mouse é onde o olho já está.
@@ -1697,8 +1716,8 @@
     hideTooltip_();
     var tip = document.createElement('div');
     tip.id = 'shared-tooltip';
-    tip.className = 'shared-tooltip' + (opts.italic ? ' shared-tooltip-italic' : '');
-    tip.textContent = text;
+    tip.className = 'shared-tooltip' + (opts.italic ? ' shared-tooltip-italic' : '') + (opts.html ? ' shared-tooltip-rich' : '');
+    if (opts.html) tip.innerHTML = opts.html; else tip.textContent = text;
     document.body.appendChild(tip);
     var rect = anchorEl.getBoundingClientRect();
     var tipRect = tip.getBoundingClientRect();
@@ -1764,11 +1783,12 @@
   function wireTooltipTrigger_(el, delayMs) {
     var text = el.getAttribute('data-tooltip');
     if (!text) return;
+    var rich = { html: el.getAttribute('data-tooltip-html') || '' };
     if (HOVER_CAPABLE_) {
       var hoverTimer = null;
       el.addEventListener('mouseenter', function () {
-        if (!delayMs) { showTooltip_(el, text); return; }
-        hoverTimer = setTimeout(function () { hoverTimer = null; showTooltip_(el, text); }, delayMs);
+        if (!delayMs) { showTooltip_(el, text, rich); return; }
+        hoverTimer = setTimeout(function () { hoverTimer = null; showTooltip_(el, text, rich); }, delayMs);
       });
       el.addEventListener('mouseleave', function () {
         if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
@@ -1777,7 +1797,7 @@
     } else {
       el.addEventListener('click', function () {
         if (stopTooltipOutsideClick_) stopTooltipOutsideClick_();
-        showTooltip_(el, text);
+        showTooltip_(el, text, rich);
         stopTooltipOutsideClick_ = dismissOnOutsideClick(el, function () {
           hideTooltip_();
           stopTooltipOutsideClick_ = null;
@@ -6084,9 +6104,12 @@
    * Saldo: receita real - esse gasto contra a soma das metas (aqui passar da meta = sobrar
    * menos do que o esperado, e a folga é 10% do módulo do esperado).
    * incomeByDay: receitas reais por dia (só usado no Saldo). Função pura.
+   * Devolve também out.avg: a média REAL por dia (Despesas: gasto; Saldo: receita - gasto) dos
+   * dias do trecho até hoje -- o "resultado" que o tooltip mostra ao lado da meta, na cor do
+   * veredito. null quando o trecho ainda nem começou.
    */
   function dayBarsTargetStatus_(days, targets, incomeByDay, mode, today) {
-    var out = { month: {}, week: {} };
+    var out = { month: {}, week: {}, avg: { month: {}, week: {} } };
     var groups = { month: {}, week: {} };
     days.forEach(function (d) {
       var sunday = parseYmdLocal_(d);
@@ -6105,15 +6128,15 @@
         expected += targetByDay[d];
         actual += mode === 'balance' ? (incomeByDay[d] || 0) - (spent[d] || 0) : (spent[d] || 0);
       });
-      if (!elapsed) return null;
+      if (!elapsed) return { status: null, avg: null };
       var over = mode === 'balance' ? expected - actual : actual - expected;
-      if (over <= 0.005) return 'ok';
-      return over <= DAY_BARS_WARN_TOLERANCE_ * Math.abs(expected) + 0.005 ? 'warn' : 'bad';
+      var status = over <= 0.005 ? 'ok' : (over <= DAY_BARS_WARN_TOLERANCE_ * Math.abs(expected) + 0.005 ? 'warn' : 'bad');
+      return { status: status, avg: actual / elapsed };
     }
     ['month', 'week'].forEach(function (kind) {
       Object.keys(groups[kind]).forEach(function (key) {
-        var status = judge(groups[kind][key], targets[kind]);
-        groups[kind][key].forEach(function (d) { out[kind][d] = status; });
+        var verdict = judge(groups[kind][key], targets[kind]);
+        groups[kind][key].forEach(function (d) { out[kind][d] = verdict.status; out.avg[kind][d] = verdict.avg; });
       });
     });
     return out;
@@ -6190,12 +6213,12 @@
       var has = totals.hasOwnProperty(dateStr);
       var clickable = has || flaggedOnlyDays[dateStr];
       var barHtml = '';
-      var tooltip = '';
+      var rows = [];
       if (has) {
         var value = totals[dateStr];
         var fraction = ref > 0 ? Math.min(1, Math.abs(value) / ref) : (value !== 0 ? 1 : 0);
         var color = 'var(--text-muted)';
-        var muted = mode === 'balance' && value < 0 ? 'opacity:.55;' : '';
+        var muted = mode === 'balance' && value < 0 ? 'opacity:.22;' : '';
         // Barra que não coube na escala ganha um triângulo no topo (mesma cor), pra mostrar
         // que ela continua (ver .day-bar-over no CSS).
         var over = ref > 0 && Math.abs(value) > ref ? ' day-bar-over' : '';
@@ -6203,9 +6226,9 @@
           barHtml = '<div class="day-bar' + over + '" style="height:' + (fraction * 100).toFixed(1) + '%;--bar-color:' + color + ';' + muted + '"></div>';
         }
         var shown = mode === 'balance' ? fmtMoney(value) : fmtMoney(Math.abs(value));
-        tooltip = fmtDate(dateStr) + '\n' + modeLabel + ': ' + shown;
+        rows.push({ label: modeLabel, value: shown });
       } else if (flaggedOnlyDays[dateStr]) {
-        tooltip = fmtDate(dateStr) + '\nSó lançamentos fora das análises';
+        rows.push({ label: 'Só lançamentos fora das análises' });
       }
       var targetHtml = '';
       if (targets && ref > 0) {
@@ -6218,12 +6241,34 @@
         targetHtml = '<div class="day-bar-target day-bar-target-month' + tone(st.month[dateStr]) + '" style="bottom:' + pct(targets.month[dateStr]) + '%"></div>' +
           '<div class="day-bar-target day-bar-target-week' + tone(st.week[dateStr]) + '" style="bottom:' + pct(targets.week[dateStr]) + '%"></div>';
         if (clickable) {
-          tooltip += '\nMeta por dia do mês: ' + fmtMoney(targets.month[dateStr]) + '\nMeta por dia da semana: ' + fmtMoney(targets.week[dateStr]);
+          // Meta e resultado (média real por dia até hoje), semana primeiro; o resultado ganha a
+          // cor do veredito das linhas pontilhadas.
+          var avgLabel = mode === 'balance' ? 'Saldo médio' : 'Despesa média';
+          var avg = (targets.status && targets.status.avg) || { month: {}, week: {} };
+          var result = function (kind) {
+            var v = avg[kind][dateStr];
+            return { label: avgLabel + ' d' + (kind === 'week' ? 'a semana' : 'o mês'), value: v === null || v === undefined ? '—' : fmtMoney(v), tone: st[kind][dateStr] };
+          };
+          rows.push({ label: 'Meta por dia da semana', value: fmtMoney(targets.week[dateStr]) });
+          rows.push(result('week'));
+          rows.push({ label: 'Meta por dia do mês', value: fmtMoney(targets.month[dateStr]) });
+          rows.push(result('month'));
         }
       }
       var isSunday = parseYmdLocal_(dateStr).getDay() === 0;
       var classes = 'day-bar-cell' + (isDay1 ? ' day-bar-day1' : '') + (isSunday ? ' day-bar-sun' : '') + (clickable ? ' day-bar-clickable' : '') + (dateStr === today ? ' day-bar-today' : '');
-      var attrs = clickable ? ' data-date="' + dateStr + '" data-tooltip="' + escapeHtml(tooltip) + '"' : '';
+      var attrs = '';
+      if (clickable) {
+        // data-tooltip = texto puro (alternativa); data-tooltip-html = o que aparece de verdade:
+        // data em negrito (mesmo formato do conector entre dias do Extrato) e, por linha, rótulo à
+        // esquerda e valor à direita, sem ":".
+        var plain = [fmtCardDate_(dateStr)].concat(rows.map(function (r) { return r.value === undefined ? r.label : r.label + ' ' + r.value; })).join('\n');
+        var rich = '<div class="tt-date">' + escapeHtml(fmtCardDate_(dateStr)) + '</div>' + rows.map(function (r) {
+          return '<div class="tt-row"><span>' + escapeHtml(r.label) + '</span>' +
+            (r.value === undefined ? '' : '<span class="tt-val' + (r.tone ? ' tt-' + r.tone : '') + '">' + escapeHtml(r.value) + '</span>') + '</div>';
+        }).join('');
+        attrs = ' data-date="' + dateStr + '" data-tooltip="' + escapeHtml(plain) + '" data-tooltip-html="' + escapeHtml(rich) + '"';
+      }
       return '<div class="' + classes + '"' + attrs + '>' +
         '<div class="day-bar-col" style="height:' + DAY_BARS_HEIGHT_PX_ + 'px">' + barHtml + targetHtml + '</div>' +
         '<div class="day-bar-num">' + dayNum + '</div>' +
