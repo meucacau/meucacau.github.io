@@ -500,7 +500,7 @@
      checklist e a contagem num selo. Expande pro lado de dentro da tela ao passar o mouse /
      segurar (ver setupReviewButton_), igual às abas da barra lateral; o ícone nunca sai do
      lugar -- do lado direito a ordem é invertida (row-reverse) e o círculo cresce pra esquerda.
-     Só aparece na aba Início, com pendência (ver updateReviewButton_). Com ele na tela, o
+     Aparece em qualquer aba, com pendência (ver updateReviewButton_). Com ele na tela, o
      "+" sobe um pouco em tela muito baixa pra caber os dois. */
   .review-fab {
     position: fixed;
@@ -911,10 +911,6 @@
   .day-bar-target-ok { border-top-color: var(--income); }
   .day-bar-target-warn { border-top-color: var(--warning); }
   .day-bar-target-bad { border-top-color: var(--expense); }
-  .day-bars-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 8px; font-size: 11px; color: var(--text-muted); }
-  .day-bars-legend[hidden] { display: none; }
-  .day-bars-legend-swatch { position: static; display: inline-block; width: 18px; height: 0; margin-left: 8px; }
-  .day-bars-legend-swatch:first-child { margin-left: 0; }
   .day-bar-num { margin-top: 3px; text-align: center; font-size: 9px; line-height: 1; color: var(--text-muted); }
   .day-bar-today .day-bar-num { color: var(--primary); font-weight: 700; }
   .day-bar-month { position: relative; height: 18px; }
@@ -3842,13 +3838,13 @@
   }
 
   // ---------- botão "Revisar pendências" (abaixo do "+") ----------
-  /** Mostra/esconde o botão e atualiza contagem e texto: só na aba Início e com pendência
-   *  (como era antes, quando ficava no topo da página). Chamada por render(). */
+  /** Mostra/esconde o botão e atualiza contagem e texto: em qualquer aba, desde que haja
+   *  pendência. Chamada por render(). */
   function updateReviewButton_() {
     var btn = document.getElementById('review-pending');
     if (!btn) return;
     var n = STATE.pendingEntries.length;
-    var show = STATE.currentView === 'dashboard' && n > 0;
+    var show = n > 0;
     btn.hidden = !show;
     document.documentElement.classList.toggle('has-review-fab', show);
     if (!show) return;
@@ -6015,7 +6011,7 @@
     { key: 'income', label: 'Receitas' },
     { key: 'balance', label: 'Saldo' }
   ];
-  var DAY_BARS_HEIGHT_PX_ = 88;
+  var DAY_BARS_HEIGHT_PX_ = 116;
 
   /** { 'YYYY-MM-DD': valor } por dia, conforme o modo: despesas (soma), receitas (soma) ou
    *  saldo (receitas - despesas, ver computeCalendarDayNets_). Mesmas regras de sempre do
@@ -6428,16 +6424,6 @@
       var targets = computeDayBarsTargets_(days, STATE.txCalendarMode);
       if (targets) targets.status = dayBarsTargetStatus_(days, targets, STATE.txCalendarMode === 'balance' ? computeCalendarDayTotals_(combined, 'income') : {}, STATE.txCalendarMode, todayYmd());
       container.innerHTML = buildDayBarsHtml_(days, totals, computeDayBarsRef_(totals, targets), STATE.txCalendarMode, computeCalendarFlaggedOnlyDays_(combined, nets), targets);
-      var legend = document.getElementById('tx-calendar-legend');
-      if (legend) {
-        legend.hidden = !targets;
-        var balance = STATE.txCalendarMode === 'balance';
-        legend.innerHTML = '<span class="day-bars-legend-swatch day-bar-target-month"></span> meta/dia do mês' +
-          '<span class="day-bars-legend-swatch day-bar-target-week"></span> da semana (o que sobra)' +
-          '<span class="day-bars-legend-swatch day-bar-target-week day-bar-target-ok"></span> ' + (balance ? 'na meta' : 'dentro da meta') +
-          '<span class="day-bars-legend-swatch day-bar-target-week day-bar-target-warn"></span> ' + (balance ? 'até 10% abaixo' : 'até 10% acima') +
-          '<span class="day-bars-legend-swatch day-bar-target-week day-bar-target-bad"></span> ' + (balance ? 'abaixo' : 'acima');
-      }
       container.querySelectorAll('.day-bar-cell[data-date]').forEach(function (el) {
         el.onclick = function () { scrollToTxDay_(el.dataset.date); };
         wireTooltipTrigger_(el, 200);
@@ -6493,7 +6479,6 @@
       '<div id="tx-calendar-collapse" style="display:grid;grid-template-rows:' + (expanded ? '1fr' : '0fr') + ';transition:grid-template-rows 200ms ease">' +
         '<div style="overflow:hidden;min-height:0">' +
           '<div id="tx-calendar-mode" class="capsule-field" style="margin:12px 0 0"></div>' +
-          '<div id="tx-calendar-legend" class="day-bars-legend" hidden></div>' +
           '<div id="tx-calendar-weeks-wrap" style="display:flex;overflow-x:auto;padding-top:12px"></div>' +
         '</div>' +
       '</div>' +
