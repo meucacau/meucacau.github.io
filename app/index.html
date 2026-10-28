@@ -141,12 +141,8 @@
   #app {
     max-width: 720px;
     margin: 0 auto;
-    padding: 16px 16px 88px;
-  }
-  /* Reserva a faixa da barra lateral recolhida (52px) só enquanto ela cabe por cima do conteúdo. */
-  @media (max-width: 830px) {
-    #app { padding-right: 60px; }
-    html[data-nav-side="left"] #app { padding-right: 16px; padding-left: 60px; }
+    /* espaço pro fim da página não ficar atrás da barra de abas flutuante e do "+" */
+    padding: 16px 16px calc(150px + env(safe-area-inset-bottom, 0px));
   }
 
   h1, h2, h3 { margin: 0 0 8px; }
@@ -387,64 +383,51 @@
   .kind-toggle button { flex: 1; background: var(--surface); color: var(--text); border: 1px solid var(--border); }
   .kind-toggle button.active { background: var(--primary); color: var(--primary-contrast); border-color: var(--primary); }
 
-  /* Barra lateral de abas: recolhida mostra só os ícones; segurar/passar o mouse
-     (ver setupSidebar_ em JavaScript.html) expande por cima do conteúdo e mostra os
-     nomes. Fica à direita por padrão (html[data-nav-side="left"] troca de lado).
+  /* Barra de abas: ilha flutuante "desgrudada" da base, compacta e centralizada (no celular
+     e no PC, com o mesmo tamanho). Só ícones; a aba ativa se expande pro lado e mostra o nome
+     (as outras mostram o nome no tooltip: hover ou toque longo, ver setupSidebar_). Contas e
+     Categorias moram no painel "Mais". Tudo que flutua (barra, "+", "para confirmar", voltar
+     ao topo) vive numa coluna central de ~380px (--dock-edge = borda direita dessa coluna).
      z-index 35: o overlay do swipe entre abas (z-index:30) não pode cobrir a barra. */
+  :root {
+    --dock-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    --dock-edge: max(16px, calc(50% - 190px));
+  }
   nav.tabbar {
     position: fixed;
-    top: 50%;
-    right: 0;
-    transform: translateY(-50%);
-    width: 52px;
-    overflow: hidden;
+    bottom: var(--dock-bottom);
+    left: 50%;
+    transform: translateX(-50%);
     display: flex;
-    flex-direction: column;
-    padding: 6px 0;
+    align-items: center;
+    gap: 2px;
+    padding: 6px;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-right: 0;
-    border-radius: 14px 0 0 14px;
-    box-shadow: var(--shadow);
-    transition: width .15s ease, box-shadow .15s ease;
+    border-radius: 30px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.22);
     z-index: 35;
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
     user-select: none;
     -webkit-user-select: none;
   }
-  html[data-nav-side="left"] nav.tabbar {
-    right: auto;
-    left: 0;
-    border-right: 1px solid var(--border);
-    border-left: 0;
-    border-radius: 0 14px 14px 0;
-  }
-  nav.tabbar.expanded {
-    width: 176px;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
-  }
-  nav.tabbar button {
+  .tab-btn {
     display: flex;
-    /* Do lado direito a barra cresce pra esquerda: a ordem invertida (row-reverse) mantém o
-       ícone colado na borda da tela, e só o nome aparece à esquerda dele ao expandir. */
-    flex-direction: row-reverse;
-    justify-content: flex-start;
     align-items: center;
-    gap: 12px;
-    width: 100%;
-    height: 44px;
+    justify-content: center;
+    box-sizing: border-box;
+    height: 46px;
+    min-width: 46px;
+    padding: 0 12px;
     background: none;
+    border-radius: 23px;
     color: var(--text-muted);
-    border-radius: 0;
-    /* (52px - 22px de ícone) / 2: o ícone fica no mesmo lugar recolhido ou expandido */
-    padding: 0 15px;
     font-size: 14px;
-    text-align: left;
     white-space: nowrap;
+    transition: background .18s ease, color .18s ease;
   }
-  html[data-nav-side="left"] nav.tabbar button { flex-direction: row; }
-  nav.tabbar button .tab-ico {
+  .tab-btn .tab-ico {
     flex: none;
     width: 22px;
     height: 22px;
@@ -457,17 +440,61 @@
   /* translateY(2px): a fonte Utendo tem a caixa de linha mais alta que a tinta das letras
      (medido: tinta ~2px acima do centro da caixa, mesmo problema do "+" do .fab-icon),
      então só centralizar a caixa deixava o texto acima do ícone. */
-  nav.tabbar button .tab-label { opacity: 0; transform: translateY(2px); transition: opacity .12s ease; }
-  nav.tabbar.expanded button .tab-label { opacity: 1; }
-  nav.tabbar button.active { color: var(--primary); font-weight: 600; }
+  .tab-btn .tab-label {
+    max-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    margin-left: 0;
+    transform: translateY(2px);
+    transition: max-width .22s ease, opacity .16s ease, margin-left .22s ease;
+  }
+  .tab-btn.active {
+    color: var(--primary);
+    font-weight: 600;
+    background: color-mix(in srgb, var(--primary) 16%, transparent);
+  }
+  .tab-btn.active .tab-label { max-width: 130px; opacity: 1; margin-left: 8px; }
+  /* Vidro fosco (liquid glass) onde o WebView suporta; sem suporte fica o fundo sólido acima. */
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) and (background: color-mix(in srgb, red 50%, transparent)) {
+    nav.tabbar, .tabbar-more {
+      background: color-mix(in srgb, var(--surface) 58%, transparent);
+      -webkit-backdrop-filter: blur(18px) saturate(1.7);
+      backdrop-filter: blur(18px) saturate(1.7);
+      border-color: rgba(255,255,255,0.28);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.35);
+    }
+  }
+  /* Painel "Mais" (Contas, Categorias): sobe da barra, alinhado à direita dela (ver setupSidebar_). */
+  .tabbar-more {
+    position: fixed;
+    bottom: calc(var(--dock-bottom) + 62px);
+    right: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.22);
+    z-index: 36;
+    opacity: 0;
+    transform: translateY(6px);
+    pointer-events: none;
+    transition: opacity .15s ease, transform .15s ease;
+    -webkit-touch-callout: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .tabbar-more.open { opacity: 1; transform: none; pointer-events: auto; }
+  .tabbar-more .tab-btn { justify-content: flex-start; }
+  .tabbar-more .tab-btn .tab-label { max-width: 130px; opacity: 1; margin-left: 10px; }
 
-  /* "+" logo abaixo da barra lateral (que tem 278px de altura, centrada na tela, e 52px
-     de largura): o centro do "+" (48px, a 2px da borda) cai no centro da barra. Em tela
-     muito baixa o min() segura o botão dentro da tela. */
+  /* "+" logo acima da barra de abas, na borda direita da coluna central (--dock-edge). */
   .fab {
     position: fixed;
-    top: min(calc(50% + 151px), calc(100% - 64px));
-    right: 2px;
+    bottom: calc(var(--dock-bottom) + 68px);
+    right: var(--dock-edge);
     width: 48px;
     height: 48px;
     border-radius: 50%;
@@ -504,8 +531,8 @@
      "+" sobe um pouco em tela muito baixa pra caber os dois. */
   .review-fab {
     position: fixed;
-    top: min(calc(50% + 207px), calc(100% - 64px));
-    right: 2px;
+    bottom: calc(var(--dock-bottom) + 126px);
+    right: var(--dock-edge);
     width: 48px;
     height: 48px;
     box-sizing: border-box;
@@ -524,8 +551,7 @@
     z-index: 35;
   }
   .review-fab[hidden] { display: none; }
-  html[data-nav-side="left"] .review-fab { right: auto; left: 2px; flex-direction: row; }
-  html.has-review-fab .fab { top: min(calc(50% + 151px), calc(100% - 120px)); }
+  html[data-nav-side="left"] .review-fab { right: auto; left: var(--dock-edge); flex-direction: row; }
   .review-ico { position: relative; flex: none; width: 22px; height: 22px; display: block; }
   .review-ico svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .review-badge {
@@ -569,11 +595,11 @@
   }
 
   #settings-btn { top: 56px; }
-  html[data-nav-side="left"] .fab { right: auto; left: 2px; }
+  html[data-nav-side="left"] .fab { right: auto; left: var(--dock-edge); }
   html[data-nav-side="left"] .theme-toggle-btn { right: auto; left: 8px; }
-  /* Voltar ao topo fica do lado de dentro do "+" (longe da barra). */
-  #scroll-to-top-btn { right: 64px; }
-  html[data-nav-side="left"] #scroll-to-top-btn { right: auto; left: 64px; }
+  /* Voltar ao topo fica ao lado do "+", do lado de dentro. */
+  #scroll-to-top-btn { right: calc(var(--dock-edge) + 58px); }
+  html[data-nav-side="left"] #scroll-to-top-btn { right: auto; left: calc(var(--dock-edge) + 58px); }
 
   /* Janela de configuração (engrenagem, ver openSettingsModal_ em JavaScript.html). */
   .settings-section { border-top: 1px solid var(--border); padding: 12px 0; }
@@ -604,7 +630,7 @@
     position: fixed;
     left: 12px;
     right: 80px;
-    bottom: 20px;
+    bottom: calc(var(--dock-bottom) + 68px);
     z-index: 36;
     display: flex;
     align-items: center;
@@ -1382,13 +1408,16 @@
   </div>
   
 
+  <div class="tabbar-more" id="tabbar-more">
+    <button class="tab-btn" data-view="accounts" aria-label="Contas"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg><span class="tab-label">Contas</span></button>
+    <button class="tab-btn" data-view="categories" aria-label="Categorias"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1"/></svg><span class="tab-label">Categorias</span></button>
+  </div>
   <nav class="tabbar">
-    <button data-view="dashboard" class="active" aria-label="Início"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg><span class="tab-label">Início</span></button>
-    <button data-view="transactions" aria-label="Extrato"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span class="tab-label">Extrato</span></button>
-    <button data-view="accounts" aria-label="Contas"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg><span class="tab-label">Contas</span></button>
-    <button data-view="categories" aria-label="Categorias"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1"/></svg><span class="tab-label">Categorias</span></button>
-    <button data-view="budgets" aria-label="Planejamento"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span class="tab-label">Planejamento</span></button>
-    <button data-view="refunds" aria-label="Reembolsos"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><span class="tab-label">Reembolsos</span></button>
+    <button class="tab-btn active" data-view="dashboard" aria-label="Início"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg><span class="tab-label">Início</span></button>
+    <button class="tab-btn" data-view="transactions" aria-label="Extrato"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span class="tab-label">Extrato</span></button>
+    <button class="tab-btn" data-view="budgets" aria-label="Planejamento"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span class="tab-label">Planejamento</span></button>
+    <button class="tab-btn" data-view="refunds" aria-label="Reembolsos"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><span class="tab-label">Reembolsos</span></button>
+    <button class="tab-btn" id="tab-more" aria-label="Mais" aria-expanded="false"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg><span class="tab-label">Mais</span></button>
   </nav>
 
   <div id="modal-root"></div>
@@ -1791,15 +1820,18 @@
   var stopTooltipOutsideClick_ = null;
   /** delayMs (opcional, 0 = imediato como sempre foi): usado pelo "×" das listas, que
    *  espera o mesmo tempo do tooltip da linha pra não piscar ao passar o mouse por cima. */
-  function wireTooltipTrigger_(el, delayMs) {
+  function wireTooltipTrigger_(el, delayMs, lazy) {
+    // lazy: o texto é lido na hora do evento (a barra de abas tira o data-tooltip da aba ativa).
     var text = el.getAttribute('data-tooltip');
-    if (!text) return;
+    if (!text && !lazy) return;
     var rich = { html: el.getAttribute('data-tooltip-html') || '' };
+    function tipText_() { return lazy ? (el.getAttribute('data-tooltip') || '') : text; }
     if (HOVER_CAPABLE_) {
       var hoverTimer = null;
       el.addEventListener('mouseenter', function () {
-        if (!delayMs) { showTooltip_(el, text, rich); return; }
-        hoverTimer = setTimeout(function () { hoverTimer = null; showTooltip_(el, text, rich); }, delayMs);
+        if (!tipText_()) return;
+        if (!delayMs) { showTooltip_(el, tipText_(), rich); return; }
+        hoverTimer = setTimeout(function () { hoverTimer = null; showTooltip_(el, tipText_(), rich); }, delayMs);
       });
       el.addEventListener('mouseleave', function () {
         if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
@@ -1807,8 +1839,9 @@
       });
     } else {
       el.addEventListener('click', function () {
+        if (!tipText_()) return;
         if (stopTooltipOutsideClick_) stopTooltipOutsideClick_();
-        showTooltip_(el, text, rich);
+        showTooltip_(el, tipText_(), rich);
         stopTooltipOutsideClick_ = dismissOnOutsideClick(el, function () {
           hideTooltip_();
           stopTooltipOutsideClick_ = null;
@@ -1824,10 +1857,10 @@
    * Com mouse, hover mostra o tooltip e o clique rola, como sempre.
    */
   var DAY_LONG_PRESS_MS_ = 350;
-  function wireDayCell_(el, onTap) {
+  function wireDayCell_(el, onTap, lazy) {
     if (HOVER_CAPABLE_) {
       el.addEventListener('click', onTap);
-      wireTooltipTrigger_(el, 200);
+      wireTooltipTrigger_(el, 200, lazy);
       return;
     }
     var text = el.getAttribute('data-tooltip') || '';
@@ -1841,8 +1874,10 @@
       cancel();
       timer = setTimeout(function () {
         timer = null;
+        var tip = lazy ? (el.getAttribute('data-tooltip') || '') : text;
+        if (!tip) return;
         longPressed = true;
-        showTooltip_(el, text, rich);
+        showTooltip_(el, tip, rich);
         // O próximo toque em qualquer lugar fecha (registrado depois do gesto atual, então
         // não pega o próprio toque longo).
         var close = function () { hideTooltip_(); document.removeEventListener('touchstart', close, true); };
@@ -3751,9 +3786,7 @@
     }
     lastRenderedView_ = STATE.currentView;
 
-    document.querySelectorAll('nav.tabbar button').forEach(function (btn) {
-      btn.classList.toggle('active', btn.dataset.view === STATE.currentView);
-    });
+    syncTabbar_(STATE.currentView);
     if (STATE.currentView === 'dashboard') renderDashboard();
     else if (STATE.currentView === 'transactions') renderTransactions();
     else if (STATE.currentView === 'accounts') renderAccounts();
@@ -3791,7 +3824,7 @@
     btn.id = 'scroll-to-top-btn';
     btn.title = 'Voltar ao topo';
     btn.textContent = '↑';
-    btn.style.cssText = 'position:fixed;bottom:24px;width:44px;height:44px;border-radius:50%;' +
+    btn.style.cssText = 'position:fixed;bottom:calc(var(--dock-bottom) + 70px);width:44px;height:44px;border-radius:50%;' +
       'font-size:20px;line-height:1;box-shadow:0 4px 10px rgba(0,0,0,0.25);opacity:0;pointer-events:none;' +
       'transition:opacity .15s ease;z-index:40';
     document.body.appendChild(btn);
@@ -12699,7 +12732,7 @@
     // ver isSwipeBlocked_) só significa "não começa um NOVO" — não mexe em nada que já
     // esteja em andamento por outra fonte (ex: um wheel ainda se acomodando).
     if (e.touches.length !== 1 || isSwipeBlocked_()) return;
-    if (e.target && e.target.closest && e.target.closest('nav.tabbar')) return; // a barra lateral tem os próprios gestos
+    if (e.target && e.target.closest && e.target.closest('nav.tabbar, .tabbar-more')) return; // a barra de abas tem os próprios gestos
     var t = e.touches[0];
     swipe_ = { source: 'touch', phase: 'undecided', startX: t.clientX, startY: t.clientY, dx: 0 };
   }
@@ -13030,9 +13063,7 @@
         lastRenderedView_ = s.originalView;
         var restore = scrollPositions_[s.originalView] || { x: 0, y: 0 };
         window.scrollTo(restore.x, restore.y);
-        document.querySelectorAll('nav.tabbar button').forEach(function (btn) {
-          btn.classList.toggle('active', btn.dataset.view === s.originalView);
-        });
+        syncTabbar_(s.originalView);
       }
       s.overlay.remove();
     }, SWIPE_ANIMATION_MS_);
@@ -13550,7 +13581,7 @@
         '<option value="light"' + (theme === 'light' ? ' selected' : '') + '>Claro</option>' +
         '<option value="dark"' + (theme === 'dark' ? ' selected' : '') + '>Escuro</option>' +
       '</select></div>' +
-      '<div class="field" style="margin-top:10px"><label>Lado da barra de abas</label><select id="st-nav-side">' +
+      '<div class="field" style="margin-top:10px"><label>Lado dos botões flutuantes (+)</label><select id="st-nav-side">' +
         '<option value="right"' + (navSide_() === 'right' ? ' selected' : '') + '>Direita</option>' +
         '<option value="left"' + (navSide_() === 'left' ? ' selected' : '') + '>Esquerda</option>' +
       '</select></div></div>';
@@ -13710,32 +13741,69 @@
     applyNavSide_();
   }
 
+  /** Marca a aba ativa na barra (a ativa mostra o nome; as outras só o ícone, com o nome no
+   *  tooltip). Contas e Categorias moram no "Mais": quando uma delas está ativa, o botão
+   *  "Mais" assume o ícone e o nome dela. */
+  function syncTabbar_(view) {
+    document.querySelectorAll('.tab-btn[data-view]').forEach(function (btn) {
+      var active = btn.dataset.view === view;
+      btn.classList.toggle('active', active);
+      if (active) btn.removeAttribute('data-tooltip');
+      else btn.setAttribute('data-tooltip', btn.getAttribute('aria-label') || '');
+    });
+    var more = document.getElementById('tab-more');
+    if (!more) return;
+    if (more.dataset.defaultHtml === undefined) more.dataset.defaultHtml = more.innerHTML;
+    var inner = document.querySelector('.tabbar-more .tab-btn[data-view="' + view + '"]');
+    more.classList.toggle('active', !!inner);
+    more.innerHTML = inner ? inner.innerHTML : more.dataset.defaultHtml;
+    if (inner) more.removeAttribute('data-tooltip'); else more.setAttribute('data-tooltip', 'Mais');
+    if (inner) closeTabbarMore_();
+  }
+  function closeTabbarMore_() {
+    var panel = document.getElementById('tabbar-more');
+    var more = document.getElementById('tab-more');
+    if (panel) panel.classList.remove('open');
+    if (more) more.setAttribute('aria-expanded', 'false');
+  }
+
   function setupSidebar_() {
     var nav = document.querySelector('nav.tabbar');
     if (!nav) return;
-    var hold = setupHoldToReveal_(nav, { hoverDelayMs: SIDEBAR_HOLD_MS_, touchDelayMs: SIDEBAR_HOLD_MS_, leaveGraceMs: 150 });
-    var stopOutsideClick_ = null;
-    hold.onOpen(function () {
-      nav.classList.add('expanded');
-      stopOutsideClick_ = dismissOnOutsideClick(nav, hold.close);
+    var panel = document.getElementById('tabbar-more');
+    var more = document.getElementById('tab-more');
+    function goTo_(view) {
+      hideTooltip_();
+      closeTabbarMore_();
+      // Ignora clique no meio da breve animação de acomodação do swipe entre abas
+      // (#swipe-overlay ainda presente) -- nesse instante #view-root não está no
+      // lugar de sempre dentro de #app (ver finishSwipeTransition_), e um render()
+      // aqui bagunçaria a troca em andamento.
+      if (document.getElementById('swipe-overlay')) return;
+      STATE.currentView = view;
+      render();
+    }
+    document.querySelectorAll('.tab-btn[data-view]').forEach(function (btn) {
+      wireDayCell_(btn, function () { goTo_(btn.dataset.view); }, true);
     });
-    hold.onClose(function () {
-      nav.classList.remove('expanded');
-      if (stopOutsideClick_) { stopOutsideClick_(); stopOutsideClick_ = null; }
-    });
-    nav.querySelectorAll('button').forEach(function (btn) {
-      btn.onclick = function () {
-        if (hold.consumeSuppressedClick()) return;
-        hold.close();
-        // Ignora clique no meio da breve animação de acomodação do swipe entre abas
-        // (#swipe-overlay ainda presente) -- nesse instante #view-root não está no
-        // lugar de sempre dentro de #app (ver finishSwipeTransition_), e um render()
-        // aqui bagunçaria a troca em andamento.
-        if (document.getElementById('swipe-overlay')) return;
-        STATE.currentView = btn.dataset.view;
-        render();
-      };
-    });
+    if (more && panel) {
+      wireDayCell_(more, function () {
+        hideTooltip_();
+        var open = !panel.classList.contains('open');
+        // alinha a borda direita do painel com a do botão "Mais"
+        panel.style.right = Math.max(8, document.documentElement.clientWidth - more.getBoundingClientRect().right) + 'px';
+        panel.classList.toggle('open', open);
+        more.setAttribute('aria-expanded', open ? 'true' : 'false');
+      }, true);
+      // Toque fora do painel "Mais" fecha.
+      document.addEventListener('mousedown', function (e) {
+        if (panel.classList.contains('open') && !panel.contains(e.target) && !more.contains(e.target)) closeTabbarMore_();
+      }, true);
+      document.addEventListener('touchstart', function (e) {
+        if (panel.classList.contains('open') && !panel.contains(e.target) && !more.contains(e.target)) closeTabbarMore_();
+      }, { capture: true, passive: true });
+    }
+    syncTabbar_(STATE.currentView);
   }
 
   // ---------- boot ----------
