@@ -64,7 +64,7 @@
     --warning: #ce893b;
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
     /* Barra de abas "liquid glass": fundo translúcido, filete de luz e contorno discreto. */
-    --glass-bg: rgba(255, 255, 255, 0.40);
+    --glass-bg: rgba(255, 255, 255, 0.24);
     --glass-edge: rgba(255, 255, 255, 0.85);
     --glass-outline: rgba(0, 0, 0, 0.07);
     --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
@@ -94,7 +94,7 @@
       --expense-tint: #2e1a1a;
       --warning: #e0b33f;
       --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-      --glass-bg: rgba(31, 34, 38, 0.58);
+      --glass-bg: rgba(31, 34, 38, 0.38);
       --glass-edge: rgba(255, 255, 255, 0.10);
       --glass-outline: rgba(0, 0, 0, 0.30);
       --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
@@ -115,7 +115,7 @@
     --expense-tint: #2e1a1a;
     --warning: #e0b33f;
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-    --glass-bg: rgba(31, 34, 38, 0.58);
+    --glass-bg: rgba(31, 34, 38, 0.38);
     --glass-edge: rgba(255, 255, 255, 0.10);
     --glass-outline: rgba(0, 0, 0, 0.30);
     --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
@@ -156,11 +156,6 @@
     margin: 0 auto;
     /* espaço pro fim da página não ficar atrás da barra de abas flutuante */
     padding: 16px 16px calc(100px + env(safe-area-inset-bottom, 0px));
-  }
-  /* Reserva a faixa dos botões laterais (+, para confirmar) só enquanto cabem por cima do conteúdo. */
-  @media (max-width: 830px) {
-    #app { padding-right: 60px; }
-    html[data-nav-side="left"] #app { padding-right: 16px; padding-left: 60px; }
   }
 
   h1, h2, h3 { margin: 0 0 8px; }
@@ -404,16 +399,48 @@
   /* Barra de abas: ilha flutuante "desgrudada" da base, compacta e centralizada (no celular
      e no PC, com o mesmo tamanho). Só ícones; a aba ativa se expande pro lado e mostra o nome
      (as outras mostram o nome no tooltip: hover ou toque longo, ver setupSidebar_). Contas e
-     Categorias moram no painel "Mais". O "+" e o "para confirmar" ficam na lateral.
+     Categorias moram no painel "Mais". O "+" e o "para confirmar" ficam ao lado da barra (à
+     direita, ou à esquerda se a configuração "Lado dos botões" pedir), na mesma fileira.
      z-index 35: o overlay do swipe entre abas (z-index:30) não pode cobrir a barra. */
   :root {
     --dock-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    --dock-btn: 46px;
+  }
+  .dock-row {
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    bottom: var(--dock-bottom);
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 6px;
+    z-index: 35;
+    pointer-events: none;
+  }
+  .dock-row > * { pointer-events: auto; }
+  html[data-nav-side="left"] .dock-row { flex-direction: row-reverse; }
+  /* Coluna de largura fixa: o "para confirmar", ao expandir, passa por cima da barra em vez de
+     empurrar a fileira. Alinha o centro do botão com o da barra (60px de altura). */
+  .dock-side {
+    flex: none;
+    width: var(--dock-btn);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    margin-bottom: calc((60px - var(--dock-btn)) / 2);
+  }
+  html[data-nav-side="left"] .dock-side { align-items: flex-start; }
+  /* Tela muito estreita: barra (até ~335px) + botão não cabem lado a lado, então os botões
+     sobem pra logo acima da barra, na mesma ponta. */
+  @media (max-width: 389px) {
+    .dock-side { position: absolute; right: 0; bottom: calc(100% + 8px); margin-bottom: 0; }
+    html[data-nav-side="left"] .dock-side { right: auto; left: 0; }
   }
   nav.tabbar {
-    position: fixed;
-    bottom: var(--dock-bottom);
-    left: 50%;
-    transform: translateX(-50%);
+    position: relative;
+    flex: none;
     display: flex;
     align-items: center;
     gap: 2px;
@@ -422,7 +449,6 @@
     border: 1px solid var(--border);
     border-radius: 30px;
     box-shadow: 0 8px 24px rgba(0,0,0,0.22);
-    z-index: 35;
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
     user-select: none;
@@ -434,8 +460,8 @@
     justify-content: center;
     box-sizing: border-box;
     height: 46px;
-    min-width: 46px;
-    padding: 0 12px;
+    min-width: 42px;
+    padding: 0 10px;
     background: none;
     border-radius: 23px;
     color: var(--text-muted);
@@ -478,13 +504,20 @@
   /* Vidro fosco (liquid glass) onde o WebView suporta; sem suporte fica o fundo sólido acima.
      As cores vêm das variáveis --glass-* (cada tema ajusta as suas). */
   @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-    nav.tabbar, .tabbar-more {
+    nav.tabbar, .tabbar-more, .fab, .review-fab {
       background: var(--glass-bg);
       -webkit-backdrop-filter: blur(22px) saturate(1.8);
       backdrop-filter: blur(22px) saturate(1.8);
       border: 1px solid var(--glass-outline);
       box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-edge);
     }
+    /* Botões de ação: vidro com um toque da cor principal e ícone nela. */
+    .fab, .review-fab {
+      background: color-mix(in srgb, var(--primary) 18%, var(--glass-bg));
+      color: var(--primary);
+    }
+    /* Aberto (nome à mostra) passa por cima da barra: fundo mais firme pra ler. */
+    .review-fab.expanded { background: color-mix(in srgb, var(--primary) 18%, var(--surface)); }
   }
   /* Painel "Mais" (Contas, Categorias): sobe da barra, alinhado à direita dela (ver setupSidebar_). */
   .tabbar-more {
@@ -512,14 +545,12 @@
   .tabbar-more .tab-btn { justify-content: flex-start; }
   .tabbar-more .tab-btn .tab-label { width: var(--tw, auto); opacity: 1; margin-left: 10px; }
 
-  /* "+" na lateral (direita por padrão), um pouco abaixo do meio da tela; em tela muito
-     baixa o min() segura o botão acima da barra de abas. */
+  /* "+" ao lado da barra de abas (ver .dock-side). Sem vidro (WebView antigo) fica cor cheia. */
   .fab {
-    position: fixed;
-    top: min(calc(50% + 151px), calc(100% - 144px));
-    right: 2px;
-    width: 48px;
-    height: 48px;
+    position: relative;
+    width: var(--dock-btn);
+    height: var(--dock-btn);
+    flex: none;
     border-radius: 50%;
     font-size: 26px;
     line-height: 1;
@@ -531,8 +562,6 @@
     align-items: center;
     justify-content: center;
     box-shadow: 0 4px 10px rgba(0,0,0,0.25);
-    /* Mesmo motivo do z-index de nav.tabbar acima. */
-    z-index: 35;
   }
   /* line-height:1 + align-items:center (acima) centralizam a CAIXA DE LINHA da fonte,
      não a TINTA do glifo "+" em si -- medido com o contorno real do glifo (canvas
@@ -546,22 +575,20 @@
     transform: translateY(3px);
   }
 
-  /* "Revisar pendências": círculo logo abaixo do "+" (mesmo eixo), com o ícone de
-     checklist e a contagem num selo. Expande pro lado de dentro da tela ao passar o mouse /
-     segurar (ver setupReviewButton_), igual às abas da barra lateral; o ícone nunca sai do
-     lugar -- do lado direito a ordem é invertida (row-reverse) e o círculo cresce pra esquerda.
-     Aparece em qualquer aba, com pendência (ver updateReviewButton_). Com ele na tela, o
-     "+" sobe um pouco em tela muito baixa pra caber os dois. */
+  /* "Revisar pendências": círculo logo acima do "+" (mesmo eixo), com o ícone de checklist e a
+     contagem num selo. Expande pro lado de dentro (por cima da barra) ao passar o mouse /
+     segurar (ver setupReviewButton_); o ícone nunca sai do lugar -- do lado direito a ordem
+     é invertida (row-reverse) e o círculo cresce pra esquerda. Aparece em qualquer aba, com
+     pendência (ver updateReviewButton_). */
   .review-fab {
-    position: fixed;
-    top: min(calc(50% + 207px), calc(100% - 144px));
-    right: 2px;
-    width: 48px;
-    height: 48px;
+    position: relative;
+    flex: none;
+    width: var(--dock-btn);
+    height: var(--dock-btn);
     box-sizing: border-box;
-    padding: 0 13px;
+    padding: 0 11px;
     gap: 10px;
-    border-radius: 24px;
+    border-radius: calc(var(--dock-btn) / 2);
     display: flex;
     flex-direction: row-reverse;
     align-items: center;
@@ -571,12 +598,9 @@
     font-size: 14px;
     box-shadow: 0 4px 10px rgba(0,0,0,0.25);
     transition: width .15s ease;
-    z-index: 35;
   }
   .review-fab[hidden] { display: none; }
-  html[data-nav-side="left"] .review-fab { right: auto; left: 2px; flex-direction: row; }
-  /* Com o "para confirmar" na tela, o "+" sobe um pouco pra caber os dois acima da barra. */
-  html.has-review-fab .fab { top: min(calc(50% + 151px), calc(100% - 200px)); }
+  html[data-nav-side="left"] .review-fab { flex-direction: row; }
   .review-ico { position: relative; flex: none; width: 22px; height: 22px; display: block; }
   .review-ico svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .review-badge {
@@ -620,11 +644,10 @@
   }
 
   #settings-btn { top: 56px; }
-  html[data-nav-side="left"] .fab { right: auto; left: 2px; }
   html[data-nav-side="left"] .theme-toggle-btn { right: auto; left: 8px; }
-  /* Voltar ao topo fica do lado de dentro do "+", acima da barra de abas. */
-  #scroll-to-top-btn { right: 64px; }
-  html[data-nav-side="left"] #scroll-to-top-btn { right: auto; left: 64px; }
+  /* Voltar ao topo fica acima da barra, no lado oposto ao dos botões (+ e para confirmar). */
+  #scroll-to-top-btn { right: auto; left: 12px; }
+  html[data-nav-side="left"] #scroll-to-top-btn { left: auto; right: 12px; }
 
   /* Janela de configuração (engrenagem, ver openSettingsModal_ em JavaScript.html). */
   .settings-section { border-top: 1px solid var(--border); padding: 12px 0; }
@@ -1418,8 +1441,6 @@
     </div>
   </div>
 
-  <button class="fab" id="fab-add"><span class="fab-icon">+</span></button>
-  <button class="review-fab" id="review-pending" aria-label="Para confirmar" hidden><span class="review-ico"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg><span class="review-badge"></span></span><span class="tab-label"></span></button>
   <button class="theme-toggle-btn" id="theme-toggle" title="Alternar tema claro/escuro"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
   
   <button class="theme-toggle-btn" id="settings-btn" title="Configurações"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
@@ -1433,13 +1454,19 @@
     <button class="tab-btn" data-view="accounts" aria-label="Contas"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg><span class="tab-label"><span>Contas</span></span></button>
     <button class="tab-btn" data-view="categories" aria-label="Categorias"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1"/></svg><span class="tab-label"><span>Categorias</span></span></button>
   </div>
-  <nav class="tabbar">
-    <button class="tab-btn active" data-view="dashboard" aria-label="Início"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg><span class="tab-label"><span>Início</span></span></button>
-    <button class="tab-btn" data-view="transactions" aria-label="Extrato"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span class="tab-label"><span>Extrato</span></span></button>
-    <button class="tab-btn" data-view="budgets" aria-label="Planejamento"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span class="tab-label"><span>Planejamento</span></span></button>
-    <button class="tab-btn" data-view="refunds" aria-label="Reembolsos"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><span class="tab-label"><span>Reembolsos</span></span></button>
-    <button class="tab-btn" id="tab-more" aria-label="Mais" aria-expanded="false"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg><span class="tab-label"><span>Mais</span></span></button>
-  </nav>
+  <div class="dock-row">
+    <nav class="tabbar">
+      <button class="tab-btn active" data-view="dashboard" aria-label="Início"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg><span class="tab-label"><span>Início</span></span></button>
+      <button class="tab-btn" data-view="transactions" aria-label="Extrato"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span class="tab-label"><span>Extrato</span></span></button>
+      <button class="tab-btn" data-view="budgets" aria-label="Planejamento"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span class="tab-label"><span>Planejamento</span></span></button>
+      <button class="tab-btn" data-view="refunds" aria-label="Reembolsos"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><span class="tab-label"><span>Reembolsos</span></span></button>
+      <button class="tab-btn" id="tab-more" aria-label="Mais" aria-expanded="false"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg><span class="tab-label"><span>Mais</span></span></button>
+    </nav>
+    <div class="dock-side">
+      <button class="review-fab" id="review-pending" aria-label="Para confirmar" hidden><span class="review-ico"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg><span class="review-badge"></span></span><span class="tab-label"></span></button>
+      <button class="fab" id="fab-add"><span class="fab-icon">+</span></button>
+    </div>
+  </div>
 
   <div id="modal-root"></div>
 
