@@ -6079,14 +6079,18 @@
    */
   function dayBarsTargetLines_(days, monthlyLimitFn, spentByDay, today) {
     var month = {}, week = {};
-    days.forEach(function (d) {
+    // "O que sobra" do trecho (semana cortada no dia 1) que contém o dia d.
+    var segmentCache = {};
+    function segmentCeiling(d) {
       var ym = d.slice(0, 7);
-      var dim = daysInMonth_(ym);
-      var limit = monthlyLimitFn(ym);
       var sunday = parseYmdLocal_(d);
       sunday.setDate(sunday.getDate() - sunday.getDay());
       var segStart = ymdFromDate_(sunday);
       if (segStart < ym + '-01') segStart = ym + '-01';
+      var key = ym + '|' + segStart;
+      if (segmentCache[key] !== undefined) return segmentCache[key];
+      var dim = daysInMonth_(ym);
+      var limit = monthlyLimitFn(ym);
       var startDay = Number(segStart.slice(8, 10));
       var spentBefore = 0;
       for (var i = 1; i < startDay; i++) {
@@ -6095,8 +6099,28 @@
         // herdaria a "sobra" de dias que nem aconteceram).
         spentBefore += ymd <= today ? (spentByDay[ymd] || 0) : limit / dim;
       }
-      month[d] = limit / dim;
-      week[d] = Math.max(0, (limit - spentBefore) / (dim - startDay + 1));
+      return (segmentCache[key] = Math.max(0, (limit - spentBefore) / (dim - startDay + 1)));
+    }
+    // Teto ÚNICO da semana de calendário (domingo a sábado): média, pelos 7 dias, do "o que
+    // sobra" do trecho de cada dia -- numa semana que vira o mês (ex: 27/9 a 3/10) mistura os
+    // dois meses ponderando pelos dias de cada um, e o total esperado da semana não muda.
+    var weekCache = {};
+    function weekCeiling(d) {
+      var sunday = parseYmdLocal_(d);
+      sunday.setDate(sunday.getDate() - sunday.getDay());
+      var key = ymdFromDate_(sunday);
+      if (weekCache[key] !== undefined) return weekCache[key];
+      var sum = 0;
+      for (var i = 0; i < 7; i++) {
+        sum += segmentCeiling(ymdFromDate_(sunday));
+        sunday.setDate(sunday.getDate() + 1);
+      }
+      return (weekCache[key] = sum / 7);
+    }
+    days.forEach(function (d) {
+      var ym = d.slice(0, 7);
+      month[d] = monthlyLimitFn(ym) / daysInMonth_(ym);
+      week[d] = weekCeiling(d);
     });
     return { month: month, week: week };
   }
@@ -6122,7 +6146,7 @@
       var sunday = parseYmdLocal_(d);
       sunday.setDate(sunday.getDate() - sunday.getDay());
       var ym = d.slice(0, 7);
-      var weekKey = ym + '|' + ymdFromDate_(sunday);
+      var weekKey = ymdFromDate_(sunday); // semana inteira, mesmo virando o mês
       (groups.month[ym] = groups.month[ym] || []).push(d);
       (groups.week[weekKey] = groups.week[weekKey] || []).push(d);
     });
