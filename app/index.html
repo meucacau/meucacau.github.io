@@ -63,6 +63,11 @@
     --expense-tint: #fee2e2;
     --warning: #ce893b;
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    /* Barra de abas "liquid glass": fundo translúcido, filete de luz e contorno discreto. */
+    --glass-bg: rgba(255, 255, 255, 0.40);
+    --glass-edge: rgba(255, 255, 255, 0.85);
+    --glass-outline: rgba(0, 0, 0, 0.07);
+    --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
     color-scheme: light;
   }
 
@@ -89,6 +94,10 @@
       --expense-tint: #2e1a1a;
       --warning: #e0b33f;
       --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+      --glass-bg: rgba(31, 34, 38, 0.58);
+      --glass-edge: rgba(255, 255, 255, 0.10);
+      --glass-outline: rgba(0, 0, 0, 0.30);
+      --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
       color-scheme: dark;
     }
   }
@@ -106,6 +115,10 @@
     --expense-tint: #2e1a1a;
     --warning: #e0b33f;
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --glass-bg: rgba(31, 34, 38, 0.58);
+    --glass-edge: rgba(255, 255, 255, 0.10);
+    --glass-outline: rgba(0, 0, 0, 0.30);
+    --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
     color-scheme: dark;
   }
 
@@ -141,8 +154,13 @@
   #app {
     max-width: 720px;
     margin: 0 auto;
-    /* espaço pro fim da página não ficar atrás da barra de abas flutuante e do "+" */
-    padding: 16px 16px calc(150px + env(safe-area-inset-bottom, 0px));
+    /* espaço pro fim da página não ficar atrás da barra de abas flutuante */
+    padding: 16px 16px calc(100px + env(safe-area-inset-bottom, 0px));
+  }
+  /* Reserva a faixa dos botões laterais (+, para confirmar) só enquanto cabem por cima do conteúdo. */
+  @media (max-width: 830px) {
+    #app { padding-right: 60px; }
+    html[data-nav-side="left"] #app { padding-right: 16px; padding-left: 60px; }
   }
 
   h1, h2, h3 { margin: 0 0 8px; }
@@ -386,12 +404,10 @@
   /* Barra de abas: ilha flutuante "desgrudada" da base, compacta e centralizada (no celular
      e no PC, com o mesmo tamanho). Só ícones; a aba ativa se expande pro lado e mostra o nome
      (as outras mostram o nome no tooltip: hover ou toque longo, ver setupSidebar_). Contas e
-     Categorias moram no painel "Mais". Tudo que flutua (barra, "+", "para confirmar", voltar
-     ao topo) vive numa coluna central de ~380px (--dock-edge = borda direita dessa coluna).
+     Categorias moram no painel "Mais". O "+" e o "para confirmar" ficam na lateral.
      z-index 35: o overlay do swipe entre abas (z-index:30) não pode cobrir a barra. */
   :root {
     --dock-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-    --dock-edge: max(16px, calc(50% - 190px));
   }
   nav.tabbar {
     position: fixed;
@@ -440,28 +456,34 @@
   /* translateY(2px): a fonte Utendo tem a caixa de linha mais alta que a tinta das letras
      (medido: tinta ~2px acima do centro da caixa, mesmo problema do "+" do .fab-icon),
      então só centralizar a caixa deixava o texto acima do ícone. */
+  /* Largura animada de 0 até a largura exata do nome (--tw, medida em measureTabLabels_):
+     quem encolhe e quem cresce andam juntos, então a barra não "estoura" por um instante na
+     troca de aba (com max-width, os dois nomes ficavam inteiros no meio da animação). */
   .tab-btn .tab-label {
-    max-width: 0;
-    opacity: 0;
+    display: block;
     overflow: hidden;
+    white-space: nowrap;
+    width: 0;
+    opacity: 0;
     margin-left: 0;
     transform: translateY(2px);
-    transition: max-width .22s ease, opacity .16s ease, margin-left .22s ease;
+    transition: width .22s ease, opacity .16s ease, margin-left .22s ease;
   }
   .tab-btn.active {
     color: var(--primary);
     font-weight: 600;
     background: color-mix(in srgb, var(--primary) 16%, transparent);
   }
-  .tab-btn.active .tab-label { max-width: 130px; opacity: 1; margin-left: 8px; }
-  /* Vidro fosco (liquid glass) onde o WebView suporta; sem suporte fica o fundo sólido acima. */
-  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) and (background: color-mix(in srgb, red 50%, transparent)) {
+  .tab-btn.active .tab-label { width: var(--tw, 90px); opacity: 1; margin-left: 8px; }
+  /* Vidro fosco (liquid glass) onde o WebView suporta; sem suporte fica o fundo sólido acima.
+     As cores vêm das variáveis --glass-* (cada tema ajusta as suas). */
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     nav.tabbar, .tabbar-more {
-      background: color-mix(in srgb, var(--surface) 58%, transparent);
-      -webkit-backdrop-filter: blur(18px) saturate(1.7);
-      backdrop-filter: blur(18px) saturate(1.7);
-      border-color: rgba(255,255,255,0.28);
-      box-shadow: 0 8px 24px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.35);
+      background: var(--glass-bg);
+      -webkit-backdrop-filter: blur(22px) saturate(1.8);
+      backdrop-filter: blur(22px) saturate(1.8);
+      border: 1px solid var(--glass-outline);
+      box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-edge);
     }
   }
   /* Painel "Mais" (Contas, Categorias): sobe da barra, alinhado à direita dela (ver setupSidebar_). */
@@ -488,13 +510,14 @@
   }
   .tabbar-more.open { opacity: 1; transform: none; pointer-events: auto; }
   .tabbar-more .tab-btn { justify-content: flex-start; }
-  .tabbar-more .tab-btn .tab-label { max-width: 130px; opacity: 1; margin-left: 10px; }
+  .tabbar-more .tab-btn .tab-label { width: var(--tw, auto); opacity: 1; margin-left: 10px; }
 
-  /* "+" logo acima da barra de abas, na borda direita da coluna central (--dock-edge). */
+  /* "+" na lateral (direita por padrão), um pouco abaixo do meio da tela; em tela muito
+     baixa o min() segura o botão acima da barra de abas. */
   .fab {
     position: fixed;
-    bottom: calc(var(--dock-bottom) + 68px);
-    right: var(--dock-edge);
+    top: min(calc(50% + 151px), calc(100% - 144px));
+    right: 2px;
     width: 48px;
     height: 48px;
     border-radius: 50%;
@@ -531,8 +554,8 @@
      "+" sobe um pouco em tela muito baixa pra caber os dois. */
   .review-fab {
     position: fixed;
-    bottom: calc(var(--dock-bottom) + 126px);
-    right: var(--dock-edge);
+    top: min(calc(50% + 207px), calc(100% - 144px));
+    right: 2px;
     width: 48px;
     height: 48px;
     box-sizing: border-box;
@@ -551,7 +574,9 @@
     z-index: 35;
   }
   .review-fab[hidden] { display: none; }
-  html[data-nav-side="left"] .review-fab { right: auto; left: var(--dock-edge); flex-direction: row; }
+  html[data-nav-side="left"] .review-fab { right: auto; left: 2px; flex-direction: row; }
+  /* Com o "para confirmar" na tela, o "+" sobe um pouco pra caber os dois acima da barra. */
+  html.has-review-fab .fab { top: min(calc(50% + 151px), calc(100% - 200px)); }
   .review-ico { position: relative; flex: none; width: 22px; height: 22px; display: block; }
   .review-ico svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .review-badge {
@@ -595,11 +620,11 @@
   }
 
   #settings-btn { top: 56px; }
-  html[data-nav-side="left"] .fab { right: auto; left: var(--dock-edge); }
+  html[data-nav-side="left"] .fab { right: auto; left: 2px; }
   html[data-nav-side="left"] .theme-toggle-btn { right: auto; left: 8px; }
-  /* Voltar ao topo fica ao lado do "+", do lado de dentro. */
-  #scroll-to-top-btn { right: calc(var(--dock-edge) + 58px); }
-  html[data-nav-side="left"] #scroll-to-top-btn { right: auto; left: calc(var(--dock-edge) + 58px); }
+  /* Voltar ao topo fica do lado de dentro do "+", acima da barra de abas. */
+  #scroll-to-top-btn { right: 64px; }
+  html[data-nav-side="left"] #scroll-to-top-btn { right: auto; left: 64px; }
 
   /* Janela de configuração (engrenagem, ver openSettingsModal_ em JavaScript.html). */
   .settings-section { border-top: 1px solid var(--border); padding: 12px 0; }
@@ -630,7 +655,7 @@
     position: fixed;
     left: 12px;
     right: 80px;
-    bottom: calc(var(--dock-bottom) + 68px);
+    bottom: calc(var(--dock-bottom) + 66px);
     z-index: 36;
     display: flex;
     align-items: center;
@@ -1405,15 +1430,15 @@
   
 
   <div class="tabbar-more" id="tabbar-more">
-    <button class="tab-btn" data-view="accounts" aria-label="Contas"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg><span class="tab-label">Contas</span></button>
-    <button class="tab-btn" data-view="categories" aria-label="Categorias"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1"/></svg><span class="tab-label">Categorias</span></button>
+    <button class="tab-btn" data-view="accounts" aria-label="Contas"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg><span class="tab-label"><span>Contas</span></span></button>
+    <button class="tab-btn" data-view="categories" aria-label="Categorias"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1"/></svg><span class="tab-label"><span>Categorias</span></span></button>
   </div>
   <nav class="tabbar">
-    <button class="tab-btn active" data-view="dashboard" aria-label="Início"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg><span class="tab-label">Início</span></button>
-    <button class="tab-btn" data-view="transactions" aria-label="Extrato"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span class="tab-label">Extrato</span></button>
-    <button class="tab-btn" data-view="budgets" aria-label="Planejamento"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span class="tab-label">Planejamento</span></button>
-    <button class="tab-btn" data-view="refunds" aria-label="Reembolsos"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><span class="tab-label">Reembolsos</span></button>
-    <button class="tab-btn" id="tab-more" aria-label="Mais" aria-expanded="false"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg><span class="tab-label">Mais</span></button>
+    <button class="tab-btn active" data-view="dashboard" aria-label="Início"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg><span class="tab-label"><span>Início</span></span></button>
+    <button class="tab-btn" data-view="transactions" aria-label="Extrato"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span class="tab-label"><span>Extrato</span></span></button>
+    <button class="tab-btn" data-view="budgets" aria-label="Planejamento"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span class="tab-label"><span>Planejamento</span></span></button>
+    <button class="tab-btn" data-view="refunds" aria-label="Reembolsos"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><span class="tab-label"><span>Reembolsos</span></span></button>
+    <button class="tab-btn" id="tab-more" aria-label="Mais" aria-expanded="false"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg><span class="tab-label"><span>Mais</span></span></button>
   </nav>
 
   <div id="modal-root"></div>
@@ -13752,6 +13777,14 @@
     more.innerHTML = inner ? inner.innerHTML : more.dataset.defaultHtml;
     if (inner) more.removeAttribute('data-tooltip'); else more.setAttribute('data-tooltip', 'Mais');
     if (inner) closeTabbarMore_();
+    measureTabLabels_();
+  }
+  /** Largura exata de cada nome (--tw): o CSS anima o nome de 0 até ela. */
+  function measureTabLabels_() {
+    document.querySelectorAll('.tab-btn .tab-label').forEach(function (l) {
+      var text = l.firstElementChild || l; // o <span> interno tem a largura natural do nome
+      l.style.setProperty('--tw', Math.ceil(text.getBoundingClientRect().width) + 'px');
+    });
   }
   function closeTabbarMore_() {
     var panel = document.getElementById('tabbar-more');
