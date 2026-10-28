@@ -1064,7 +1064,7 @@
   /* Descrição de categoria escrita pelo usuário — itálico pra separar do texto do app. */
   .shared-tooltip-italic { font-style: italic; }
   /* Tooltip com linhas (ver buildDayBarsHtml_): data em negrito, texto à esquerda e números à direita. */
-  .shared-tooltip-rich { white-space: normal; }
+  .shared-tooltip-rich { white-space: nowrap; max-width: none; }
   .shared-tooltip-rich .tt-date { font-weight: 700; margin-bottom: 3px; }
   .shared-tooltip-rich .tt-row { display: flex; justify-content: space-between; gap: 16px; }
   .shared-tooltip-rich .tt-val { text-align: right; white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -1073,7 +1073,7 @@
   .shared-tooltip-rich .tt-line { height: 0; margin: 4px 0; border-top: 0 solid currentColor; opacity: .9; }
   .shared-tooltip-rich .tt-line-week { border-top-width: 3px; border-top-style: dashed; }
   .shared-tooltip-rich .tt-line-month { border-top-width: 2px; border-top-style: dotted; }
-  .shared-tooltip-rich .tt-result { text-align: right; font-weight: 700; margin-top: 2px; }
+  .shared-tooltip-rich .tt-result { text-align: center; font-weight: 700; margin-top: 2px; }
   .shared-tooltip-rich .tt-ok { color: #4ade80; }
   .shared-tooltip-rich .tt-warn { color: #fbbf24; }
   .shared-tooltip-rich .tt-bad { color: #f87171; }
@@ -1499,7 +1499,7 @@
    * passada = a semana de calendário anterior à atual, retrasada = a anterior a essa.
    * Dias mais antigos ou futuros levam só a data + dia da semana.
    */
-  function fmtCardDate_(ymd) {
+  function fmtCardDate_(ymd, withoutWeekSuffix) {
     var d = parseYmdLocal_(ymd);
     var today = parseYmdLocal_(todayYmd());
     var DAY_MS = 24 * 60 * 60 * 1000;
@@ -1507,6 +1507,7 @@
     var label = d.getDate() + ' de ' + MONTH_NAMES_PT[d.getMonth()] + ' de ' + d.getFullYear() + ', ' + WEEKDAY_NAMES_PT[d.getDay()];
     if (diffDays === 0) return 'Hoje, ' + label;
     if (diffDays === 1) return 'Ontem, ' + label;
+    if (withoutWeekSuffix) return label; // tooltip do Resumo: uma linha só, sem "da semana passada"
     var daysSinceWeekStart = today.getDay();
     if (diffDays > daysSinceWeekStart && diffDays <= daysSinceWeekStart + 7) return label + ' da semana passada';
     if (diffDays > daysSinceWeekStart + 7 && diffDays <= daysSinceWeekStart + 14) return label + ' da semana retrasada';
@@ -6199,15 +6200,16 @@
   };
 
   /** Texto do veredito de um trecho: diferença POR DIA entre o teto e a média real, sem
-   *  centavos ("R$ 26/dia abaixo do teto"). null quando o trecho ainda nem começou. */
+   *  centavos ("Sobrou R$ 26/dia!" / "Gastou R$ 50/dia a mais"). null quando o trecho
+   *  ainda nem começou. */
   function dayBarsResultText_(ceiling, avg, tone) {
     if (avg === null || avg === undefined || !tone) return null;
     var perDay = function (v) { return fmtMoneyNoCents_(v) + '/dia'; };
     if (tone === 'ok') {
       var under = Math.round(ceiling - avg);
-      return under > 0 ? perDay(under) + ' abaixo do teto' : 'No teto';
+      return under > 0 ? 'Sobrou ' + perDay(under) + '!' : 'No teto';
     }
-    return perDay(Math.max(1, Math.round(avg - ceiling))) + ' acima do teto';
+    return 'Gastou ' + perDay(Math.max(1, Math.round(avg - ceiling))) + ' a mais';
   }
 
   /**
@@ -6277,11 +6279,11 @@
         // data em negrito (mesmo formato do conector entre dias do Extrato), meia linha de
         // espaço depois de Despesas e, por trecho (semana, mês): amostra do traço, teto, média e
         // veredito. Textos à esquerda e números em negrito à direita, sem ":".
-        var plain = [fmtCardDate_(dateStr)].concat(rows.filter(function (r) { return !r.gap && !r.sample; }).map(function (r) {
+        var plain = [fmtCardDate_(dateStr, true)].concat(rows.filter(function (r) { return !r.gap && !r.sample; }).map(function (r) {
           return r.result !== undefined ? r.result : (r.value === undefined ? r.label : r.label + ' ' + r.value);
         })).join('\n');
         var tipIcon = function (t) { return t === 'ok' ? BALANCE_GOAL_REACHED_ICON_ : DAY_BARS_RESULT_ICONS_[t]; };
-        var rich = '<div class="tt-date">' + escapeHtml(fmtCardDate_(dateStr)) + '</div>' + rows.map(function (r) {
+        var rich = '<div class="tt-date">' + escapeHtml(fmtCardDate_(dateStr, true)) + '</div>' + rows.map(function (r) {
           if (r.gap) return '<div class="tt-gap"></div>';
           if (r.sample) return '<div class="tt-line tt-line-' + r.sample + (r.tone ? ' tt-' + r.tone : '') + '"></div>';
           if (r.result !== undefined) return '<div class="tt-result tt-' + r.tone + '">' + tipIcon(r.tone) + escapeHtml(r.result) + '</div>';
