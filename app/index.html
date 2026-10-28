@@ -1091,18 +1091,14 @@
   .shared-tooltip-italic { font-style: italic; }
   /* Tooltip com linhas (ver buildDayBarsHtml_): data em negrito, texto à esquerda e números à direita. */
   .shared-tooltip-rich { white-space: nowrap; max-width: none; }
-  .shared-tooltip-rich .tt-date { font-weight: 700; margin-bottom: 3px; }
+  .shared-tooltip-rich .tt-date { font-weight: 700; margin-bottom: 3px; text-align: center; }
   .shared-tooltip-rich .tt-row { display: flex; justify-content: space-between; gap: 16px; }
   .shared-tooltip-rich .tt-val { text-align: right; white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums; }
   .shared-tooltip-rich .tt-gap { height: .5em; }
-  .shared-tooltip-rich .tt-title { text-align: center; font-weight: 700; }
+  .shared-tooltip-rich .tt-title { text-align: center; }
   /* "Média  R$ X × R$ Y  Teto": rótulos nas pontas, valores no centro. */
   .shared-tooltip-rich .tt-trio { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; }
   .shared-tooltip-rich .tt-trio > span:last-child { text-align: right; }
-  /* Amostra do traço da linha no gráfico (semana tracejada, mês pontilhada), na cor do veredito. */
-  .shared-tooltip-rich .tt-line { height: 0; margin: 4px 0; border-top: 0 solid currentColor; opacity: .9; }
-  .shared-tooltip-rich .tt-line-week { border-top-width: 3px; border-top-style: dashed; }
-  .shared-tooltip-rich .tt-line-month { border-top-width: 2px; border-top-style: dotted; }
   .shared-tooltip-rich .tt-result { text-align: center; font-weight: 700; margin-top: 2px; }
   .shared-tooltip-rich .tt-ok { color: #4ade80; }
   .shared-tooltip-rich .tt-warn { color: #fbbf24; }
@@ -6342,8 +6338,7 @@
       var clickable = has || flaggedOnlyDays[dateStr];
       var barHtml = '';
       // Linhas do tooltip: { label, value, tone } (rótulo à esquerda, valor em negrito à direita),
-      // { gap: true } (meia linha), { sample: 'week'|'month', tone } (amostra do traço da linha no
-      // gráfico) e { result, tone } (veredito: ícone + texto em negrito na cor do veredito).
+      // { gap: true } (meia linha), { title } (semana/mês, centralizado) e { trio } e { result, tone } (veredito: ícone + texto em negrito na cor do veredito).
       var rows = [];
       if (has) {
         var value = totals[dateStr];
@@ -6377,7 +6372,6 @@
            ['month', capitalizeFirst_(monthName), 'em ' + monthName.toLowerCase()]].forEach(function (seg) {
             var kind = seg[0], ceiling = targets[kind][dateStr], a = avg[kind][dateStr], verdict = st[kind][dateStr];
             rows.push({ gap: true });
-            rows.push({ sample: kind, tone: verdict });
             rows.push({ title: seg[1] });
             // Média à esquerda, "média × teto" no centro, Teto à direita.
             rows.push({ trio: (a === null || a === undefined ? '—' : fmtMoneyNoCents_(a)) + ' × ' + fmtMoneyNoCents_(ceiling) });
@@ -6394,7 +6388,7 @@
         // data em negrito (mesmo formato do conector entre dias do Extrato), meia linha de
         // espaço depois de Despesas e, por trecho (semana, mês): amostra do traço, teto, média e
         // veredito. Textos à esquerda e números em negrito à direita, sem ":".
-        var plain = [fmtCardDate_(dateStr, true)].concat(rows.filter(function (r) { return !r.gap && !r.sample; }).map(function (r) {
+        var plain = [fmtCardDate_(dateStr, true)].concat(rows.filter(function (r) { return !r.gap; }).map(function (r) {
           if (r.title !== undefined) return r.title;
           if (r.trio !== undefined) return 'Média ' + r.trio + ' Teto';
           return r.result !== undefined ? r.result : (r.value === undefined ? r.label : r.label + ' ' + r.value);
@@ -6402,7 +6396,6 @@
         var tipIcon = function (t) { return t === 'ok' ? BALANCE_GOAL_REACHED_ICON_ : DAY_BARS_RESULT_ICONS_[t]; };
         var rich = '<div class="tt-date">' + escapeHtml(fmtCardDate_(dateStr, true)) + '</div>' + rows.map(function (r) {
           if (r.gap) return '<div class="tt-gap"></div>';
-          if (r.sample) return '<div class="tt-line tt-line-' + r.sample + (r.tone ? ' tt-' + r.tone : '') + '"></div>';
           if (r.title !== undefined) return '<div class="tt-title">' + escapeHtml(r.title) + '</div>';
           if (r.trio !== undefined) return '<div class="tt-trio"><span>Média</span><span class="tt-val">' + escapeHtml(r.trio) + '</span><span>Teto</span></div>';
           if (r.result !== undefined) return '<div class="tt-result tt-' + r.tone + '">' + tipIcon(r.tone) + escapeHtml(r.result) + '</div>';
