@@ -864,7 +864,7 @@
      ganha 8px de respiro à esquerda -- a linha fica no meio dele) em --border, e mês (a
      célula do dia 1) em tom mais forte. */
   .day-bars-plot { display: flex; flex-shrink: 0; }
-  .day-bar-cell { position: relative; width: 14px; flex-shrink: 0; }
+  .day-bar-cell { position: relative; width: 14px; flex-shrink: 0; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
   .day-bar-clickable { cursor: pointer; }
   .day-bar-clickable:hover { background: var(--border); }
   .week-cal-dragging .day-bar-cell { pointer-events: none; }
@@ -1069,6 +1069,10 @@
   .shared-tooltip-rich .tt-row { display: flex; justify-content: space-between; gap: 16px; }
   .shared-tooltip-rich .tt-val { text-align: right; white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums; }
   .shared-tooltip-rich .tt-gap { height: .5em; }
+  .shared-tooltip-rich .tt-title { text-align: center; font-weight: 700; }
+  /* "Média  R$ X × R$ Y  Teto": rótulos nas pontas, valores no centro. */
+  .shared-tooltip-rich .tt-trio { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; }
+  .shared-tooltip-rich .tt-trio > span:last-child { text-align: right; }
   /* Amostra do traço da linha no gráfico (semana tracejada, mês pontilhada), na cor do veredito. */
   .shared-tooltip-rich .tt-line { height: 0; margin: 4px 0; border-top: 0 solid currentColor; opacity: .9; }
   .shared-tooltip-rich .tt-line-week { border-top-width: 3px; border-top-style: dashed; }
@@ -1539,6 +1543,8 @@
   function updateThemeToggleIcon_() {
     var btn = document.getElementById('theme-toggle');
     if (btn) btn.innerHTML = currentEffectiveTheme_() === 'dark' ? UI_ICON_SUN_ : UI_ICON_MOON_;
+    // No app Android, a barra de notificações/navegação segue o tema escolhido aqui (versões antigas do app não têm setTheme).
+    try { if (window.FinancasApp && typeof window.FinancasApp.setTheme === 'function') window.FinancasApp.setTheme(currentEffectiveTheme_() === 'dark'); } catch (e) { /* segue sem */ }
   }
   /** Alterna e salva a preferência — a partir daqui, o tema do sistema para de valer. */
   function toggleTheme_() {
@@ -1809,6 +1815,54 @@
         });
       });
     }
+  }
+
+  /**
+   * Dia do Resumo/calendário: toque curto (ou clique) leva ao card do dia no Extrato
+   * (onTap); no celular, TOQUE LONGO só mostra o tooltip -- não rola a tela (antes o toque
+   * longo também disparava o clique ao soltar, a página rolava e o tooltip sumia junto).
+   * Com mouse, hover mostra o tooltip e o clique rola, como sempre.
+   */
+  var DAY_LONG_PRESS_MS_ = 350;
+  function wireDayCell_(el, onTap) {
+    if (HOVER_CAPABLE_) {
+      el.addEventListener('click', onTap);
+      wireTooltipTrigger_(el, 200);
+      return;
+    }
+    var text = el.getAttribute('data-tooltip') || '';
+    var rich = { html: el.getAttribute('data-tooltip-html') || '' };
+    var timer = null, startX = 0, startY = 0, longPressed = false;
+    function cancel() { if (timer) { clearTimeout(timer); timer = null; } }
+    el.addEventListener('touchstart', function (e) {
+      longPressed = false;
+      var t = e.touches[0];
+      startX = t.clientX; startY = t.clientY;
+      cancel();
+      timer = setTimeout(function () {
+        timer = null;
+        longPressed = true;
+        showTooltip_(el, text, rich);
+        // O próximo toque em qualquer lugar fecha (registrado depois do gesto atual, então
+        // não pega o próprio toque longo).
+        var close = function () { hideTooltip_(); document.removeEventListener('touchstart', close, true); };
+        document.addEventListener('touchstart', close, true);
+      }, DAY_LONG_PRESS_MS_);
+    }, { passive: true });
+    el.addEventListener('touchmove', function (e) {
+      var t = e.touches[0];
+      if (Math.abs(t.clientX - startX) > 10 || Math.abs(t.clientY - startY) > 10) cancel(); // virou rolagem
+    }, { passive: true });
+    el.addEventListener('touchcancel', cancel, { passive: true });
+    el.addEventListener('touchend', function (e) {
+      cancel();
+      if (longPressed && e.cancelable) e.preventDefault(); // sem o clique emulado ao soltar
+    });
+    el.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    el.addEventListener('click', function () {
+      if (longPressed) { longPressed = false; return; }
+      onTap();
+    });
   }
 
   /** Fecha qualquer tooltip/popover/menu flutuante (document.body-level, fora de
@@ -6224,16 +6278,15 @@
   };
 
   /** Texto do veredito de um trecho: diferença POR DIA entre o teto e a média real, sem
-   *  centavos ("Sobrou R$ 26/dia!" / "Gastou R$ 50/dia a mais"). null quando o trecho
-   *  ainda nem começou. */
-  function dayBarsResultText_(ceiling, avg, tone) {
+   *  centavos. scope = 'nesta semana' ou 'em outubro' ("Sobrou R$ 26 por dia nesta semana!" /
+   *  "Gastou R$ 50 a mais por dia em outubro"). null quando o trecho ainda nem começou. */
+  function dayBarsResultText_(ceiling, avg, tone, scope) {
     if (avg === null || avg === undefined || !tone) return null;
-    var perDay = function (v) { return fmtMoneyNoCents_(v) + '/dia'; };
     if (tone === 'ok') {
       var under = Math.round(ceiling - avg);
-      return under > 0 ? 'Sobrou ' + perDay(under) + '!' : 'No teto';
+      return under > 0 ? 'Sobrou ' + fmtMoneyNoCents_(under) + ' por dia ' + scope + '!' : 'No teto ' + scope;
     }
-    return 'Gastou ' + perDay(Math.max(1, Math.round(avg - ceiling))) + ' a mais';
+    return 'Gastou ' + fmtMoneyNoCents_(Math.max(1, Math.round(avg - ceiling))) + ' a mais por dia ' + scope;
   }
 
   /**
@@ -6283,14 +6336,19 @@
           '<div class="day-bar-target day-bar-target-week' + tone(st.week[dateStr]) + '" style="bottom:' + pct(targets.week[dateStr]) + '%"></div>';
         if (clickable) {
           var avg = (targets.status && targets.status.avg) || { month: {}, week: {} };
-          [['week', 'da semana'], ['month', 'do mês']].forEach(function (seg) {
+          var monthName = MONTH_NAMES_PT[Number(dateStr.slice(5, 7)) - 1];
+          var weekStart = parseYmdLocal_(dateStr);
+          weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+          var weekEnd = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6);
+          [['week', 'Semana (' + weekStart.getDate() + ' a ' + weekEnd.getDate() + ')', 'nesta semana'],
+           ['month', capitalizeFirst_(monthName), 'em ' + monthName.toLowerCase()]].forEach(function (seg) {
             var kind = seg[0], ceiling = targets[kind][dateStr], a = avg[kind][dateStr], verdict = st[kind][dateStr];
-            var perDay = function (v) { return fmtMoneyNoCents_(v) + '/dia'; };
             rows.push({ gap: true });
             rows.push({ sample: kind, tone: verdict });
-            rows.push({ label: 'Teto ' + seg[1], value: perDay(ceiling) });
-            rows.push({ label: 'Média ' + seg[1], value: a === null || a === undefined ? '—' : perDay(a) });
-            var result = dayBarsResultText_(ceiling, a, verdict);
+            rows.push({ title: seg[1] });
+            // Média à esquerda, "média × teto" no centro, Teto à direita.
+            rows.push({ trio: (a === null || a === undefined ? '—' : fmtMoneyNoCents_(a)) + ' × ' + fmtMoneyNoCents_(ceiling) });
+            var result = dayBarsResultText_(ceiling, a, verdict, seg[2]);
             if (result) rows.push({ result: result, tone: verdict });
           });
         }
@@ -6304,12 +6362,16 @@
         // espaço depois de Despesas e, por trecho (semana, mês): amostra do traço, teto, média e
         // veredito. Textos à esquerda e números em negrito à direita, sem ":".
         var plain = [fmtCardDate_(dateStr, true)].concat(rows.filter(function (r) { return !r.gap && !r.sample; }).map(function (r) {
+          if (r.title !== undefined) return r.title;
+          if (r.trio !== undefined) return 'Média ' + r.trio + ' Teto';
           return r.result !== undefined ? r.result : (r.value === undefined ? r.label : r.label + ' ' + r.value);
         })).join('\n');
         var tipIcon = function (t) { return t === 'ok' ? BALANCE_GOAL_REACHED_ICON_ : DAY_BARS_RESULT_ICONS_[t]; };
         var rich = '<div class="tt-date">' + escapeHtml(fmtCardDate_(dateStr, true)) + '</div>' + rows.map(function (r) {
           if (r.gap) return '<div class="tt-gap"></div>';
           if (r.sample) return '<div class="tt-line tt-line-' + r.sample + (r.tone ? ' tt-' + r.tone : '') + '"></div>';
+          if (r.title !== undefined) return '<div class="tt-title">' + escapeHtml(r.title) + '</div>';
+          if (r.trio !== undefined) return '<div class="tt-trio"><span>Média</span><span class="tt-val">' + escapeHtml(r.trio) + '</span><span>Teto</span></div>';
           if (r.result !== undefined) return '<div class="tt-result tt-' + r.tone + '">' + tipIcon(r.tone) + escapeHtml(r.result) + '</div>';
           return '<div class="tt-row"><span>' + escapeHtml(r.label) + '</span>' +
             (r.value === undefined ? '' : '<span class="tt-val">' + escapeHtml(r.value) + '</span>') + '</div>';
@@ -6478,8 +6540,7 @@
       if (targets) targets.status = dayBarsTargetStatus_(days, targets, todayYmd());
       container.innerHTML = buildDayBarsHtml_(days, totals, computeDayBarsRef_(totals, targets), STATE.txCalendarMode, computeCalendarFlaggedOnlyDays_(combined, nets), targets);
       container.querySelectorAll('.day-bar-cell[data-date]').forEach(function (el) {
-        el.onclick = function () { scrollToTxDay_(el.dataset.date); };
-        wireTooltipTrigger_(el, 200);
+        wireDayCell_(el, function () { scrollToTxDay_(el.dataset.date); });
       });
       container.onscroll = function () { STATE.txCalendarScrollLeft = container.scrollLeft; };
       container.scrollLeft = STATE.txCalendarScrollLeft !== null ? STATE.txCalendarScrollLeft : container.scrollWidth;
@@ -6493,8 +6554,7 @@
     container.innerHTML = buildWeekCalendarHtml_(weekColumns, nets, posRef, negRef, computeCalendarFlaggedOnlyDays_(combined, nets));
 
     container.querySelectorAll('.mini-cal-day[data-date]').forEach(function (el) {
-      el.onclick = function () { scrollToTxDay_(el.dataset.date); };
-      wireTooltipTrigger_(el, 200);
+      wireDayCell_(el, function () { scrollToTxDay_(el.dataset.date); });
     });
     container.onscroll = function () { STATE.txCalendarScrollLeft = container.scrollLeft; };
     container.scrollLeft = STATE.txCalendarScrollLeft !== null ? STATE.txCalendarScrollLeft : container.scrollWidth;
