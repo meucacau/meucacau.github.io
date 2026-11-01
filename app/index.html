@@ -341,6 +341,14 @@
   }
   /* box-sizing pro padding não estourar a largura do modal; resize vertical só. */
   textarea { box-sizing: border-box; resize: vertical; }
+  /* Texto de exemplo dos campos: cinza, claramente diferente do que a pessoa digita. */
+  input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: 0.65; }
+  .fb-thumbs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  .fb-thumbs:empty { display: none; }
+  #fb-add-img { margin-bottom: 12px; }
+  .fb-thumb { position: relative; width: 64px; height: 64px; }
+  .fb-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); display: block; }
+  .fb-thumb-x { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; padding: 0; border-radius: 50%; font-size: 14px; line-height: 20px; background: var(--text); color: var(--surface); }
   /* Mesmo esmaecimento de button:disabled -- usado pelo campo Valor "Automático" do
      orçamento (ver renderAmountField_/openBudgetModal), que fica bloqueado mas com a
      MESMA forma de um campo normal, pra deixar claro que normalmente seria editável. */
@@ -404,26 +412,32 @@
      z-index 35: o overlay do swipe entre abas (z-index:30) não pode cobrir a barra. */
   :root {
     --dock-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-    --dock-btn: 46px;
+    --dock-btn: 44px;
   }
+  /* Grade 1fr / auto / 1fr: a barra fica SEMPRE no centro da tela; os botões ocupam a coluna
+     lateral (direita, ou esquerda com "Lado dos botões"), então não a deslocam. Se a largura
+     da tela não comporta barra + botões lado a lado (ver o @media abaixo), os botões sobem
+     pra logo acima da barra, na mesma ponta. */
   .dock-row {
     position: fixed;
-    left: 8px;
-    right: 8px;
+    left: 4px;
+    right: 4px;
     bottom: var(--dock-bottom);
-    display: flex;
-    justify-content: center;
-    align-items: flex-end;
-    gap: 6px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: end;
     z-index: 35;
     pointer-events: none;
   }
   .dock-row > * { pointer-events: auto; }
-  html[data-nav-side="left"] .dock-row { flex-direction: row-reverse; }
+  nav.tabbar { grid-column: 2; grid-row: 1; }
   /* Coluna de largura fixa: o "para confirmar", ao expandir, passa por cima da barra em vez de
-     empurrar a fileira. Alinha o centro do botão com o da barra (60px de altura). */
+     mexer na fileira. Centro do botão alinhado com o da barra (60px de altura). */
   .dock-side {
-    flex: none;
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: start;
+    margin-left: 4px;
     width: var(--dock-btn);
     display: flex;
     flex-direction: column;
@@ -431,20 +445,17 @@
     gap: 8px;
     margin-bottom: calc((60px - var(--dock-btn)) / 2);
   }
-  html[data-nav-side="left"] .dock-side { align-items: flex-start; }
-  /* Tela muito estreita: barra (até ~335px) + botão não cabem lado a lado, então os botões
-     sobem pra logo acima da barra, na mesma ponta. */
-  @media (max-width: 389px) {
-    .dock-side { position: absolute; right: 0; bottom: calc(100% + 8px); margin-bottom: 0; }
+  html[data-nav-side="left"] .dock-side { grid-column: 1; justify-self: end; margin-left: 0; margin-right: 4px; align-items: flex-start; }
+  @media (max-width: 409px) {
+    .dock-side, html[data-nav-side="left"] .dock-side { position: absolute; right: 0; left: auto; bottom: calc(100% + 8px); margin: 0; }
     html[data-nav-side="left"] .dock-side { right: auto; left: 0; }
   }
   nav.tabbar {
     position: relative;
-    flex: none;
     display: flex;
     align-items: center;
-    gap: 2px;
-    padding: 6px;
+    gap: 1px;
+    padding: 6px 5px;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 30px;
@@ -460,8 +471,8 @@
     justify-content: center;
     box-sizing: border-box;
     height: 46px;
-    min-width: 42px;
-    padding: 0 10px;
+    min-width: 38px;
+    padding: 0 8px;
     background: none;
     border-radius: 23px;
     color: var(--text-muted);
@@ -586,14 +597,13 @@
     width: var(--dock-btn);
     height: var(--dock-btn);
     box-sizing: border-box;
-    padding: 0 11px;
+    padding: 0 10px;
     gap: 10px;
     border-radius: calc(var(--dock-btn) / 2);
     display: flex;
     flex-direction: row-reverse;
     align-items: center;
     justify-content: flex-start;
-    overflow: hidden;
     white-space: nowrap;
     font-size: 14px;
     box-shadow: 0 4px 10px rgba(0,0,0,0.25);
@@ -601,16 +611,18 @@
   }
   .review-fab[hidden] { display: none; }
   html[data-nav-side="left"] .review-fab { flex-direction: row; }
-  .review-ico { position: relative; flex: none; width: 22px; height: 22px; display: block; }
+  .review-ico { flex: none; width: 22px; height: 22px; display: block; }
   .review-ico svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .review-badge {
-    position: absolute; top: -9px; right: -9px;
-    min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box;
-    border-radius: 8px; background: var(--expense); color: #fff;
-    font-size: 10px; font-weight: 700; line-height: 16px; text-align: center;
+    /* Preso ao canto do botão (não ao ícone) e fora do recorte: pode passar da borda do círculo. */
+    position: absolute; top: -6px; right: -6px;
+    min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box;
+    border-radius: 9px; background: var(--expense); color: #fff;
+    font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
   }
-  .review-fab .tab-label { opacity: 0; transform: translateY(2px); transition: opacity .12s ease; }
-  .review-fab.expanded .tab-label { opacity: 1; }
+  .review-fab .tab-label { overflow: hidden; max-width: 0; opacity: 0; transform: translateY(2px); transition: opacity .12s ease, max-width .15s ease; }
+  .review-fab.expanded .tab-label { max-width: 260px; opacity: 1; }
 
   .theme-toggle-btn svg, .modal svg.inline-icon, svg.inline-icon {
     width: 18px;
@@ -656,6 +668,8 @@
   .settings-row .grow { flex: 1; min-width: 0; }
   .settings-row button { padding: 6px 12px; font-size: 13px; white-space: nowrap; }
   .settings-ok { color: var(--income); font-weight: 600; }
+  .settings-error { color: var(--expense); font-size: 13px; margin: 0 0 10px; }
+  .settings-error[hidden] { display: none; }
   .settings-warning {
     color: var(--expense);
     font-size: 13px;
@@ -981,7 +995,7 @@
      cima das barras; a célula do domingo tem o respiro de 8px, então a linha da semana
      quebra naturalmente entre uma semana e outra. */
   .day-bar-target { position: absolute; left: 0; right: 0; height: 0; pointer-events: none; z-index: 2; }
-  .day-bar-target-month { border-top: 2px dotted var(--text-muted); }
+  .day-bar-target-month { border-top: 2px dotted var(--text-muted); z-index: 3; }
   .day-bar-target-week { border-top: 3px dashed var(--text); }
   /* Veredito do trecho (ver dayBarsTargetStatus_): cor da linha, mês e semana à parte. */
   .day-bar-target-ok { border-top-color: var(--income); }
@@ -1453,6 +1467,7 @@
   <div class="tabbar-more" id="tabbar-more">
     <button class="tab-btn" data-view="accounts" aria-label="Contas"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg><span class="tab-label"><span>Contas</span></span></button>
     <button class="tab-btn" data-view="categories" aria-label="Categorias"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1"/></svg><span class="tab-label"><span>Categorias</span></span></button>
+    <button class="tab-btn" id="tab-feedback" aria-label="Sugestões"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span class="tab-label"><span>Sugestões</span></span></button>
   </div>
   <div class="dock-row">
     <nav class="tabbar">
@@ -4017,9 +4032,9 @@
     var hold = setupHoldToReveal_(btn, { hoverDelayMs: SIDEBAR_HOLD_MS_, touchDelayMs: SIDEBAR_HOLD_MS_, leaveGraceMs: 150 });
     var stopOutsideClick_ = null;
     hold.onOpen(function () {
-      // Largura natural: 13px de borda + ícone (22) + vão (10) + nome + 13px de borda.
+      // Largura natural: 11px de borda + ícone (22) + vão (10) + nome + 11px de borda.
       var labelW = btn.querySelector('.tab-label').scrollWidth;
-      btn.style.width = (13 + 22 + 10 + labelW + 13) + 'px';
+      btn.style.width = (11 + 22 + 10 + labelW + 11) + 'px';
       btn.classList.add('expanded');
       stopOutsideClick_ = dismissOnOutsideClick(btn, hold.close);
     });
@@ -12121,10 +12136,10 @@
     var root = document.createElement('div');
     root.id = 'fab-speed-dial';
 
-    // O "+" fica colado na barra lateral (na borda da tela), então o menu abre pro lado
-    // de DENTRO da tela: uma coluna só, com as outras criações em cima e "Novo lançamento"
-    // (a ação do toque normal, cápsula destacada) embaixo, na altura do "+". O padding do
-    // lado do "+" cobre o vão até ele: sem isso, passar o mouse por ali fechava tudo
+    // O menu abre pra CIMA do "+" (pra não cobrir a barra de abas, que fica ao lado): uma
+    // coluna só, com as outras criações no alto e "Novo lançamento" (a ação do toque normal,
+    // cápsula destacada) embaixo, colada no "+", alinhada à borda externa dele. O padding de
+    // baixo cobre o vão até o botão: sem isso, passar o mouse por ali fechava tudo
     // (bug antigo do menu) -- a ÁREA de hover cresce até encostar no botão.
     var stack = document.createElement('div');
     stack.style.cssText = 'position:fixed;display:flex;flex-direction:column;gap:8px;' +
@@ -12154,17 +12169,16 @@
       var onLeft = navSide_() === 'left';
       var viewportW = document.documentElement.clientWidth;
       stack.style.alignItems = onLeft ? 'flex-start' : 'flex-end';
-      stack.style.padding = '0';
-      stack.style[onLeft ? 'paddingLeft' : 'paddingRight'] = HOLD_REVEAL_GAP_PX + 'px';
-      stack.style.left = onLeft ? fabRect.right + 'px' : 'auto';
-      stack.style.right = onLeft ? 'auto' : (viewportW - fabRect.left) + 'px';
-      stack.style.bottom = (window.innerHeight - (fabRect.top + fabRect.height / 2) - indicator.offsetHeight / 2) + 'px';
-      stack.style.transform = 'translateX(' + (onLeft ? -6 : 6) + 'px)';
+      stack.style.padding = '0 0 ' + HOLD_REVEAL_GAP_PX + 'px';
+      stack.style.left = onLeft ? fabRect.left + 'px' : 'auto';
+      stack.style.right = onLeft ? 'auto' : (viewportW - fabRect.right) + 'px';
+      stack.style.bottom = (window.innerHeight - fabRect.top) + 'px';
+      stack.style.transform = 'translateY(6px)';
 
       stack.style.pointerEvents = 'auto';
       requestAnimationFrame(function () {
         stack.style.opacity = '1';
-        stack.style.transform = 'translateX(0)';
+        stack.style.transform = 'translateY(0)';
       });
       stopOutsideClick_ = dismissOnOutsideClick(root, hold.close);
     });
@@ -13593,6 +13607,164 @@
     return typeof CacauAnalytics !== 'undefined' ? CacauAnalytics : { enabled: function () { return false; }, optedOut: function () { return true; }, setOptOut: function () {} };
   }
 
+  // ---------- sugestões, dúvidas e comentários ao desenvolvedor ----------
+  /** Vai por e-mail instantâneo ao desenvolvedor, via o coletor (collector/Code.js, schema FEEDBACK_TAG_).
+   *  O assunto do e-mail é "Sugestão - <tópico>"; o corpo é só o que a pessoa digitou. */
+  var FEEDBACK_URL_ = 'https://script.google.com/macros/s/AKfycbzx7u1F-_c0_26KzHx2Uy6k1j-IG6kHpyhybDaE_5OHnq3UQPmpXlmfOPd84SJsrOs2eA/exec';
+  var FEEDBACK_TAG_ = 'cacau-fb1';
+  var FEEDBACK_MAX_IMAGES_ = 3;
+  var FEEDBACK_MAX_TEXT_ = 4000;
+  var FEEDBACK_MAX_IMAGE_CHARS_ = 850000; // base64 por imagem (o coletor aceita até 900000)
+  var FEEDBACK_EXAMPLE_ = 'Exemplo: gostaria de poder trocar a categoria direto na fila de lançamentos a confirmar. ' +
+    'Ou: como faço para vincular um reembolso a uma despesa?';
+  /** Tópicos (máx. 20), cada um com o escopo em poucas palavras. `view` = tela que o pré-seleciona. */
+  var FEEDBACK_TOPICS_ = [
+    { name: 'Início', scope: 'resumo, gráficos e cards', view: 'dashboard' },
+    { name: 'Extrato', scope: 'lista, filtros, busca e calendário', view: 'transactions' },
+    { name: 'Novo lançamento', scope: 'formulário de criar ou editar' },
+    { name: 'Lançamentos a confirmar', scope: 'fila de pendências do botão vermelho' },
+    { name: 'Orçamentos', scope: 'tetos por categoria e alertas', view: 'budgets' },
+    { name: 'Lançamentos recorrentes', scope: 'previsões e contas fixas' },
+    { name: 'Reembolsos', scope: 'vínculos e valores a receber', view: 'refunds' },
+    { name: 'Contas', scope: 'contas, saldos e arquivadas', view: 'accounts' },
+    { name: 'Categorias', scope: 'categorias, ícones e subcategorias', view: 'categories' },
+    { name: 'Captura de notificações', scope: 'lançamentos automáticos no Android' },
+    { name: 'Barra de abas e botões', scope: 'navegação, + e botões flutuantes' },
+    { name: 'Aparência', scope: 'tema, cores e textos' },
+    { name: 'Configurações e conta', scope: 'planilha, login e preferências' },
+    { name: 'Erro ou lentidão', scope: 'algo travou, sumiu ou quebrou' },
+    { name: 'Ideia de recurso novo', scope: 'algo que o app ainda não faz' },
+    { name: 'Outro assunto', scope: 'qualquer coisa fora da lista' }
+  ];
+
+  function feedbackUid_() {
+    var key = 'cacau-uid', uid = '';
+    try { uid = localStorage.getItem(key) || ''; } catch (e) { uid = ''; }
+    if (!/^[a-z0-9]{8,40}$/i.test(uid)) {
+      var bytes = new Uint8Array(8);
+      if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(bytes);
+      else for (var i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+      uid = Array.prototype.map.call(bytes, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+      try { localStorage.setItem(key, uid); } catch (e) { /* segue com o ID desta sessão */ }
+    }
+    return uid;
+  }
+
+  /** Reduz a foto pra um JPEG pequeno (cabe no e-mail e no envio): tenta tamanhos cada vez menores. */
+  function feedbackCompressImage_(file) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('imagem inválida')); };
+      img.onload = function () {
+        URL.revokeObjectURL(url);
+        var attempts = [[1280, 0.72], [1024, 0.6], [800, 0.5], [640, 0.45]];
+        for (var i = 0; i < attempts.length; i++) {
+          var scale = Math.min(1, attempts[i][0] / Math.max(img.naturalWidth, img.naturalHeight, 1));
+          var canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+          canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+          var ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          var dataUrl = canvas.toDataURL('image/jpeg', attempts[i][1]);
+          var data = dataUrl.split(',')[1] || '';
+          if (data && data.length <= FEEDBACK_MAX_IMAGE_CHARS_) { resolve({ thumb: dataUrl, data: data }); return; }
+        }
+        reject(new Error('imagem grande demais'));
+      };
+      img.src = url;
+    });
+  }
+
+  function openFeedbackModal_() {
+    var images = [];
+    var sending = false;
+    var currentTopic = FEEDBACK_TOPICS_.filter(function (t) { return t.view && t.view === STATE.currentView; })[0];
+    var options = FEEDBACK_TOPICS_.map(function (t) {
+      return '<option value="' + escapeHtml(t.name) + '"' + (t === currentTopic ? ' selected' : '') + '>' +
+        escapeHtml(t.name + ' (' + t.scope + ')') + '</option>';
+    }).join('');
+    openModal(
+      '<h2>Enviar sugestão ou dúvida</h2>' +
+      '<div class="muted" style="margin-bottom:12px">Chega direto ao desenvolvedor, na hora. Pode ser uma ideia, uma dúvida ou um comentário.</div>' +
+      '<div class="field"><label>Assunto</label><select id="fb-topic">' + options + '</select></div>' +
+      '<div class="field"><label>Mensagem</label><textarea id="fb-text" rows="5" maxlength="' + FEEDBACK_MAX_TEXT_ + '" placeholder="' + escapeHtml(FEEDBACK_EXAMPLE_) + '"></textarea></div>' +
+      '<div class="field"><label>Imagens (opcional, até ' + FEEDBACK_MAX_IMAGES_ + ')</label>' +
+        '<div id="fb-thumbs" class="fb-thumbs"></div>' +
+        '<button type="button" class="secondary" id="fb-add-img">Anexar imagem</button>' +
+        '<input type="file" id="fb-file" accept="image/*" multiple hidden></div>' +
+      '<div class="field"><label>Seu e-mail para resposta (opcional)</label>' +
+        '<input type="email" id="fb-reply" autocomplete="email" placeholder="voce@exemplo.com"></div>' +
+      '<div id="fb-error" class="settings-error" hidden></div>' +
+      '<div style="display:flex;gap:8px"><button type="button" class="secondary" id="fb-cancel" style="flex:1">Cancelar</button>' +
+        '<button type="button" id="fb-send" style="flex:1">Enviar</button></div>'
+    );
+
+    var thumbs = document.getElementById('fb-thumbs');
+    var addBtn = document.getElementById('fb-add-img');
+    var fileInput = document.getElementById('fb-file');
+    var errorEl = document.getElementById('fb-error');
+    function showError_(msg) { errorEl.textContent = msg || ''; errorEl.hidden = !msg; }
+    function renderThumbs_() {
+      thumbs.innerHTML = images.map(function (img, i) {
+        return '<span class="fb-thumb"><img alt="Imagem anexada ' + (i + 1) + '" src="' + img.thumb + '">' +
+          '<button type="button" class="fb-thumb-x" data-i="' + i + '" aria-label="Remover imagem ' + (i + 1) + '">×</button></span>';
+      }).join('');
+      thumbs.querySelectorAll('.fb-thumb-x').forEach(function (b) {
+        b.onclick = function () { images.splice(Number(b.dataset.i), 1); renderThumbs_(); };
+      });
+      addBtn.hidden = images.length >= FEEDBACK_MAX_IMAGES_;
+    }
+    addBtn.onclick = function () { fileInput.click(); };
+    fileInput.onchange = function () {
+      var files = Array.prototype.slice.call(fileInput.files || [], 0, FEEDBACK_MAX_IMAGES_ - images.length);
+      fileInput.value = '';
+      showError_('');
+      files.reduce(function (chain, file) {
+        return chain.then(function () {
+          return feedbackCompressImage_(file).then(function (img) { images.push(img); renderThumbs_(); });
+        }).catch(function () { showError_('Não consegui usar uma das imagens. Tente outra.'); });
+      }, Promise.resolve());
+    };
+
+    document.getElementById('fb-cancel').onclick = closeModal;
+    var sendBtn = document.getElementById('fb-send');
+    sendBtn.onclick = function () {
+      if (sending) return;
+      var text = document.getElementById('fb-text').value.trim();
+      if (!text) { showError_('Escreva a mensagem antes de enviar.'); return; }
+      var reply = document.getElementById('fb-reply').value.trim();
+      if (reply && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reply)) { showError_('O e-mail para resposta não parece válido.'); return; }
+      showError_('');
+      sending = true;
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Enviando…';
+      var payload = {
+        k: FEEDBACK_TAG_, uid: feedbackUid_(), plat: window.FinancasApp ? 'android' : 'web', ver: 'app',
+        topic: document.getElementById('fb-topic').value, text: text, reply: reply,
+        images: images.map(function (img) { return { data: img.data }; })
+      };
+      // text/plain evita o preflight (o Apps Script não responde a OPTIONS).
+      fetch(FEEDBACK_URL_, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, body: JSON.stringify(payload) })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          if (res && res.ok) { closeModal(); showToast('Enviado! Obrigado pela mensagem.'); return; }
+          throw new Error(res && res.error === 'limite' ? 'limite' : 'falha');
+        })
+        .catch(function (err) {
+          sending = false;
+          sendBtn.disabled = false;
+          sendBtn.textContent = 'Enviar';
+          showError_(err && err.message === 'limite'
+            ? 'Você já enviou várias mensagens na última hora. Tente de novo mais tarde.'
+            : 'Não consegui enviar agora. Confira a internet e tente de novo; sua mensagem continua aqui.');
+        });
+    };
+    renderThumbs_();
+  }
+
   function openSettingsModal_() {
     var multiuser = typeof FINANCAS_MULTIUSER !== 'undefined' && FINANCAS_MULTIUSER;
     var inApp = !!androidBridge_();
@@ -13655,12 +13827,14 @@
       '<div class="muted" style="margin:6px 0">Seus lançamentos ficam só na planilha do seu Google Drive' +
       (analytics_().enabled() ? '; só o uso anônimo do app (telas e cliques, sem dados dos lançamentos) vai para a equipe, e você pode desligar em Preferências. ' : '. ') +
       'Para o app deixar de ter acesso à sua conta, <a href="https://myaccount.google.com/connections" target="_blank" rel="noopener">revogue o acesso na sua conta Google</a>. ' +
-      'Dúvidas ou problemas: fale com quem te convidou para o beta.</div></div>';
+      '</div>' +
+      '<div class="settings-row"><div class="grow"><div>Sugestões e dúvidas</div><div class="muted">Mande uma ideia, pergunta ou comentário, com imagens se quiser.</div></div><button class="secondary" id="st-feedback">Enviar</button></div></div>';
 
     html += '<button class="secondary" id="st-close" style="width:100%;margin-top:8px">Fechar</button>';
     openModal(html);
 
     document.getElementById('st-close').onclick = function () { closeModal(); updateSetupBanner_(); };
+    document.getElementById('st-feedback').onclick = openFeedbackModal_;
 
     // Conta e planilha
     if (multiuser) {
@@ -13839,6 +14013,14 @@
     document.querySelectorAll('.tab-btn[data-view]').forEach(function (btn) {
       wireDayCell_(btn, function () { goTo_(btn.dataset.view); }, true);
     });
+    var feedbackBtn = document.getElementById('tab-feedback');
+    if (feedbackBtn) {
+      wireDayCell_(feedbackBtn, function () {
+        hideTooltip_();
+        closeTabbarMore_();
+        openFeedbackModal_();
+      }, true);
+    }
     if (more && panel) {
       wireDayCell_(more, function () {
         hideTooltip_();
