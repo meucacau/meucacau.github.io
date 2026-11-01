@@ -656,6 +656,9 @@
   }
 
   #settings-btn { top: 56px; }
+  /* Sugestões fica sob as configurações (ou sob o tema, se não houver configurações). */
+  #feedback-btn { top: 56px; }
+  #settings-btn ~ #feedback-btn { top: 100px; }
   html[data-nav-side="left"] .theme-toggle-btn { right: auto; left: 8px; }
   /* Voltar ao topo fica acima da barra, no lado oposto ao dos botões (+ e para confirmar). */
   #scroll-to-top-btn { right: auto; left: 12px; }
@@ -1151,6 +1154,8 @@
   }
   /* Descrição de categoria escrita pelo usuário — itálico pra separar do texto do app. */
   .shared-tooltip-italic { font-style: italic; }
+  /* Dica que some sozinha (ver openFeedbackModal_): o fade dura o último meio segundo dos 3 s. */
+  .shared-tooltip-fading { opacity: 0; transition: opacity .5s ease; }
   /* Tooltip com linhas (ver buildDayBarsHtml_): data em negrito, texto à esquerda e números à direita. */
   .shared-tooltip-rich { white-space: nowrap; max-width: none; }
   .shared-tooltip-rich .tt-date { font-weight: 700; margin-bottom: 3px; text-align: center; }
@@ -1463,11 +1468,11 @@
     <button id="setup-banner-btn">Configurar</button>
   </div>
   
+  <button class="theme-toggle-btn" id="feedback-btn" title="Sugestões e dúvidas" aria-label="Sugestões e dúvidas"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
 
   <div class="tabbar-more" id="tabbar-more">
     <button class="tab-btn" data-view="accounts" aria-label="Contas"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg><span class="tab-label"><span>Contas</span></span></button>
     <button class="tab-btn" data-view="categories" aria-label="Categorias"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1"/></svg><span class="tab-label"><span>Categorias</span></span></button>
-    <button class="tab-btn" id="tab-feedback" aria-label="Sugestões"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span class="tab-label"><span>Sugestões</span></span></button>
   </div>
   <div class="dock-row">
     <nav class="tabbar">
@@ -2482,7 +2487,9 @@
    *
    * config: { container, pinned: {value,label}|null,
    *   items: [{value,label,isSubcategory,tooltip,recentlyUsed}],
-   *   selectedValue, onChange, allowDeselect, disabled, collapseUnused }
+   *   selectedValue, onChange, allowDeselect, disabled, collapseUnused, showAll }
+   * showAll: lista curta e fixa (ex: assuntos da janela de sugestões) — mostra todas as cápsulas,
+   * sem o limite de linhas nem o "Outro...".
    * allowDeselect: clicar na cápsula já ativa desmarca (getValue vira null) em vez de manter selecionada.
    * item.isSubcategory/tooltip: estilo de borda dupla + tooltip instantâneo ao passar o mouse.
    * item.recentlyUsed: só relevante com collapseUnused — ver acima.
@@ -2593,7 +2600,7 @@
       }
 
       mainList().forEach(function (item) { container.appendChild(makeCapsule(item)); });
-      if (config.disabled) return;
+      if (config.disabled || config.showAll) return;
 
       var outroBtn = document.createElement('button');
       outroBtn.type = 'button';
@@ -13681,24 +13688,19 @@
   function openFeedbackModal_() {
     var images = [];
     var sending = false;
-    var currentTopic = FEEDBACK_TOPICS_.filter(function (t) { return t.view && t.view === STATE.currentView; })[0];
-    var options = FEEDBACK_TOPICS_.map(function (t) {
-      return '<option value="' + escapeHtml(t.name) + '"' + (t === currentTopic ? ' selected' : '') + '>' +
-        escapeHtml(t.name + ' (' + t.scope + ')') + '</option>';
-    }).join('');
+    var accountEmail = '';
+    var currentTopic = FEEDBACK_TOPICS_.filter(function (t) { return t.view && t.view === STATE.currentView; })[0] || FEEDBACK_TOPICS_[0];
     openModal(
       '<h2>Enviar sugestão ou dúvida</h2>' +
-      '<div class="muted" style="margin-bottom:12px">Chega direto ao desenvolvedor, na hora. Pode ser uma ideia, uma dúvida ou um comentário.</div>' +
-      '<div class="field"><label>É uma</label><select id="fb-kind">' +
-        '<option value="sugestao">Sugestão</option><option value="duvida">Dúvida</option><option value="comentario">Comentário</option></select></div>' +
-      '<div class="field"><label>Assunto</label><select id="fb-topic">' + options + '</select></div>' +
+      '<div class="muted" style="margin-bottom:6px">Ajude o app a melhorar para você e para outros usuários enviando sua sugestão, dúvida ou comentário. Todas as comunicações são bem-vindas!</div>' +
+      '<div class="muted" style="margin-bottom:12px">Se precisarmos responder, o retorno será no e-mail da sua conta<span id="fb-email-wrap" hidden>: <b id="fb-email"></b></span>.</div>' +
+      '<div class="field"><label>É uma</label><div id="fb-kind-field" class="capsule-field"></div></div>' +
+      '<div class="field"><label>Assunto</label><div id="fb-topic-field" class="capsule-field"></div></div>' +
       '<div class="field"><label>Mensagem</label><textarea id="fb-text" rows="5" maxlength="' + FEEDBACK_MAX_TEXT_ + '" placeholder="' + escapeHtml(FEEDBACK_EXAMPLE_) + '"></textarea></div>' +
       '<div class="field"><label>Imagens (opcional, até ' + FEEDBACK_MAX_IMAGES_ + ')</label>' +
         '<div id="fb-thumbs" class="fb-thumbs"></div>' +
         '<button type="button" class="secondary" id="fb-add-img">Anexar imagem</button>' +
         '<input type="file" id="fb-file" accept="image/*" multiple hidden></div>' +
-      '<div class="field"><label id="fb-contact-label">E-mail ou WhatsApp (opcional)</label>' +
-        '<input type="text" id="fb-contact" autocomplete="email" placeholder="voce@exemplo.com ou (11) 91234-5678"></div>' +
       '<div id="fb-error" class="settings-error" hidden></div>' +
       '<div style="display:flex;gap:8px"><button type="button" class="secondary" id="fb-cancel" style="flex:1">Cancelar</button>' +
         '<button type="button" id="fb-send" style="flex:1">Enviar</button></div>'
@@ -13708,12 +13710,58 @@
     var addBtn = document.getElementById('fb-add-img');
     var fileInput = document.getElementById('fb-file');
     var errorEl = document.getElementById('fb-error');
-    var kindEl = document.getElementById('fb-kind');
-    // Dúvida só faz sentido com um jeito de responder: o contato passa a ser obrigatório.
-    kindEl.onchange = function () {
-      document.getElementById('fb-contact-label').textContent = kindEl.value === 'duvida'
-        ? 'E-mail ou WhatsApp (obrigatório, para eu responder)' : 'E-mail ou WhatsApp (opcional)';
-    };
+    // O e-mail da conta é o endereço de resposta; sem ele (leitura falhou) a mensagem segue mesmo assim.
+    run('getPhoneConnectionInfo').then(function (info) {
+      var emailEl = document.getElementById('fb-email');
+      if (!emailEl || !info || !info.email) return; // janela fechada enquanto carregava, ou sem e-mail
+      accountEmail = info.email;
+      emailEl.textContent = accountEmail;
+      document.getElementById('fb-email-wrap').hidden = false;
+    }).catch(function () { /* o envio funciona sem isso */ });
+
+    var kindField = createCapsuleField(document.getElementById('fb-kind-field'), {
+      items: [
+        { value: 'sugestao', label: 'Sugestão' },
+        { value: 'duvida', label: 'Dúvida' },
+        { value: 'comentario', label: 'Comentário' }
+      ],
+      selectedValue: 'sugestao',
+      showAll: true
+    });
+    var scopeByName = {};
+    FEEDBACK_TOPICS_.forEach(function (t) { scopeByName[t.name] = t.scope; });
+    var topicContainer = document.getElementById('fb-topic-field');
+    var topicField = createCapsuleField(topicContainer, {
+      items: FEEDBACK_TOPICS_.map(function (t) { return { value: t.name, label: t.name }; }),
+      selectedValue: currentTopic.name,
+      showAll: true,
+      onChange: function (name) {
+        // Logo após escolher, a descrição fica 3 s acima da cápsula e some em fade.
+        var active = topicContainer.querySelector('.capsule.active');
+        if (active) showTopicHint_(active, scopeByName[name], true);
+      }
+    });
+    // Descrição do assunto: aparece ao passar o mouse; depois de um clique fica 3 s (com fade) mesmo
+    // que o mouse saia. Mexer em outra cápsula antes disso troca a dica.
+    var hintPinned = false, hintFadeTimer = null, hintEndTimer = null;
+    function clearHintTimers_() { clearTimeout(hintFadeTimer); clearTimeout(hintEndTimer); hintPinned = false; }
+    function showTopicHint_(anchor, text, pin) {
+      clearHintTimers_();
+      showTooltip_(anchor, text);
+      if (!pin) return;
+      hintPinned = true;
+      var tip = document.getElementById('shared-tooltip');
+      hintFadeTimer = setTimeout(function () { if (tip) tip.classList.add('shared-tooltip-fading'); }, 2500);
+      hintEndTimer = setTimeout(function () { hintPinned = false; if (tip && tip.parentNode) tip.remove(); }, 3000);
+    }
+    topicContainer.addEventListener('mouseover', function (e) {
+      var cap = e.target.closest ? e.target.closest('.capsule') : null;
+      if (cap && scopeByName[cap.textContent]) showTopicHint_(cap, scopeByName[cap.textContent], false);
+    });
+    topicContainer.addEventListener('mouseout', function (e) {
+      var cap = e.target.closest ? e.target.closest('.capsule') : null;
+      if (cap && !hintPinned) hideTooltip_();
+    });
     function showError_(msg) { errorEl.textContent = msg || ''; errorEl.hidden = !msg; }
     function renderThumbs_() {
       thumbs.innerHTML = images.map(function (img, i) {
@@ -13737,31 +13785,26 @@
       }, Promise.resolve());
     };
 
-    document.getElementById('fb-cancel').onclick = closeModal;
+    document.getElementById('fb-cancel').onclick = function () { clearHintTimers_(); hideTooltip_(); closeModal(); };
     var sendBtn = document.getElementById('fb-send');
     sendBtn.onclick = function () {
       if (sending) return;
       var text = document.getElementById('fb-text').value.trim();
       if (!text) { showError_('Escreva a mensagem antes de enviar.'); return; }
-      var contact = document.getElementById('fb-contact').value.trim();
-      var digits = contact.replace(/\D/g, '');
-      var contactOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact) || (/^[+()\-.\s\d]+$/.test(contact) && digits.length >= 10 && digits.length <= 15);
-      if (kindEl.value === 'duvida' && !contact) { showError_('Para dúvidas, informe seu e-mail ou WhatsApp para eu poder responder.'); return; }
-      if (contact && !contactOk) { showError_('O contato não parece válido. Use um e-mail ou um WhatsApp com DDD.'); return; }
       showError_('');
       sending = true;
       sendBtn.disabled = true;
       sendBtn.textContent = 'Enviando…';
       var payload = {
         k: FEEDBACK_TAG_, uid: feedbackUid_(), plat: window.FinancasApp ? 'android' : 'web', ver: 'app',
-        kind: kindEl.value, topic: document.getElementById('fb-topic').value, text: text, contact: contact,
+        kind: kindField.getValue(), topic: topicField.getValue(), text: text, email: accountEmail,
         images: images.map(function (img) { return { data: img.data }; })
       };
       // text/plain evita o preflight (o Apps Script não responde a OPTIONS).
       fetch(FEEDBACK_URL_, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, body: JSON.stringify(payload) })
         .then(function (r) { return r.json(); })
         .then(function (res) {
-          if (res && res.ok) { closeModal(); showToast('Enviado! Obrigado pela mensagem.'); return; }
+          if (res && res.ok) { clearHintTimers_(); hideTooltip_(); closeModal(); showToast('Obrigado pelo contato! Sua mensagem foi enviada.'); return; }
           throw new Error(res && res.error === 'limite' ? 'limite' : 'falha');
         })
         .catch(function (err) {
@@ -13838,14 +13881,12 @@
       '<div class="muted" style="margin:6px 0">Seus lançamentos ficam só na planilha do seu Google Drive' +
       (analytics_().enabled() ? '; só o uso anônimo do app (telas e cliques, sem dados dos lançamentos) vai para a equipe, e você pode desligar em Preferências. ' : '. ') +
       'Para o app deixar de ter acesso à sua conta, <a href="https://myaccount.google.com/connections" target="_blank" rel="noopener">revogue o acesso na sua conta Google</a>. ' +
-      '</div>' +
-      '<div class="settings-row"><div class="grow"><div>Sugestões e dúvidas</div><div class="muted">Mande uma ideia, pergunta ou comentário, com imagens se quiser.</div></div><button class="secondary" id="st-feedback">Enviar</button></div></div>';
+      '</div></div>';
 
     html += '<button class="secondary" id="st-close" style="width:100%;margin-top:8px">Fechar</button>';
     openModal(html);
 
     document.getElementById('st-close').onclick = function () { closeModal(); updateSetupBanner_(); };
-    document.getElementById('st-feedback').onclick = openFeedbackModal_;
 
     // Conta e planilha
     if (multiuser) {
@@ -14024,14 +14065,6 @@
     document.querySelectorAll('.tab-btn[data-view]').forEach(function (btn) {
       wireDayCell_(btn, function () { goTo_(btn.dataset.view); }, true);
     });
-    var feedbackBtn = document.getElementById('tab-feedback');
-    if (feedbackBtn) {
-      wireDayCell_(feedbackBtn, function () {
-        hideTooltip_();
-        closeTabbarMore_();
-        openFeedbackModal_();
-      }, true);
-    }
     if (more && panel) {
       wireDayCell_(more, function () {
         hideTooltip_();
@@ -14065,6 +14098,7 @@
     updateThemeToggleIcon_();
     var settingsBtn = document.getElementById('settings-btn');
     if (settingsBtn) settingsBtn.onclick = openSettingsModal_;
+    document.getElementById('feedback-btn').onclick = openFeedbackModal_;
     var setupBannerBtn = document.getElementById('setup-banner-btn');
     if (setupBannerBtn) setupBannerBtn.onclick = openOnboardingModal_;
     updateSetupBanner_();
