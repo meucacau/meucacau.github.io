@@ -13689,14 +13689,16 @@
     openModal(
       '<h2>Enviar sugestão ou dúvida</h2>' +
       '<div class="muted" style="margin-bottom:12px">Chega direto ao desenvolvedor, na hora. Pode ser uma ideia, uma dúvida ou um comentário.</div>' +
+      '<div class="field"><label>É uma</label><select id="fb-kind">' +
+        '<option value="sugestao">Sugestão</option><option value="duvida">Dúvida</option><option value="comentario">Comentário</option></select></div>' +
       '<div class="field"><label>Assunto</label><select id="fb-topic">' + options + '</select></div>' +
       '<div class="field"><label>Mensagem</label><textarea id="fb-text" rows="5" maxlength="' + FEEDBACK_MAX_TEXT_ + '" placeholder="' + escapeHtml(FEEDBACK_EXAMPLE_) + '"></textarea></div>' +
       '<div class="field"><label>Imagens (opcional, até ' + FEEDBACK_MAX_IMAGES_ + ')</label>' +
         '<div id="fb-thumbs" class="fb-thumbs"></div>' +
         '<button type="button" class="secondary" id="fb-add-img">Anexar imagem</button>' +
         '<input type="file" id="fb-file" accept="image/*" multiple hidden></div>' +
-      '<div class="field"><label>Seu e-mail para resposta (opcional)</label>' +
-        '<input type="email" id="fb-reply" autocomplete="email" placeholder="voce@exemplo.com"></div>' +
+      '<div class="field"><label id="fb-contact-label">E-mail ou WhatsApp (opcional)</label>' +
+        '<input type="text" id="fb-contact" autocomplete="email" placeholder="voce@exemplo.com ou (11) 91234-5678"></div>' +
       '<div id="fb-error" class="settings-error" hidden></div>' +
       '<div style="display:flex;gap:8px"><button type="button" class="secondary" id="fb-cancel" style="flex:1">Cancelar</button>' +
         '<button type="button" id="fb-send" style="flex:1">Enviar</button></div>'
@@ -13706,6 +13708,12 @@
     var addBtn = document.getElementById('fb-add-img');
     var fileInput = document.getElementById('fb-file');
     var errorEl = document.getElementById('fb-error');
+    var kindEl = document.getElementById('fb-kind');
+    // Dúvida só faz sentido com um jeito de responder: o contato passa a ser obrigatório.
+    kindEl.onchange = function () {
+      document.getElementById('fb-contact-label').textContent = kindEl.value === 'duvida'
+        ? 'E-mail ou WhatsApp (obrigatório, para eu responder)' : 'E-mail ou WhatsApp (opcional)';
+    };
     function showError_(msg) { errorEl.textContent = msg || ''; errorEl.hidden = !msg; }
     function renderThumbs_() {
       thumbs.innerHTML = images.map(function (img, i) {
@@ -13735,15 +13743,18 @@
       if (sending) return;
       var text = document.getElementById('fb-text').value.trim();
       if (!text) { showError_('Escreva a mensagem antes de enviar.'); return; }
-      var reply = document.getElementById('fb-reply').value.trim();
-      if (reply && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reply)) { showError_('O e-mail para resposta não parece válido.'); return; }
+      var contact = document.getElementById('fb-contact').value.trim();
+      var digits = contact.replace(/\D/g, '');
+      var contactOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact) || (/^[+()\-.\s\d]+$/.test(contact) && digits.length >= 10 && digits.length <= 15);
+      if (kindEl.value === 'duvida' && !contact) { showError_('Para dúvidas, informe seu e-mail ou WhatsApp para eu poder responder.'); return; }
+      if (contact && !contactOk) { showError_('O contato não parece válido. Use um e-mail ou um WhatsApp com DDD.'); return; }
       showError_('');
       sending = true;
       sendBtn.disabled = true;
       sendBtn.textContent = 'Enviando…';
       var payload = {
         k: FEEDBACK_TAG_, uid: feedbackUid_(), plat: window.FinancasApp ? 'android' : 'web', ver: 'app',
-        topic: document.getElementById('fb-topic').value, text: text, reply: reply,
+        kind: kindEl.value, topic: document.getElementById('fb-topic').value, text: text, contact: contact,
         images: images.map(function (img) { return { data: img.data }; })
       };
       // text/plain evita o preflight (o Apps Script não responde a OPTIONS).
