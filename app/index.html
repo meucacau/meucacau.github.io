@@ -351,7 +351,8 @@
   #fb-add-img { margin-bottom: 12px; }
   .fb-thumb { position: relative; width: 64px; height: 64px; }
   .fb-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); display: block; }
-  .fb-thumb-x { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; padding: 0; border-radius: 50%; font-size: 14px; line-height: 20px; background: var(--text); color: var(--surface); }
+  .fb-thumb-x { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--text); color: var(--surface); }
+  .fb-thumb-x svg { display: block; }
   /* Mesmo esmaecimento de button:disabled -- usado pelo campo Valor "Automático" do
      orçamento (ver renderAmountField_/openBudgetModal), que fica bloqueado mas com a
      MESMA forma de um campo normal, pra deixar claro que normalmente seria editável. */
@@ -14176,23 +14177,39 @@
     });
   }
 
+  /** X de remover miniatura desenhado em SVG: o caractere × nunca fica exatamente no centro do círculo. */
+  var FEEDBACK_X_SVG_ = '<svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true"><path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg>';
+  var feedbackPasteHandler_ = null;
+  /** Imagens (Blob/File) presentes numa área de transferência colada; [] se só há texto. */
+  function feedbackPastedImages_(clipboardData) {
+    var out = [];
+    var items = (clipboardData && clipboardData.items) || [];
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].kind === 'file' && /^image\//.test(items[i].type)) {
+        var f = items[i].getAsFile();
+        if (f) out.push(f);
+      }
+    }
+    return out;
+  }
+
   function openFeedbackModal_() {
     var images = [];
     var sending = false;
     var accountEmail = '';
     var currentTopic = FEEDBACK_TOPICS_.filter(function (t) { return t.view && t.view === STATE.currentView; })[0] || FEEDBACK_TOPICS_[0];
     openModal(
-      '<h2>Enviar sugestão ou dúvida</h2>' +
+      '<h2>Contato</h2>' +
       '<div class="muted" style="margin-bottom:6px">Ajude o app a melhorar para você e para outros usuários enviando sua sugestão, dúvida ou comentário. Todas as comunicações são bem-vindas!</div>' +
-      '<div class="muted" style="margin-bottom:12px">Se precisarmos responder, o retorno será no e-mail da sua conta<span id="fb-email-wrap" hidden>: <b id="fb-email"></b></span>.</div>' +
       '<div class="field"><label>É uma</label><div id="fb-kind-field" class="capsule-field"></div></div>' +
       '<div class="field"><label>Assunto</label><div id="fb-topic-field" class="capsule-field"></div></div>' +
       '<div class="field"><label>Mensagem</label><textarea id="fb-text" rows="5" maxlength="' + FEEDBACK_MAX_TEXT_ + '" placeholder="' + escapeHtml(FEEDBACK_EXAMPLE_) + '"></textarea></div>' +
-      '<div class="field"><label>Imagens (opcional, até ' + FEEDBACK_MAX_IMAGES_ + ')</label>' +
+      '<div class="field"><label>Imagens (opcional, até ' + FEEDBACK_MAX_IMAGES_ + ' · você também pode colar com Ctrl+V)</label>' +
         '<div id="fb-thumbs" class="fb-thumbs"></div>' +
         '<button type="button" class="secondary" id="fb-add-img">Anexar imagem</button>' +
         '<input type="file" id="fb-file" accept="image/*" multiple hidden></div>' +
       '<div id="fb-error" class="settings-error" hidden></div>' +
+      '<div class="muted" style="margin-bottom:12px">Se precisarmos responder, o retorno será no e-mail da sua conta<span id="fb-email-wrap" hidden>: <b id="fb-email"></b></span>.</div>' +
       '<div style="display:flex;gap:8px"><button type="button" class="secondary" id="fb-cancel" style="flex:1">Cancelar</button>' +
         '<button type="button" id="fb-send" style="flex:1">Enviar</button></div>'
     );
@@ -14257,7 +14274,7 @@
     function renderThumbs_() {
       thumbs.innerHTML = images.map(function (img, i) {
         return '<span class="fb-thumb"><img alt="Imagem anexada ' + (i + 1) + '" src="' + img.thumb + '">' +
-          '<button type="button" class="fb-thumb-x" data-i="' + i + '" aria-label="Remover imagem ' + (i + 1) + '">×</button></span>';
+          '<button type="button" class="fb-thumb-x" data-i="' + i + '" aria-label="Remover imagem ' + (i + 1) + '">' + FEEDBACK_X_SVG_ + '</button></span>';
       }).join('');
       thumbs.querySelectorAll('.fb-thumb-x').forEach(function (b) {
         b.onclick = function () { images.splice(Number(b.dataset.i), 1); renderThumbs_(); };
@@ -14265,16 +14282,38 @@
       addBtn.hidden = images.length >= FEEDBACK_MAX_IMAGES_;
     }
     addBtn.onclick = function () { fileInput.click(); };
-    fileInput.onchange = function () {
-      var files = Array.prototype.slice.call(fileInput.files || [], 0, FEEDBACK_MAX_IMAGES_ - images.length);
-      fileInput.value = '';
-      showError_('');
+    // Arquivos escolhidos e imagens coladas seguem o mesmo caminho (limite, compressão, miniatura).
+    function addImageFiles_(list) {
+      var files = list.slice(0, FEEDBACK_MAX_IMAGES_ - images.length);
+      showError_(list.length && !files.length ? 'Você já anexou o máximo de ' + FEEDBACK_MAX_IMAGES_ + ' imagens.' : '');
       files.reduce(function (chain, file) {
         return chain.then(function () {
-          return feedbackCompressImage_(file).then(function (img) { images.push(img); renderThumbs_(); });
+          return feedbackCompressImage_(file).then(function (img) {
+            if (images.length < FEEDBACK_MAX_IMAGES_) { images.push(img); renderThumbs_(); }
+          });
         }).catch(function () { showError_('Não consegui usar uma das imagens. Tente outra.'); });
       }, Promise.resolve());
+    }
+    fileInput.onchange = function () {
+      var files = Array.prototype.slice.call(fileInput.files || []);
+      fileInput.value = '';
+      addImageFiles_(files);
     };
+    // Colar (Ctrl+V / ⌘V) com a janela aberta, em qualquer lugar dela: se a área de transferência
+    // tem imagem, ela vira anexo; texto colado continua indo normalmente pro campo em foco.
+    if (feedbackPasteHandler_) document.removeEventListener('paste', feedbackPasteHandler_, true);
+    feedbackPasteHandler_ = function (e) {
+      if (!document.getElementById('fb-thumbs')) { // a janela já fechou
+        document.removeEventListener('paste', feedbackPasteHandler_, true);
+        feedbackPasteHandler_ = null;
+        return;
+      }
+      var imgs = feedbackPastedImages_(e.clipboardData);
+      if (!imgs.length) return;
+      e.preventDefault();
+      addImageFiles_(imgs);
+    };
+    document.addEventListener('paste', feedbackPasteHandler_, true);
 
     document.getElementById('fb-cancel').onclick = function () { clearHintTimers_(); hideTooltip_(); closeModal(); };
     var sendBtn = document.getElementById('fb-send');
