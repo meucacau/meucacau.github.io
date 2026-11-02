@@ -446,9 +446,22 @@
     margin-bottom: calc((60px - var(--dock-btn)) / 2);
   }
   html[data-nav-side="left"] .dock-side { grid-column: 1; justify-self: end; margin-left: 0; margin-right: 4px; align-items: flex-start; }
+  /* Botão do cacaueiro: fora da barra, na coluna do lado OPOSTO ao dos botões (+ e para confirmar). */
+  .tree-fab {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: end;
+    margin-right: 4px;
+    margin-bottom: calc((60px - var(--dock-btn)) / 2);
+  }
+  .tree-fab .tab-ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  html[data-nav-side="left"] .tree-fab { grid-column: 3; justify-self: start; margin-right: 0; margin-left: 4px; }
   @media (max-width: 409px) {
     .dock-side, html[data-nav-side="left"] .dock-side { position: absolute; right: 0; left: auto; bottom: calc(100% + 8px); margin: 0; }
     html[data-nav-side="left"] .dock-side { right: auto; left: 0; }
+    /* .fab.tree-fab (e não só .tree-fab): o position:relative de .fab vem depois no arquivo e empataria. */
+    .fab.tree-fab, html[data-nav-side="left"] .fab.tree-fab { position: absolute; left: 0; right: auto; bottom: calc(100% + 8px); margin: 0; }
+    html[data-nav-side="left"] .fab.tree-fab { left: auto; right: 0; }
   }
   nav.tabbar {
     position: relative;
@@ -663,6 +676,22 @@
   /* Voltar ao topo fica acima da barra, no lado oposto ao dos botões (+ e para confirmar). */
   #scroll-to-top-btn { right: auto; left: 12px; }
   html[data-nav-side="left"] #scroll-to-top-btn { left: auto; right: 12px; }
+
+  /* Janela do cacaueiro (botão ao lado da barra, ver openTreeModal_ em JavaScript.html): no meio da tela. */
+  .modal-backdrop.modal-center { align-items: center; padding: 16px; }
+  .modal-backdrop.modal-center .modal { max-width: 400px; border-radius: 20px; max-height: 88vh; }
+  .tree-modal { text-align: center; }
+  .tree-modal h2 { margin: 0 0 2px; }
+  .tree-img-wrap { height: 190px; display: flex; align-items: center; justify-content: center; margin: 4px 0 6px; }
+  .tree-img-wrap img { max-height: 190px; max-width: 100%; transition: filter .4s ease; }
+  .tree-img-fallback { font-size: 64px; }
+  .tree-bar { height: 10px; border-radius: 5px; background: var(--border); overflow: hidden; margin: 10px 0 4px; }
+  .tree-bar > span { display: block; height: 100%; border-radius: 5px; background: var(--primary); transition: width .4s ease; }
+  .tree-facts { text-align: left; margin: 14px 0 12px; border-top: 1px solid var(--border); }
+  .tree-facts > div { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+  .tree-facts > div > span:first-child { color: var(--text-muted); }
+  .tree-facts b { font-variant-numeric: tabular-nums; text-align: right; }
+  .tree-note { font-size: 13px; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--primary) 12%, transparent); margin-top: 8px; text-align: left; }
 
   /* Janela de configuração (engrenagem, ver openSettingsModal_ em JavaScript.html). */
   .settings-section { border-top: 1px solid var(--border); padding: 12px 0; }
@@ -1486,13 +1515,14 @@
       <button class="review-fab" id="review-pending" aria-label="Para confirmar" hidden><span class="review-ico"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg><span class="review-badge"></span></span><span class="tab-label"></span></button>
       <button class="fab" id="fab-add"><span class="fab-icon">+</span></button>
     </div>
+    <button class="fab tree-fab" id="tree-open" aria-label="Meu cacaueiro" title="Meu cacaueiro"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c4 2 6.5 7 6.5 11S16 21 12 22c-4-1-6.5-5-6.5-9S8 4 12 2z"/><path d="M12 2v20M9 4.5c-1.3 5-1.3 10 0 15M15 4.5c1.3 5 1.3 10 0 15"/></svg></button>
   </div>
 
   <div id="modal-root"></div>
 
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=8966e45376"></script>
+  <script src="cacau-web.js?v=341f2300fd"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -1535,15 +1565,20 @@
   var STATUS_LABELS = { aberta: 'Aberta', fechada: 'Fechada', paga: 'Paga', atrasada: 'Atrasada' };
   var TX_PAGE_SIZE = 50; // ver STATE.txVisibleCount / "Carregar mais" no Extrato
 
+  // Chamadas que criam lançamento: contam como "dia com lançamento" no cacaueiro (ver treeNoteEntry_).
+  var TREE_ENTRY_FNS_ = { createTransaction: true, createTransfer: true, confirmPendingEntry: true };
   function run(fnName) {
     var args = Array.prototype.slice.call(arguments, 1);
+    var promise;
     // Versão web fora do Apps Script (web/backend.js, scripts/build-web.js): sem google.script.run.
-    if (window.CacauBackend) return window.CacauBackend.call(fnName, args);
-    return new Promise(function (resolve, reject) {
+    if (window.CacauBackend) promise = window.CacauBackend.call(fnName, args);
+    else promise = new Promise(function (resolve, reject) {
       google.script.run
         .withSuccessHandler(resolve)
         .withFailureHandler(function (err) { reject(err); })[fnName].apply(null, args);
     });
+    if (TREE_ENTRY_FNS_[fnName]) promise.then(function () { treeNoteEntry_(); }, function () { /* quem chamou trata o erro */ });
+    return promise;
   }
 
   /** Primeira letra maiúscula, resto como o usuário digitou — Referente a/Pago a/Recebido de. */
@@ -3703,6 +3738,7 @@
       applyBootstrapData(data);
       STATE.bootstrapped = true;
       render();
+      treeTouch_(false).catch(function () { /* o cacaueiro nunca atrapalha o app */ });
     }).catch(function (err) {
       clearInterval(bootstrapTicker_);
       STATE.bootstrapped = true;
@@ -13375,6 +13411,145 @@
     updateReviewButton_();
   }
 
+  // ---------- cacaueiro (botão de cacau ao lado da barra de abas; regras em Tree.js) ----------
+  var TREE_IMG_BASE_ = 'https://meucacau.github.io/cacaueiro/';
+  var TREE_STAGES_ = [
+    { name: 'Semente', img: 'semente' }, { name: 'Broto', img: 'broto' },
+    { name: 'Mudinha', img: 'mudinha' }, { name: 'Arbusto', img: 'arbusto' },
+    { name: 'Árvore jovem', img: 'arvore-jovem' }, { name: 'Florada', img: 'florada' },
+    { name: 'Primeiros frutos', img: 'primeiros-frutos' }, { name: 'Árvore carregada', img: 'arvore-carregada' }
+  ];
+  // Só existem desenhos de árvore seca pra árvore grande (estágios 7 e 8). Nos estágios 3 a 6 a
+  // secagem é um filtro de cor sobre o próprio desenho; semente e broto (1 e 2) estão
+  // enterrados e não mudam.
+  var TREE_DRY_IMGS_ = [null, 'murchando', 'rala', 'seca'];
+  var TREE_DRY_FILTERS_ = ['', 'saturate(.7) sepia(.35)', 'saturate(.45) sepia(.6) brightness(.95)', 'grayscale(.5) sepia(.75) brightness(.82)'];
+  var TREE_DRY_LABELS_ = ['', 'murchando', 'rala', 'seca'];
+  var treeState_ = null;
+  var treeHealth_ = null;
+
+  /**
+   * Multiplicador de pontos de 1x a 2x pela saúde financeira: média de até duas notas de 0 a 1,
+   * cada uma só entra se houver dado: (a) fração dos orçamentos do mês que NÃO estouraram;
+   * (b) gasto do mês até hoje contra o mesmo trecho do mês anterior (1 se gastou igual ou
+   * menos, caindo até 0 em 50% a mais). Sem nenhuma nota, 1x.
+   */
+  function treeMultiplier_(scores) {
+    var parts = [];
+    if (scores.budgetsTotal > 0) parts.push(scores.budgetsWithin / scores.budgetsTotal);
+    if (scores.spentPrev > 0) {
+      var ratio = scores.spentNow / scores.spentPrev;
+      parts.push(ratio <= 1 ? 1 : Math.max(0, 1 - (ratio - 1) / 0.5));
+    }
+    if (!parts.length) return 1;
+    var avg = parts.reduce(function (a, b) { return a + b; }, 0) / parts.length;
+    return Math.round((1 + avg) * 100) / 100;
+  }
+  /** Dados da saúde financeira de hoje a partir do que o app já tem em memória (null sem dashboard). */
+  function treeHealthScores_() {
+    var d = STATE.dashboard;
+    if (!d || !d.month) return null;
+    var ym = d.month;
+    var referenceFraction = computeMonthPinsAndReference_(ym).referenceFraction;
+    var autoDays = budgetAutoWindowDays_();
+    var within = 0, total = 0;
+    STATE.budgets.forEach(function (b) {
+      if (b.archived || b.isUnbudgetedCatchAll) return;
+      var progress = b.periodMode === 'auto'
+        ? (autoDays ? computeBudgetAutoMonthProgress_(b.categoryIds, autoDays, ym, referenceFraction) : null)
+        : computeBudgetMonthProgress_(b, ym, referenceFraction);
+      if (!progress || !(progress.limit > 0)) return;
+      total++;
+      if (progress.status !== 'estourado') within++;
+    });
+    var today = new Date();
+    var day = String(today.getDate()).padStart(2, '0');
+    var prevYm = ym.slice(5) === '01' ? (Number(ym.slice(0, 4)) - 1) + '-12' : ym.slice(0, 5) + String(Number(ym.slice(5)) - 1).padStart(2, '0');
+    var spentNow = 0, spentPrev = 0;
+    STATE.allTransactions.forEach(function (t) {
+      if (t.kind !== 'expense' || t.excludeFromAnalysis || !t.date) return;
+      var monthPart = t.date.slice(0, 7), dayPart = t.date.slice(8, 10);
+      if (dayPart > day) return;
+      if (monthPart === ym) spentNow += t.amount;
+      else if (monthPart === prevYm) spentPrev += t.amount;
+    });
+    return { budgetsWithin: within, budgetsTotal: total, spentNow: spentNow, spentPrev: spentPrev };
+  }
+  /** Avisa o servidor que o app foi aberto hoje (entry = houve lançamento) e guarda o estado devolvido. */
+  function treeTouch_(entry) {
+    var scores = treeHealthScores_();
+    var input = { today: todayYmd(), entry: !!entry };
+    if (scores) input.mult = treeMultiplier_(scores);
+    return run('touchTree', input).then(function (view) {
+      treeState_ = view;
+      if (scores) treeHealth_ = scores;
+      return view;
+    });
+  }
+  function treeNoteEntry_() {
+    treeTouch_(true).then(function () {
+      if (document.getElementById('tree-modal')) renderTreeModal_();
+    }).catch(function () { /* o cacaueiro nunca atrapalha o app */ });
+  }
+  function treeFmt_(n, places) { return (Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: places === undefined ? 1 : places }); }
+  function treeImageFile_(view) {
+    if (view.stage >= 7 && view.dryLevel > 0) return TREE_DRY_IMGS_[view.dryLevel];
+    return TREE_STAGES_[view.stage - 1].img;
+  }
+  function treeImageFilter_(view) { return view.stage >= 3 && view.stage <= 6 ? TREE_DRY_FILTERS_[view.dryLevel] : ''; }
+  function treeModalHtml_(view, health) {
+    var stage = TREE_STAGES_[view.stage - 1];
+    var span = view.nextAt === null ? 1 : view.nextAt - view.stageStart;
+    var pct = view.nextAt === null ? 100 : Math.max(0, Math.min(100, ((view.points - view.stageStart) / span) * 100));
+    var html = '<div class="tree-modal" id="tree-modal">' +
+      '<h2>Meu cacaueiro</h2>' +
+      '<div class="muted">Estágio ' + view.stage + ' de ' + view.stageCount + ' · ' + escapeHtml(stage.name) + (view.dryLevel ? ' (' + TREE_DRY_LABELS_[view.dryLevel] + ')' : '') + '</div>' +
+      '<div class="tree-img-wrap"><img id="tree-img" alt="' + escapeHtml(stage.name) + '" src="' + TREE_IMG_BASE_ + treeImageFile_(view) + '.webp" style="filter:' + treeImageFilter_(view) + '"></div>' +
+      '<div class="tree-bar"><span style="width:' + pct.toFixed(1) + '%"></span></div>' +
+      '<div class="muted">' + (view.nextAt === null
+        ? 'Você chegou ao último estágio. Continue usando para manter a árvore carregada.'
+        : 'Faltam ' + treeFmt_(view.toNext) + ' pontos para ' + escapeHtml(TREE_STAGES_[view.stage].name)) + '</div>';
+    if (view.dryLevel > 0) {
+      html += '<div class="tree-note">Sua árvore ficou um tempo sem cuidado e secou um pouco. Faltam ' + treeFmt_(view.recoveryLeft) +
+        ' pontos para ela se recuperar; enquanto isso os pontos novos vão para a recuperação e não para o crescimento.</div>';
+    }
+    html += '<div class="tree-facts">' +
+      '<div><span>Pontos no total</span><b>' + treeFmt_(view.points) + '</b></div>' +
+      '<div><span>Hoje</span><b>' + (view.todayBase === 3 ? 'abriu o app e lançou (3)' : 'abriu o app (1)') + ' × ' + treeFmt_(view.todayMult, 2) + ' = ' + treeFmt_(view.todayPoints) + ' pontos</b></div>' +
+      '<div><span>Multiplicador (saúde financeira)</span><b>' + treeFmt_(view.todayMult, 2) + 'x</b></div>';
+    if (health && health.budgetsTotal > 0) {
+      html += '<div><span>Orçamentos dentro do teto</span><b>' + health.budgetsWithin + ' de ' + health.budgetsTotal + '</b></div>';
+    }
+    if (health && health.spentPrev > 0) {
+      var diff = Math.round((health.spentNow / health.spentPrev - 1) * 100);
+      html += '<div><span>Gastos até hoje vs. mês anterior</span><b>' + (diff > 0 ? '+' : diff < 0 ? '−' : '') + Math.abs(diff) + '%</b></div>';
+    }
+    html += '<div><span>Dias de uso</span><b>' + view.openDays + ' (' + view.entryDays + ' com lançamento)</b></div>' +
+      '</div>' +
+      '<div class="muted" style="font-size:12px;margin-bottom:12px">Cada dia com o app aberto vale 1 ponto e cada dia com lançamento vale 3. A saúde financeira multiplica os pontos do dia por até 2. Depois de 7 dias sem abrir, a árvore começa a secar.</div>' +
+      '<button type="button" id="tree-close" style="width:100%">Fechar</button></div>';
+    return html;
+  }
+  function renderTreeModal_() {
+    var modal = document.querySelector('#modal-root .modal');
+    if (!modal || !treeState_) return;
+    modal.innerHTML = treeModalHtml_(treeState_, treeHealth_);
+    var img = document.getElementById('tree-img');
+    if (img) img.onerror = function () { img.outerHTML = '<div class="tree-img-fallback">🌳</div>'; };
+    document.getElementById('tree-close').onclick = closeModal;
+  }
+  function openTreeModal_() {
+    openModal('<div class="tree-modal" id="tree-modal"><h2>Meu cacaueiro</h2><div class="muted">Carregando...</div></div>');
+    document.getElementById('modal-backdrop').classList.add('modal-center');
+    if (treeState_) renderTreeModal_();
+    treeTouch_(false).then(function () {
+      if (document.getElementById('tree-modal')) renderTreeModal_();
+    }).catch(function (err) {
+      var el = document.getElementById('tree-modal');
+      if (el && !treeState_) el.innerHTML = '<h2>Meu cacaueiro</h2><div class="muted">Não consegui carregar agora: ' + escapeHtml(err && err.message || 'erro') + '</div><button type="button" onclick="closeModal()" style="width:100%;margin-top:12px">Fechar</button>';
+    });
+  }
+
   // ---------- ponte com o app Android (beta multiusuário) ----------
   /**
    * Dentro do app Android (WebView) existe window.FinancasApp: entrega o ID da planilha da
@@ -14099,6 +14274,7 @@
     var settingsBtn = document.getElementById('settings-btn');
     if (settingsBtn) settingsBtn.onclick = openSettingsModal_;
     document.getElementById('feedback-btn').onclick = openFeedbackModal_;
+    document.getElementById('tree-open').onclick = openTreeModal_;
     var setupBannerBtn = document.getElementById('setup-banner-btn');
     if (setupBannerBtn) setupBannerBtn.onclick = openOnboardingModal_;
     updateSetupBanner_();

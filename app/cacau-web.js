@@ -4388,6 +4388,125 @@ function nowHm_() {
   return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'HH:mm');
 }
 
+// ===== Tree.js =====
+/**
+ * Cacaueiro de progresso: uma árvore que cresce com a constância de uso (botão de cacau ao
+ * lado da barra de abas). O servidor guarda só o essencial, nas propriedades do USUÁRIO
+ * (mesmo lugar das preferências de interface): é dado do app, não financeiro, e não vale a
+ * pena uma aba na planilha. Nada aqui lê a planilha: a saúde financeira (multiplicador) é
+ * calculada pelo cliente, que já tem orçamentos e lançamentos em memória (ver
+ * treeMultiplier_, JavaScript.html), e chega pronta em touchTree.
+ *
+ * Regras:
+ *  - Dia com o app aberto vale 1 ponto; dia em que também houve lançamento vale 3.
+ *  - A saúde financeira multiplica os pontos DO DIA por 1x até 2x (nunca tira pontos).
+ *  - Pontos nunca diminuem, então o estágio nunca regride.
+ *  - Depois de 7 dias sem abrir a árvore seca (nível 1 murchando, 2 rala, 3 seca, conforme
+ *    os dias parados). Na volta, os pontos ficam como estavam, mas os próximos pontos vão
+ *    primeiro pra RECUPERAR a árvore (folhas e frutos do estágio) e só depois voltam a
+ *    contar pro crescimento.
+ */
+var TREE_STATE_KEY_ = 'TREE_STATE';
+var TREE_STAGE_POINTS_ = [0, 6, 30, 90, 180, 300, 420, 540];
+var TREE_IDLE_DRY_DAYS_ = 7;
+var TREE_RECOVERY_NEED_ = [0, 9, 18, 30];
+
+function treeValidYmd_(s) { return /^\d{4}-\d{2}-\d{2}$/.test(String(s || '')); }
+function treeDaysBetween_(fromYmd, toYmd) {
+  var a = fromYmd.split('-'), b = toYmd.split('-');
+  return Math.round((Date.UTC(+b[0], +b[1] - 1, +b[2]) - Date.UTC(+a[0], +a[1] - 1, +a[2])) / 86400000);
+}
+function treeRound_(n, places) { var f = Math.pow(10, places); return Math.round(n * f) / f; }
+
+/** Dias SEM abrir o app (idle) -> nível de secagem: 0 saudável, 1 murchando, 2 rala, 3 seca. */
+function treeDryLevelForIdle_(idle) {
+  if (idle < TREE_IDLE_DRY_DAYS_) return 0;
+  if (idle < 10) return 1;
+  if (idle < 14) return 2;
+  return 3;
+}
+/** Pontos que ainda faltam pra recuperar -> nível de secagem mostrado. */
+function treeDryLevelForRecovery_(left) {
+  if (left > TREE_RECOVERY_NEED_[2]) return 3;
+  if (left > TREE_RECOVERY_NEED_[1]) return 2;
+  return left > 0 ? 1 : 0;
+}
+
+function treeNewState_(today, mult) {
+  return { pts: 0, day: today, base: 1, mult: mult, rec: 0, od: 1, ed: 0, first: today };
+}
+
+/** Fecha o dia anterior e abre `today`: os pontos de ontem entram (primeiro pagando a recuperação). */
+function treeRollDay_(s, today, mult) {
+  var idle = treeDaysBetween_(s.day, today) - 1;
+  var earned = s.base * s.mult;
+  var used = Math.min(s.rec, earned);
+  s.rec = treeRound_(s.rec - used, 2);
+  s.pts = treeRound_(s.pts + (earned - used), 2);
+  var level = treeDryLevelForIdle_(idle);
+  if (level > 0) s.rec = Math.max(s.rec, TREE_RECOVERY_NEED_[level]);
+  s.day = today; s.base = 1; s.mult = mult; s.od++;
+}
+
+/** Estado pronto pra tela, a partir do que está guardado (sem escrever nada). */
+function treeView_(s) {
+  var todayPoints = s.base * s.mult;
+  var used = Math.min(s.rec, todayPoints);
+  var recLeft = s.rec - used;
+  var points = s.pts + todayPoints - used;
+  var idx = 0;
+  for (var i = 0; i < TREE_STAGE_POINTS_.length; i++) if (points >= TREE_STAGE_POINTS_[i]) idx = i;
+  var nextAt = idx + 1 < TREE_STAGE_POINTS_.length ? TREE_STAGE_POINTS_[idx + 1] : null;
+  return {
+    stage: idx + 1,
+    stageCount: TREE_STAGE_POINTS_.length,
+    stageStart: TREE_STAGE_POINTS_[idx],
+    points: treeRound_(points, 1),
+    nextAt: nextAt,
+    toNext: nextAt === null ? 0 : treeRound_(nextAt - points, 1),
+    dryLevel: treeDryLevelForRecovery_(recLeft),
+    recoveryLeft: treeRound_(recLeft, 1),
+    todayBase: s.base,
+    todayMult: s.mult,
+    todayPoints: treeRound_(todayPoints, 1),
+    openDays: s.od,
+    entryDays: s.ed,
+    firstDay: s.first
+  };
+}
+
+/**
+ * Registra que o app foi aberto hoje (e, com entry, que houve lançamento) e devolve o
+ * estado da árvore. input = { today: 'YYYY-MM-DD' (dia do aparelho do usuário), mult: 1..2,
+ * entry: boolean }. Idempotente no mesmo dia: chamar várias vezes só atualiza o
+ * multiplicador do dia e sobe a base de 1 pra 3 uma vez.
+ */
+function touchTree(input) {
+  input = input || {};
+  if (!treeValidYmd_(input.today)) throw new Error('Data inválida.');
+  // Sem mult (cliente ainda sem dados pra calcular a saúde): não mexe no multiplicador do dia.
+  var newMult = null;
+  if (input.mult !== undefined && input.mult !== null && isFinite(Number(input.mult))) {
+    newMult = treeRound_(Math.min(2, Math.max(1, Number(input.mult))), 2);
+  }
+  var props = PropertiesService.getUserProperties();
+  var lock = LockService.getUserLock();
+  lock.waitLock(10000);
+  try {
+    var raw = props.getProperty(TREE_STATE_KEY_);
+    var s = null;
+    try { s = raw ? JSON.parse(raw) : null; } catch (e) { s = null; }
+    if (!s || !treeValidYmd_(s.day)) s = treeNewState_(input.today, newMult === null ? 1 : newMult);
+    else if (input.today > s.day) treeRollDay_(s, input.today, newMult === null ? 1 : newMult);
+    else if (newMult !== null) s.mult = newMult; // mesmo dia (ou relógio do aparelho voltou): só atualiza a saúde do dia
+    if (input.entry && s.base < 3) { s.base = 3; s.ed++; }
+    props.setProperty(TREE_STATE_KEY_, JSON.stringify(s));
+    return treeView_(s);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 return {
   archiveAccount: (typeof archiveAccount === 'function' ? archiveAccount : function () { throw new Error('"archiveAccount" não existe na versão web.'); }),
   archiveCategory: (typeof archiveCategory === 'function' ? archiveCategory : function () { throw new Error('"archiveCategory" não existe na versão web.'); }),
@@ -4422,6 +4541,7 @@ return {
   setBudgetViewPreference: (typeof setBudgetViewPreference === 'function' ? setBudgetViewPreference : function () { throw new Error('"setBudgetViewPreference" não existe na versão web.'); }),
   setRefundLinksForActiveTransaction: (typeof setRefundLinksForActiveTransaction === 'function' ? setRefundLinksForActiveTransaction : function () { throw new Error('"setRefundLinksForActiveTransaction" não existe na versão web.'); }),
   setRefundSharesForPassiveTransaction: (typeof setRefundSharesForPassiveTransaction === 'function' ? setRefundSharesForPassiveTransaction : function () { throw new Error('"setRefundSharesForPassiveTransaction" não existe na versão web.'); }),
+  touchTree: (typeof touchTree === 'function' ? touchTree : function () { throw new Error('"touchTree" não existe na versão web.'); }),
   unignoreForecastCycle: (typeof unignoreForecastCycle === 'function' ? unignoreForecastCycle : function () { throw new Error('"unignoreForecastCycle" não existe na versão web.'); }),
   updateAccount: (typeof updateAccount === 'function' ? updateAccount : function () { throw new Error('"updateAccount" não existe na versão web.'); }),
   updateBudget: (typeof updateBudget === 'function' ? updateBudget : function () { throw new Error('"updateBudget" não existe na versão web.'); }),
