@@ -204,6 +204,9 @@
 
   .amount-income { color: var(--income); font-weight: 600; }
   .amount-expense { color: var(--expense); font-weight: 600; }
+  /* Transferência: dinheiro só muda de conta, não é ganho nem gasto. */
+  .amount-neutral { color: var(--text); font-weight: 600; }
+  .tx-arrow { opacity: .7; margin: 0 1px; }
 
   .badge {
     display: inline-block;
@@ -716,6 +719,19 @@
     .tree-fx { display: none; }
   }
   .tree-img-fallback { font-size: 64px; }
+  /* Pop-up de progresso sobre o botão do cacaueiro (ver treeShowProgressPop_). */
+  .tree-pop {
+    position: fixed; z-index: 40; width: 124px; box-sizing: border-box; padding: 10px 12px 12px; text-align: center;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow);
+    opacity: 0; transform: translateY(6px); transition: opacity .25s ease, transform .25s ease; cursor: pointer;
+  }
+  .tree-pop.show { opacity: 1; transform: none; }
+  .tree-pop-img { display: block; height: 64px; max-width: 100%; margin: 0 auto; transition: opacity .3s ease; }
+  .tree-pop-img.tree-pop-img-out { opacity: 0; }
+  .tree-pop-bar { position: relative; height: 8px; margin-top: 8px; border-radius: 4px; background: var(--border); overflow: hidden; }
+  .tree-pop-ghost, .tree-pop-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 4px; }
+  .tree-pop-ghost { background: rgba(170, 170, 170, .6); }
+  .tree-pop-fill { background: var(--primary); }
   .tree-bar { height: 10px; border-radius: 5px; background: var(--border); overflow: hidden; margin: 10px 0 4px; }
   .tree-bar > span { display: block; height: 100%; border-radius: 5px; background: var(--primary); transition: width .4s ease; }
   .tree-facts { text-align: left; margin: 14px 0 12px; border-top: 1px solid var(--border); }
@@ -1466,6 +1482,16 @@
     max-width: 240px;
     font-size: 13px;
   }
+  /* Ponta padrão de pop-ups e tooltips (ver setPopupTip_): quadradinho girado, metade pra fora da
+     caixa, na mesma cor dela. Sem classe: caixa acima da origem (ponta embaixo); .tip-below: caixa
+     abaixo da origem (ponta em cima). --tip-x = distância da ponta até a borda esquerda da caixa. */
+  .has-tip::after {
+    content: ''; position: absolute; left: var(--tip-x, 50%); bottom: -5px; width: 10px; height: 10px; margin-left: -5px;
+    background: inherit; transform: rotate(45deg); border-radius: 0 0 2px 0; pointer-events: none; box-sizing: border-box;
+  }
+  .has-tip.tip-below::after { bottom: auto; top: -5px; border-radius: 2px 0 0 0; }
+  .confirm-popover.has-tip::after, .tree-pop.has-tip::after { border: 1px solid var(--border); border-top-color: transparent; border-left-color: transparent; }
+  .confirm-popover.has-tip.tip-below::after, .tree-pop.has-tip.tip-below::after { border-color: var(--border) transparent transparent var(--border); }
   .confirm-popover-actions {
     display: flex;
     gap: 8px;
@@ -1474,7 +1500,8 @@
   }
   .confirm-popover-actions button { padding: 6px 12px; font-size: 12px; margin: 0; }
 
-  .dropdown-popover { padding: 6px; max-height: 260px; overflow-y: auto; }
+  .dropdown-popover { padding: 6px; }
+  .pop-scroll { max-height: 260px; overflow-y: auto; }
   .dropdown-option {
     padding: 8px 12px;
     border-radius: 6px;
@@ -1862,16 +1889,42 @@
     };
   }
 
+  /**
+   * Ponta (setinha) padrão de todo pop-up e tooltip: uma pontinha na borda da caixa apontando
+   * pro CENTRO de quem a abriu (botão, linha, cursor). A caixa já está posicionada (left/top);
+   * above = ela ficou ACIMA da origem (ponta na borda de baixo), senão abaixo (ponta no topo).
+   * A ponta anda pela borda pra continuar apontando certo quando a caixa foi empurrada
+   * pra dentro da tela, e nunca chega nos cantos arredondados (14 px de folga).
+   */
+  function setPopupTip_(box, originCenterX, above) {
+    var r = box.getBoundingClientRect();
+    var x = Math.min(Math.max(originCenterX - r.left, 14), Math.max(14, r.width - 14));
+    box.style.setProperty('--tip-x', x + 'px');
+    box.classList.add('has-tip');
+    box.classList.toggle('tip-below', !above);
+  }
+
   function positionPopover(anchorEl, pop) {
     document.body.appendChild(pop);
+    // Lista rolável: a rolagem vai pra um miolo (.pop-scroll), porque overflow na própria
+    // caixa cortaria a ponta que sai pra fora dela.
+    if (pop.classList.contains('dropdown-popover') && !pop.querySelector(':scope > .pop-scroll')) {
+      var scroll = document.createElement('div');
+      scroll.className = 'pop-scroll';
+      if (pop.style.maxHeight) { scroll.style.maxHeight = pop.style.maxHeight; pop.style.maxHeight = ''; }
+      while (pop.firstChild) scroll.appendChild(pop.firstChild);
+      pop.appendChild(scroll);
+    }
     var rect = anchorEl.getBoundingClientRect();
     var popRect = pop.getBoundingClientRect();
     var vh = document.documentElement.clientHeight;
-    var top = rect.bottom + 6;
-    if (top + popRect.height > vh - 8) top = rect.top - popRect.height - 6;
+    var above = false;
+    var top = rect.bottom + 10;
+    if (top + popRect.height > vh - 8) { top = rect.top - popRect.height - 10; above = true; }
     var clamped = clampToViewport_(rect.left, top, popRect.width, popRect.height);
     pop.style.left = clamped.left + 'px';
     pop.style.top = clamped.top + 'px';
+    setPopupTip_(pop, rect.left + rect.width / 2, above);
   }
 
   // ---------- tooltip de cápsula (fora do modal, nunca cortado pela borda dele) ----------
@@ -1905,10 +1958,12 @@
       ? opts.pointer.y
       : rect.bottom;
     var top = anchorTop - tipRect.height - 12;
-    if (top < 8) top = anchorBottom + 12;
+    var above = true;
+    if (top < 8) { top = anchorBottom + 12; above = false; }
     var clamped = clampToViewport_(centerX - tipRect.width / 2, top, tipRect.width, tipRect.height);
     tip.style.left = clamped.left + 'px';
     tip.style.top = clamped.top + 'px';
+    setPopupTip_(tip, centerX, above);
   }
   function hideTooltip_() {
     var existing = document.getElementById('shared-tooltip');
@@ -3769,7 +3824,7 @@
       applyBootstrapData(data);
       STATE.bootstrapped = true;
       render();
-      treeTouch_(false).catch(function () { /* o cacaueiro nunca atrapalha o app */ });
+      treeTouch_(false).then(treeShowProgressPop_).catch(function () { /* o cacaueiro nunca atrapalha o app */ });
     }).catch(function (err) {
       clearInterval(bootstrapTicker_);
       STATE.bootstrapped = true;
@@ -4922,7 +4977,55 @@
    * fmtCardDate_/renderTxList), depois categoria/referente a/pago a. A conta vai embaixo
    * do valor, na coluna da direita, em vez de embaixo do texto principal.
    */
+  /** A outra perna de uma transferência (ou null). Confirmadas se ligam pelo transferGroupId; as
+   *  prévias otimistas ainda não têm grupo, então casam por data/hora/valor/descrição e sentido
+   *  contrário, entre as prévias. */
+  function transferOtherLeg_(t) {
+    if (t.kind !== 'transfer_out' && t.kind !== 'transfer_in') return null;
+    var wanted = t.kind === 'transfer_out' ? 'transfer_in' : 'transfer_out';
+    if (t.transferGroupId) {
+      return STATE.allTransactions.find(function (x) { return x.transferGroupId === t.transferGroupId && x.id !== t.id; }) || null;
+    }
+    return STATE.pendingTransactions.find(function (x) {
+      return x.kind === wanted && !x.transferGroupId && x.date === t.date && (x.time || '') === (t.time || '') &&
+        x.amount === t.amount && (x.description || '') === (t.description || '');
+    }) || null;
+  }
+  /** Uma transferência é UM lançamento no Extrato (como de fato é): das duas pernas, fica só a de
+   *  saída; se só a de entrada passou pelo filtro (ex.: filtro pela conta de destino), ela
+   *  representa a transferência. A linha mostra as duas contas via transferOtherLeg_. */
+  function collapseTransferLegs_(list) {
+    var seen = {};
+    var drop = {};
+    list.forEach(function (t) {
+      var other = transferOtherLeg_(t);
+      if (!other) return;
+      var key = [t.id, other.id].sort().join('|');
+      if (seen[key]) { drop[t.id] = true; return; }
+      var otherHere = list.some(function (x) { return x.id === other.id; });
+      if (otherHere && t.kind === 'transfer_in') { drop[t.id] = true; return; }
+      seen[key] = true;
+    });
+    return list.filter(function (t) { return !drop[t.id]; });
+  }
+  /** Linha única de transferência: valor em cor neutra (não é receita nem despesa) e "A → B". */
+  function extratoTransferRowHtml_(t, other) {
+    var from = t.kind === 'transfer_out' ? t : other;
+    var to = t.kind === 'transfer_out' ? other : t;
+    var mainLabel = '<strong>Transferência</strong>';
+    if (t.description) mainLabel += ' · ' + escapeHtml(t.description);
+    var sub = accountNameHtml(from.accountId) + ' <span class="tx-arrow" aria-label="para">→</span> ' + accountNameHtml(to.accountId);
+    var rowAttrs = (t.pending && !t.editable) ? ' class="row"' : ' class="row row-clickable" data-tx="' + escapeHtml(t.id) + '"';
+    return '<div' + rowAttrs + '>' +
+      '<span style="flex:0 0 38px;font-size:13px">' + (t.time ? escapeHtml(t.time) : '') + '</span>' +
+      '<span style="flex:1;font-size:13px">' + mainLabel + '</span>' +
+      '<span style="text-align:right"><span style="white-space:nowrap">' + txFlagIconHtml_(t) + '<span class="amount-neutral">' + escapeHtml(fmtMoney(t.amount)) + '</span></span>' +
+        '<br><span class="muted" style="white-space:normal">' + sub + '</span></span>' +
+    '</div>';
+  }
   function extratoRowHtml(t) {
+    var otherLeg = transferOtherLeg_(t);
+    if (otherLeg) return extratoTransferRowHtml_(t, otherLeg);
     var isTransfer = t.kind === 'transfer_out' || t.kind === 'transfer_in';
     var isExpense = t.kind === 'expense' || t.kind === 'transfer_out';
     var sign = isExpense ? '-' : '+';
@@ -5324,6 +5427,7 @@
   function renderTxList(combined) {
     var list = document.getElementById('tx-list');
     if (!list) return;
+    combined = collapseTransferLegs_(combined); // transferência = 1 linha (cópia nova; o sort abaixo não mexe na lista original)
     // Ordena por data (mais recente primeiro, igual ao que o servidor devolve) ANTES de
     // agrupar — groupTransactionsByDate_ respeita a ordem de PRIMEIRA APARIÇÃO, e como as
     // prévias otimistas entram na frente no concat, o grupo da data delas ia parar no
@@ -13522,6 +13626,8 @@
       if (document.getElementById('tree-modal')) renderTreeModal_();
     }).catch(function () { /* o cacaueiro nunca atrapalha o app */ });
   }
+  /** Pontos sem decimais na tela: o total arredonda pra baixo (nunca mostra 30 antes do estágio que começa em 30) e o que falta, pra cima. */
+  function treePts_(n, mode) { var v = Number(n) || 0; return treeFmt_(mode === 'up' ? Math.ceil(v - 1e-9) : mode === 'round' ? Math.round(v) : Math.floor(v + 1e-9), 0); }
   function treeFmt_(n, places) { return (Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: places === undefined ? 1 : places }); }
   function treeImageFile_(view) {
     if (view.stage >= 7 && view.dryLevel > 0) return TREE_DRY_IMGS_[view.dryLevel];
@@ -13587,14 +13693,14 @@
       '<div class="tree-bar"><span style="width:' + pct.toFixed(1) + '%"></span></div>' +
       '<div class="muted">' + (view.nextAt === null
         ? 'Você chegou ao último estágio. Continue usando para manter a árvore carregada.'
-        : 'Faltam ' + treeFmt_(view.toNext) + ' pontos para ' + escapeHtml(TREE_STAGES_[view.stage].name)) + '</div>';
+        : 'Faltam ' + treePts_(view.toNext, 'up') + ' pontos para ' + escapeHtml(TREE_STAGES_[view.stage].name)) + '</div>';
     if (view.dryLevel > 0) {
-      html += '<div class="tree-note">Sua árvore ficou um tempo sem cuidado e secou um pouco. Faltam ' + treeFmt_(view.recoveryLeft) +
+      html += '<div class="tree-note">Sua árvore ficou um tempo sem cuidado e secou um pouco. Faltam ' + treePts_(view.recoveryLeft, 'up') +
         ' pontos para ela se recuperar; enquanto isso os pontos novos vão para a recuperação e não para o crescimento.</div>';
     }
     html += '<div class="tree-facts">' +
-      '<div><span>Pontos no total</span><b>' + treeFmt_(view.points) + '</b></div>' +
-      '<div><span>Hoje</span><b>' + (view.todayBase === 3 ? 'abriu o app e lançou (3)' : 'abriu o app (1)') + ' × ' + treeFmt_(view.todayMult, 2) + ' = ' + treeFmt_(view.todayPoints) + ' pontos</b></div>' +
+      '<div><span>Pontos no total</span><b>' + treePts_(view.points) + '</b></div>' +
+      '<div><span>Hoje</span><b>' + (view.todayBase === 3 ? 'abriu o app e lançou (3)' : 'abriu o app (1)') + ' × ' + treeFmt_(view.todayMult, 2) + ' = ' + treePts_(view.todayPoints, 'round') + ' pontos</b></div>' +
       '<div><span>Multiplicador (saúde financeira)</span><b>' + treeFmt_(view.todayMult, 2) + 'x</b></div>';
     if (health && health.budgetsTotal > 0) {
       html += '<div><span>Orçamentos dentro do teto</span><b>' + health.budgetsWithin + ' de ' + health.budgetsTotal + '</b></div>';
@@ -13633,6 +13739,131 @@
       var el = document.getElementById('tree-modal');
       if (el && !treeState_) el.innerHTML = '<h2>Meu cacaueiro</h2><div class="muted">Não consegui carregar agora: ' + escapeHtml(err && err.message || 'erro') + '</div><button type="button" onclick="closeModal()" style="width:100%;margin-top:12px">Fechar</button>';
     });
+  }
+
+  // ---------- pop-up de progresso (ao abrir o app) ----------
+  /**
+   * Ao abrir o app, um pop-up pequeno sobre o botão do cacaueiro mostra a figura do estágio e a
+   * barra subindo: uma faixa cinza clara cresce até onde o progresso chegou e, em seguida, a
+   * marrom a alcança (2 s no total, devagar-rápido-devagar). O ponto de partida é a posição REAL
+   * do pop-up anterior (guardada no aparelho). Se o ganho não chega a 1 pixel, a barra cresce
+   * 5 px "de enfeite" só pra dar a sensação de avanço; o enfeite NUNCA é guardado, então o
+   * próximo pop-up parte da posição real. Mudou de estágio: a barra enche, a figura troca e a
+   * barra recomeça no estágio novo.
+   */
+  var TREE_POINTS_ = [0, 6, 30, 90, 180, 300, 420, 540]; // mesmas faixas de TREE_STAGE_POINTS_ (Tree.js)
+  var TREE_PROG_KEY_ = 'cacau-tree-prog';
+  var TREE_POP_MIN_GROWTH_PX_ = 5;
+  var TREE_POP_PHASE_MS_ = 2000;
+  var TREE_POP_HOLD_MS_ = 1800;
+  function treeProgGet_() {
+    try {
+      var v = JSON.parse(localStorage.getItem(TREE_PROG_KEY_));
+      if (v && isFinite(v.pts) && v.stage >= 1 && v.stage <= TREE_POINTS_.length) return v;
+    } catch (e) { /* sem armazenamento ou lixo: tratado como primeira vez */ }
+    return null;
+  }
+  function treeProgSet_(view) {
+    try { localStorage.setItem(TREE_PROG_KEY_, JSON.stringify({ pts: view.points, stage: view.stage })); } catch (e) { /* só perde o ponto de partida */ }
+  }
+  /** Progresso (0–100) dentro do estágio. */
+  function treePct_(points, stage) {
+    var start = TREE_POINTS_[stage - 1], next = TREE_POINTS_[stage];
+    if (next === undefined) return 100;
+    return Math.max(0, Math.min(100, (points - start) / (next - start) * 100));
+  }
+  /** [de, até] em pixels, garantindo ao menos TREE_POP_MIN_GROWTH_PX_ de crescimento visível. */
+  function treeBarSpan_(width, fromPx, toPx) {
+    if (toPx - fromPx >= 1) return [fromPx, toPx];
+    toPx = Math.min(width, fromPx + TREE_POP_MIN_GROWTH_PX_);
+    return [Math.max(0, toPx - TREE_POP_MIN_GROWTH_PX_), toPx];
+  }
+  /** Devagar no começo, rápido no meio, devagar no fim. */
+  function treeEase_(x) {
+    x = Math.max(0, Math.min(1, x));
+    return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+  }
+  /** Faixa clara na 1ª metade do tempo, marrom na 2ª; ambas com a mesma curva. */
+  function treeBarPhase_(ghost, fill, fromPx, toPx, totalMs, done) {
+    var half = totalMs / 2, t0 = null;
+    ghost.style.width = fromPx + 'px';
+    fill.style.width = fromPx + 'px';
+    function frame(now) {
+      if (t0 === null) t0 = now;
+      var el = now - t0;
+      ghost.style.width = (fromPx + (toPx - fromPx) * treeEase_(el / half)) + 'px';
+      fill.style.width = (fromPx + (toPx - fromPx) * treeEase_((el - half) / half)) + 'px';
+      if (el < totalMs) requestAnimationFrame(frame); else done();
+    }
+    requestAnimationFrame(frame);
+  }
+  function treeClosePop_() {
+    var pop = document.getElementById('tree-pop');
+    if (!pop) return;
+    pop.classList.remove('show');
+    setTimeout(function () { if (pop.parentNode) pop.remove(); }, 300);
+  }
+  function treeShowProgressPop_(view) {
+    var btn = document.getElementById('tree-open');
+    if (!view || !btn || document.getElementById('tree-pop') || document.getElementById('modal-backdrop')) return;
+    var rect = btn.getBoundingClientRect();
+    if (!rect.width) return;
+    var prev = treeProgGet_();
+    if (prev && prev.stage > view.stage) prev = null; // outro aparelho ficou pra trás: não tem de onde partir
+    var stageUp = !!prev && prev.stage < view.stage;
+    var endPct = treePct_(view.points, view.stage);
+    var startPct = !prev ? endPct : stageUp ? treePct_(prev.pts, prev.stage) : Math.min(treePct_(prev.pts, view.stage), endPct);
+    var file = treeImageFile_(view);
+    var firstFile = stageUp ? TREE_STAGES_[prev.stage - 1].img : file;
+    treeProgSet_(view); // posição REAL, nunca a do enfeite
+    treeSeenSet_(file); // a janela do cacaueiro não repete a troca de figura que este pop-up já mostrou
+
+    var pop = document.createElement('div');
+    pop.id = 'tree-pop';
+    pop.className = 'tree-pop';
+    pop.setAttribute('role', 'status');
+    pop.innerHTML = '<img class="tree-pop-img" alt="" src="' + treeImgSrc_(firstFile) + '">' +
+      '<div class="tree-pop-bar"><span class="tree-pop-ghost"></span><span class="tree-pop-fill"></span></div>';
+    document.body.appendChild(pop);
+    var img = pop.querySelector('img'), bar = pop.querySelector('.tree-pop-bar');
+    var ghost = pop.querySelector('.tree-pop-ghost'), fill = pop.querySelector('.tree-pop-fill');
+    img.onerror = function () { img.style.visibility = 'hidden'; };
+    // Em cima do botão, centrada nele (a caixa é empurrada pra dentro da tela; a ponta continua no centro do botão).
+    var vh = document.documentElement.clientHeight, vw = document.documentElement.clientWidth;
+    var popW = pop.getBoundingClientRect().width;
+    var centerX = rect.left + rect.width / 2;
+    pop.style.left = Math.max(8, Math.min(vw - popW - 8, centerX - popW / 2)) + 'px';
+    pop.style.bottom = (vh - rect.top + 12) + 'px';
+    setPopupTip_(pop, centerX, true);
+
+    var width = bar.clientWidth;
+    var timers = [];
+    function later(fn, ms) { timers.push(setTimeout(fn, ms)); }
+    function finish() { later(treeClosePop_, TREE_POP_HOLD_MS_); }
+    pop.onclick = function () { timers.forEach(clearTimeout); pop.onclick = null; treeClosePop_(); openTreeModal_(); };
+
+    var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var span = treeBarSpan_(width, width * startPct / 100, width * endPct / 100);
+    requestAnimationFrame(function () { pop.classList.add('show'); });
+    if (reduced) {
+      ghost.style.width = fill.style.width = span[1] + 'px';
+      later(treeClosePop_, 2500);
+    } else if (!stageUp) {
+      later(function () { treeBarPhase_(ghost, fill, span[0], span[1], TREE_POP_PHASE_MS_, finish); }, 250);
+    } else {
+      later(function () {
+        var fullSpan = treeBarSpan_(width, width * startPct / 100, width);
+        treeBarPhase_(ghost, fill, fullSpan[0], fullSpan[1], TREE_POP_PHASE_MS_ * 0.7, function () {
+          img.classList.add('tree-pop-img-out');
+          later(function () {
+            img.src = treeImgSrc_(file);
+            img.classList.remove('tree-pop-img-out');
+            var next = treeBarSpan_(width, 0, width * endPct / 100);
+            treeBarPhase_(ghost, fill, next[0], next[1], TREE_POP_PHASE_MS_ * 0.6, finish);
+          }, 300);
+        });
+      }, 250);
+    }
   }
 
   // ---------- ponte com o app Android (beta multiusuário) ----------
