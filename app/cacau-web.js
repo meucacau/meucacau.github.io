@@ -830,12 +830,13 @@ function brandPage_(output) {
 // ===== Budgets.js =====
 /**
  * CRUD de orçamento por categoria (ver Budgets no client — "Orçamentos"). Um orçamento
- * é uma TAXA — um valor esperado a cada N dias (ex: R$100 a cada 7 dias) — em vez de um
- * valor fixo mensal. Isso permite tanto acompanhar "nos últimos N dias" quanto projetar
- * pra um mês de calendário específico (escalando pelo número de dias do mês ÷ N, ver
- * JavaScript.html). Repete automaticamente até ser alterado ou removido; todo o cálculo
- * de gasto/progresso é feito no cliente a partir de STATE.allTransactions, então essa
- * aba só guarda a configuração.
+ * é um valor esperado por CICLO: "N x (dia | semana | mês)" (ex: R$100 a cada 1 semana,
+ * R$1000 a cada 1 mês). A barra mede o ciclo atual e zera quando ele vira; pra um mês de
+ * calendário específico o valor é projetado pelo tamanho do mês (ver JavaScript.html).
+ * Repete automaticamente até ser alterado ou removido; todo o cálculo de gasto/progresso
+ * é feito no cliente a partir de STATE.allTransactions, então essa aba só guarda a
+ * configuração. (A lógica antiga de "últimos N dias" está guardada na tag git
+ * reserva-orcamento-ultimos-dias.)
  *
  * CategoryID guarda uma lista separada por vírgula (mesmo padrão de Categories.Keywords)
  * — um orçamento agora pode cobrir várias categorias/subcategorias de uma vez (ver
@@ -912,9 +913,52 @@ function ensureUnbudgetedCatchAllBudget_(rows) {
   if (existing) return rows;
   rows.push(appendRow_('Budgets', {
     CategoryID: '', MonthlyLimit: 0, IntervalDays: 30, AutoIncludeParentId: '',
-    Archived: false, IsUnbudgetedCatchAll: true, PeriodMode: 'auto'
+    Archived: false, IsUnbudgetedCatchAll: true, PeriodMode: 'auto',
+    CycleUnit: 'month', CycleCount: 1, ScaleByDays: true
   }));
   return rows;
+}
+
+/** Ciclo equivalente de um orçamento antigo (só IntervalDays, em dias): 30 -> 1 mês,
+ *  7 -> 1 semana, múltiplo de 7 -> N semanas, o resto -> N dias. */
+function budgetCycleFromIntervalDays_(intervalDays) {
+  var n = Number(intervalDays);
+  if (!n || n < 1) n = 30;
+  if (n === 30) return { unit: 'month', count: 1 };
+  if (n % 7 === 0) return { unit: 'week', count: n / 7 };
+  return { unit: 'day', count: n };
+}
+
+/** Ciclo { unit, count, scaleByDays } de uma linha da aba Budgets. Linha com CycleUnit/
+ *  CycleCount válidos usa eles; linha antiga (sem as colunas) lê de IntervalDays, com
+ *  ScaleByDays ligado -- preserva o comportamento de antes (escalar pelo tamanho do mês). */
+function budgetCycleOfRow_(b) {
+  var unit = String(b.CycleUnit || '');
+  var count = Number(b.CycleCount);
+  var scaleCell = b.ScaleByDays;
+  var scaleByDays = (scaleCell === '' || scaleCell === undefined || scaleCell === null) ? true : parseBoolCell_(scaleCell);
+  if (BUDGET_CYCLE_MAX[unit] && Number.isInteger(count) && count >= 1 && count <= BUDGET_CYCLE_MAX[unit]) {
+    return { unit: unit, count: count, scaleByDays: scaleByDays };
+  }
+  var derived = budgetCycleFromIntervalDays_(b.IntervalDays ? Number(b.IntervalDays) : 30);
+  return { unit: derived.unit, count: derived.count, scaleByDays: scaleByDays };
+}
+
+var BUDGET_CYCLE_MAX = { day: 999, week: 104, month: 60 };
+
+/** Valida unit/count de um ciclo (client e servidor concordam nos limites). */
+function validateBudgetCycle_(unit, count) {
+  var n = Number(count);
+  if (!BUDGET_CYCLE_MAX[unit]) throw new Error('Ciclo precisa ser em dias, semanas ou meses.');
+  if (!Number.isInteger(n) || n < 1 || n > BUDGET_CYCLE_MAX[unit]) {
+    throw new Error('O ciclo precisa ser um número inteiro entre 1 e ' + BUDGET_CYCLE_MAX[unit] + '.');
+  }
+  return { unit: unit, count: n };
+}
+
+/** IntervalDays de compatibilidade pra um ciclo (mês = 30 dias, semana = 7), limitado a 999. */
+function budgetCycleApproxDays_(unit, count) {
+  return Math.min(999, count * (unit === 'month' ? 30 : (unit === 'week' ? 7 : 1)));
 }
 
 function listBudgets(includeArchived) {
@@ -940,6 +984,7 @@ function listBudgets(includeArchived) {
         categoryName = isSoloTopLevel ? names[0] + ' (sem subcategorias)' : names.join(' / ');
       }
       var isCatchAll = parseBoolCell_(b.IsUnbudgetedCatchAll);
+      var cycle = budgetCycleOfRow_(b);
       return {
         id: b.ID,
         categoryIds: categoryIds,
@@ -948,6 +993,12 @@ function listBudgets(includeArchived) {
         amount: Number(b.MonthlyLimit),
         // Orçamentos criados antes de existir intervalo de dias equivalem a "30 dias".
         intervalDays: b.IntervalDays ? Number(b.IntervalDays) : 30,
+        // Ciclo "N x (dia|semana|mês)" -- linha antiga migra sozinha na leitura (ver
+        // budgetCycleOfRow_), sem reescrever a planilha.
+        cycleUnit: cycle.unit,
+        cycleCount: cycle.count,
+        scaleByDays: cycle.scaleByDays,
+        recoveryDismissedFrom: b.RecoveryDismissedFrom ? String(b.RecoveryDismissedFrom).slice(0, 10) : null,
         archived: isArchived_(b.Archived),
         isUnbudgetedCatchAll: isCatchAll,
         // A barra catch-all é SEMPRE 'auto' (nunca teve PeriodMode próprio antes desse
@@ -994,36 +1045,48 @@ function validateBudgetCategoryIds_(categoryIds, excludeBudgetId) {
   if (duplicate) throw new Error('"' + duplicate.Name + '" já está em outro orçamento.');
 }
 
-/** periodMode 'auto' (ver grilling): amount/intervalDays viram só placeholders inertes
- *  (o client já manda um valor válido qualquer, nunca lido de verdade -- ver
- *  computeBudgetAutoProgress_/openBudgetModal, JavaScript.html) -- só valida de verdade
- *  em modo 'manual', onde eles são o teto/período reais da barra. */
+/** Ciclo pedido pelo cliente: cycleUnit/cycleCount (novo) ou, de um cliente antigo,
+ *  intervalDays (migrado, ver budgetCycleFromIntervalDays_). */
+function budgetCycleFromInput_(input) {
+  if (input.cycleUnit !== undefined) return validateBudgetCycle_(input.cycleUnit, input.cycleCount);
+  var n = validateIntervalDays_(input.intervalDays || 30);
+  var derived = budgetCycleFromIntervalDays_(n);
+  return validateBudgetCycle_(derived.unit, derived.count);
+}
+
+/** periodMode 'auto': amount vira só um placeholder inerte (o client já manda um valor
+ *  válido qualquer, nunca lido de verdade -- o teto é a mediana de gasto do ciclo, ver
+ *  budgetAutoAmount_/openBudgetModal, JavaScript.html) -- só valida de verdade em modo
+ *  'manual', onde amount é o teto real do ciclo. O ciclo (unit/count/scaleByDays) vale
+ *  nos 2 modos. */
 function createBudget(input) {
   var categoryIds = Array.isArray(input.categoryIds) ? input.categoryIds : parseCategoryIdList_(input.categoryIds);
   validateBudgetCategoryIds_(categoryIds, null);
 
   var periodMode = input.periodMode === 'auto' ? 'auto' : 'manual';
-  var amount, intervalDays;
+  var amount;
   if (periodMode === 'auto') {
     amount = Number(input.amount) || 1;
-    intervalDays = validateIntervalDays_(input.intervalDays || 30);
   } else {
     amount = Number(input.amount);
     if (!amount || amount <= 0) throw new Error('Valor precisa ser maior que zero.');
-    intervalDays = validateIntervalDays_(input.intervalDays);
   }
+  var cycle = budgetCycleFromInput_(input);
+  var scaleByDays = input.scaleByDays === undefined ? true : !!input.scaleByDays;
   var classification = classifyBudgetCategorySelection_(categoryIds, readAll_('Categories'));
 
   return appendRow_('Budgets', {
-    CategoryID: categoryIds.join(','), MonthlyLimit: amount, IntervalDays: intervalDays,
-    AutoIncludeParentId: classification.autoIncludeParentId || '', Archived: false, PeriodMode: periodMode
+    CategoryID: categoryIds.join(','), MonthlyLimit: amount, IntervalDays: budgetCycleApproxDays_(cycle.unit, cycle.count),
+    AutoIncludeParentId: classification.autoIncludeParentId || '', Archived: false, PeriodMode: periodMode,
+    CycleUnit: cycle.unit, CycleCount: cycle.count, ScaleByDays: scaleByDays
   });
 }
 
 /** input.periodMode ('auto'|'manual', opcional): trocar PRA 'auto' nunca vem acompanhado
- *  de amount/intervalDays (ver openBudgetModal, JavaScript.html) -- o valor/período
- *  manual anterior fica intacto na planilha sozinho, sem precisar de coluna extra pra
- *  "lembrar" nada (ver comentário no SCHEMA, SheetService.js). */
+ *  de amount (ver openBudgetModal, JavaScript.html) -- o valor manual anterior fica
+ *  intacto na planilha sozinho, sem precisar de coluna extra pra "lembrar" nada (ver
+ *  comentário no SCHEMA, SheetService.js). Mudar o ciclo também zera a dispensa do
+ *  plano de recuperação (os ciclos mudaram, a conta recomeça). */
 function updateBudget(input) {
   if (!input.id) throw new Error('ID do orçamento é obrigatório.');
   var updates = {};
@@ -1033,7 +1096,20 @@ function updateBudget(input) {
     if (!amount || amount <= 0) throw new Error('Valor precisa ser maior que zero.');
     updates.MonthlyLimit = amount;
   }
-  if (input.intervalDays !== undefined) updates.IntervalDays = validateIntervalDays_(input.intervalDays);
+  if (input.cycleUnit !== undefined || input.intervalDays !== undefined) {
+    var cycle = budgetCycleFromInput_(input);
+    updates.CycleUnit = cycle.unit;
+    updates.CycleCount = cycle.count;
+    updates.IntervalDays = budgetCycleApproxDays_(cycle.unit, cycle.count);
+    // Só zera a dispensa quando o ciclo MUDOU de verdade (o cliente manda o ciclo em toda
+    // edição, mesmo sem mexer nele).
+    var current = readAll_('Budgets').filter(function (r) { return r.ID === input.id; })[0];
+    if (current) {
+      var currentCycle = budgetCycleOfRow_(current);
+      if (currentCycle.unit !== cycle.unit || currentCycle.count !== cycle.count) updates.RecoveryDismissedFrom = '';
+    }
+  }
+  if (input.scaleByDays !== undefined) updates.ScaleByDays = !!input.scaleByDays;
   if (input.categoryIds !== undefined) {
     var categoryIds = Array.isArray(input.categoryIds) ? input.categoryIds : parseCategoryIdList_(input.categoryIds);
     validateBudgetCategoryIds_(categoryIds, input.id);
@@ -1044,6 +1120,18 @@ function updateBudget(input) {
   var updated = updateRowById_('Budgets', input.id, updates);
   if (!updated) throw new Error('Orçamento não encontrado.');
   return updated;
+}
+
+/** "Dispensar" o plano de recuperação de estouro (ver budgetRecoveryState_, client): o
+ *  déficit passa a valer 0 a partir do ciclo que começa em fromYmd (YYYY-MM-DD) -- o
+ *  limite normal digitado nunca muda, só o teto derivado de recuperação deixa de valer. */
+function dismissBudgetRecovery(input) {
+  if (!input || !input.id) throw new Error('ID do orçamento é obrigatório.');
+  var from = String(input.fromYmd || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) throw new Error('Data inválida.');
+  var updated = updateRowById_('Budgets', input.id, { RecoveryDismissedFrom: from });
+  if (!updated) throw new Error('Orçamento não encontrado.');
+  return true;
 }
 
 function removeBudget(id) {
@@ -3548,7 +3636,17 @@ var SCHEMA = {
   // voltar pra outro período restaura o valor de antes sozinho, sem precisar de
   // colunas extras: o formulário simplesmente não manda um valor novo pra eles
   // enquanto o modo for 'auto' (ver openBudgetModal).
-  Budgets: ['ID', 'CategoryID', 'MonthlyLimit', 'Archived', 'CreatedAt', 'IntervalDays', 'AutoIncludeParentId', 'IsUnbudgetedCatchAll', 'PeriodMode'],
+  // CycleUnit ('day'|'week'|'month') + CycleCount (N) + ScaleByDays substituem
+  // IntervalDays como "período" do orçamento: o ciclo é "N x (dia|semana|mês)" e a barra
+  // mede o ciclo ATUAL, zerando quando ele vira (ver budgetCycleForDate_, JavaScript.html).
+  // Linha antiga sem essas colunas lê o ciclo de IntervalDays (30 -> 1 mês, 7 -> 1
+  // semana, múltiplo de 7 -> N semanas, resto -> N dias) e ScaleByDays = ligado (ver
+  // budgetCycleOfRow_, Budgets.js); IntervalDays continua gravado só por compatibilidade.
+  // ScaleByDays (só pra ciclo em meses): o valor é uma taxa de 30 dias e o limite do mês
+  // = valor / 30 x dias reais. RecoveryDismissedFrom (YYYY-MM-DD, vazio = sem dispensa):
+  // início do ciclo a partir do qual o déficit do plano de recuperação de estouro vale 0
+  // (botão "Dispensar", ver budgetRecoveryState_).
+  Budgets: ['ID', 'CategoryID', 'MonthlyLimit', 'Archived', 'CreatedAt', 'IntervalDays', 'AutoIncludeParentId', 'IsUnbudgetedCatchAll', 'PeriodMode', 'CycleUnit', 'CycleCount', 'ScaleByDays', 'RecoveryDismissedFrom'],
   // Lançamento recorrente (ver Forecasts.js): um gasto/receita que se repete a cada
   // IntervalDays dias (ex: "Diarista" a cada 7 dias, "Salário" a cada 30) mas não faz
   // sentido como um limite de Orçamento. CategoryID pode ser categoria OU subcategoria
@@ -3680,6 +3778,7 @@ var TEXT_COLUMNS = {
   RecurringRules: ['LastCreatedYm'],
   PendingEntries: ['CreatedAt'],
   Plans: ['Month'],
+  Budgets: ['RecoveryDismissedFrom'],
   ForecastCycleIgnores: ['CycleStart']
 };
 
@@ -3694,7 +3793,8 @@ var TEXT_COLUMN_DATE_PATTERNS = {
   Time: 'HH:mm',
   CreatedAt: "yyyy-MM-dd'T'HH:mm:ss",
   Month: 'yyyy-MM',
-  CycleStart: 'yyyy-MM-dd'
+  CycleStart: 'yyyy-MM-dd',
+  RecoveryDismissedFrom: 'yyyy-MM-dd'
 };
 
 /**
@@ -4524,6 +4624,7 @@ return {
   deleteTransaction: (typeof deleteTransaction === 'function' ? deleteTransaction : function () { throw new Error('"deleteTransaction" não existe na versão web.'); }),
   discardPendingEntry: (typeof discardPendingEntry === 'function' ? discardPendingEntry : function () { throw new Error('"discardPendingEntry" não existe na versão web.'); }),
   dismissBudgetModeSwitchSuggestion: (typeof dismissBudgetModeSwitchSuggestion === 'function' ? dismissBudgetModeSwitchSuggestion : function () { throw new Error('"dismissBudgetModeSwitchSuggestion" não existe na versão web.'); }),
+  dismissBudgetRecovery: (typeof dismissBudgetRecovery === 'function' ? dismissBudgetRecovery : function () { throw new Error('"dismissBudgetRecovery" não existe na versão web.'); }),
   dismissBudgetSuggestion: (typeof dismissBudgetSuggestion === 'function' ? dismissBudgetSuggestion : function () { throw new Error('"dismissBudgetSuggestion" não existe na versão web.'); }),
   dismissForecastSuggestion: (typeof dismissForecastSuggestion === 'function' ? dismissForecastSuggestion : function () { throw new Error('"dismissForecastSuggestion" não existe na versão web.'); }),
   exportTransactionsCsv: (typeof exportTransactionsCsv === 'function' ? exportTransactionsCsv : function () { throw new Error('"exportTransactionsCsv" não existe na versão web.'); }),
