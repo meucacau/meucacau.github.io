@@ -170,6 +170,11 @@
     box-shadow: var(--shadow);
   }
 
+  /* Plano cujo mês já passou (ver renderBudgets): linha destacada + botão Excluir. */
+  .row.plan-past { background: color-mix(in srgb, var(--warning) 12%, transparent); box-shadow: inset 3px 0 0 var(--warning); }
+  .plan-past-note { color: var(--warning); font-size: 13px; }
+  .plan-past-delete { padding: 4px 10px; font-size: 13px; background: transparent; color: var(--warning); border: 1px solid var(--warning); border-radius: 999px; cursor: pointer; }
+  .plan-past-delete.row-x-armed { color: var(--expense); border-color: var(--expense); }
   .warning-banner {
     background: var(--bg);
     border: 1px solid var(--warning);
@@ -11030,12 +11035,23 @@
       '</div>';
 
     var plans = STATE.plans.slice().sort(function (a, b) { return a.month.localeCompare(b.month); });
+    var currentMonth_ = todayYmd().slice(0, 7);
     var plansHtml = plans.map(function (p) {
       var cls = p.kind === 'expense' ? 'amount-expense' : 'amount-income';
       var sign = p.kind === 'expense' ? '-' : '+';
-      return '<div class="row" data-row-plan="' + escapeHtml(p.id) + '"><span>' + escapeHtml(p.label) + '<br><span class="muted">' + fmtMonthYear(p.month) + '</span></span>' +
+      // Plano cujo mês já passou não pesa mais na tendência de saldo (o mês já aconteceu):
+      // destaca a linha e oferece excluir de uma vez, além do "×" de sempre.
+      var isPast = p.month < currentMonth_;
+      var monthHtml = isPast
+        ? '<span class="plan-past-note">Mês já passou · ' + fmtMonthYear(p.month) + '</span>'
+        : '<span class="muted">' + fmtMonthYear(p.month) + '</span>';
+      var pastDeleteHtml = isPast
+        ? '<button type="button" class="plan-past-delete" data-remove-plan="' + escapeHtml(p.id) + '">Excluir</button>'
+        : '';
+      return '<div class="row' + (isPast ? ' plan-past' : '') + '" data-row-plan="' + escapeHtml(p.id) + '"><span>' + escapeHtml(p.label) + '<br>' + monthHtml + '</span>' +
         '<span class="row-actions">' +
           '<span class="' + cls + '">' + sign + ' ' + fmtMoney(p.amount) + '</span>' +
+          pastDeleteHtml +
           rowRemoveButtonHtml_('data-remove-plan', p.id, 'Remover') +
         '</span></div>';
     }).join('') || '<div class="empty-state">Nenhum plano cadastrado ainda.</div>';
