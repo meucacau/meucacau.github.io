@@ -3766,7 +3766,11 @@ var SCHEMA = {
   // (uma meta só, só o valor -- sem data). Vive na planilha (não em localStorage) pra
   // sincronizar entre celular e computador. Se "atingida" ou não é sempre DERIVADO do
   // saldo de hoje, nunca gravado aqui.
-  BalanceGoal: ['ID', 'Amount', 'UpdatedAt']
+  BalanceGoal: ['ID', 'Amount', 'UpdatedAt'],
+  // Progresso do cacaueiro (ver Tree.js): no máximo UMA linha, com o estado em JSON na coluna
+  // State. Vive na planilha (não nas propriedades do usuário nem no navegador) pra nunca se
+  // perder ao trocar de aparelho, limpar o navegador ou recriar o acesso.
+  TreeState: ['ID', 'State', 'UpdatedAt']
 };
 
 // Colunas que guardam datas como texto (ex: '2026-08-15', '2026-08') para
@@ -4504,11 +4508,11 @@ function nowHm_() {
 // ===== Tree.js =====
 /**
  * Cacaueiro de progresso: uma árvore que cresce com a constância de uso (botão de cacau ao
- * lado da barra de abas). O servidor guarda só o essencial, nas propriedades do USUÁRIO
- * (mesmo lugar das preferências de interface): é dado do app, não financeiro, e não vale a
- * pena uma aba na planilha. Nada aqui lê a planilha: a saúde financeira (multiplicador) é
- * calculada pelo cliente, que já tem orçamentos e lançamentos em memória (ver
- * treeMultiplier_, JavaScript.html), e chega pronta em touchTree.
+ * lado da barra de abas). O servidor guarda só o essencial, na aba TreeState da PLANILHA do
+ * usuário (uma linha): o progresso nunca se perde ao trocar de aparelho ou limpar o navegador.
+ * Nada aqui lê lançamentos: a saúde financeira (multiplicador) é calculada pelo cliente, que
+ * já tem orçamentos e lançamentos em memória (ver treeMultiplier_, JavaScript.html), e chega
+ * pronta em touchTree.
  *
  * Regras:
  *  - Dia com o app aberto vale 1 ponto; dia em que também houve lançamento vale 3.
@@ -4588,6 +4592,31 @@ function treeView_(s) {
   };
 }
 
+function treeParse_(raw) {
+  try { return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+}
+
+/**
+ * Estado guardado na aba TreeState (uma linha). Quem já tinha progresso nas propriedades do
+ * usuário (versão do Apps Script antes dessa aba) é migrado na primeira leitura: o estado
+ * antigo é copiado pra planilha e nunca mais lido de lá. Sem nada em lugar nenhum: null.
+ */
+function treeLoadState_() {
+  var rows = readAll_('TreeState');
+  if (rows.length) {
+    var fromSheet = treeParse_(rows[0].State);
+    if (fromSheet) return fromSheet;
+  }
+  return treeParse_(PropertiesService.getUserProperties().getProperty(TREE_STATE_KEY_));
+}
+
+function treeSaveState_(state) {
+  var rows = readAll_('TreeState');
+  var updates = { State: JSON.stringify(state), UpdatedAt: nowIso_() };
+  if (rows.length) updateRowById_('TreeState', rows[0].ID, updates);
+  else appendRow_('TreeState', updates);
+}
+
 /**
  * Registra que o app foi aberto hoje (e, com entry, que houve lançamento) e devolve o
  * estado da árvore. input = { today: 'YYYY-MM-DD' (dia do aparelho do usuário), mult: 1..2,
@@ -4602,18 +4631,15 @@ function touchTree(input) {
   if (input.mult !== undefined && input.mult !== null && isFinite(Number(input.mult))) {
     newMult = treeRound_(Math.min(2, Math.max(1, Number(input.mult))), 2);
   }
-  var props = PropertiesService.getUserProperties();
   var lock = LockService.getUserLock();
   lock.waitLock(10000);
   try {
-    var raw = props.getProperty(TREE_STATE_KEY_);
-    var s = null;
-    try { s = raw ? JSON.parse(raw) : null; } catch (e) { s = null; }
+    var s = treeLoadState_();
     if (!s || !treeValidYmd_(s.day)) s = treeNewState_(input.today, newMult === null ? 1 : newMult);
     else if (input.today > s.day) treeRollDay_(s, input.today, newMult === null ? 1 : newMult);
     else if (newMult !== null) s.mult = newMult; // mesmo dia (ou relógio do aparelho voltou): só atualiza a saúde do dia
     if (input.entry && s.base < 3) { s.base = 3; s.ed++; }
-    props.setProperty(TREE_STATE_KEY_, JSON.stringify(s));
+    treeSaveState_(s);
     return treeView_(s);
   } finally {
     lock.releaseLock();
