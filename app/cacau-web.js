@@ -1699,20 +1699,14 @@ function getBootstrapData() {
   // Meta de saldo do gráfico de projeção (ver getBalanceGoal, Plans.js) -- número em R$
   // ou null.
   var balanceGoal = null;
+  var balanceGoalName = '';
   try {
     balanceGoal = getBalanceGoal();
+    balanceGoalName = getBalanceGoalName();
   } catch (err) {
     balanceGoal = null;
+    balanceGoalName = '';
     errors.push('meta de saldo: ' + err.message);
-  }
-  // Filtro de abertura do card de Orçamentos ('rolling' ou 'current', ver
-  // getBudgetViewPreference) -- preferência de UI, não dado financeiro.
-  var budgetViewPreference = 'rolling';
-  try {
-    budgetViewPreference = getBudgetViewPreference();
-  } catch (err) {
-    budgetViewPreference = 'rolling';
-    errors.push('filtro de orçamentos: ' + err.message);
   }
   // Rede de segurança: google.script.run devolve null pro cliente se QUALQUER ponto do
   // retorno tiver um Date (ou outro valor não serializável) -- e aí o app inteiro falha
@@ -1724,7 +1718,7 @@ function getBootstrapData() {
     counterpartyMappings: counterpartyMappings, counterpartyAliases: counterpartyAliases, budgetSuggestionDismissals: budgetSuggestionDismissals,
     plans: plans, people: people, refundShares: refundShares, refundLinks: refundLinks,
     forecastCycleIgnores: forecastCycleIgnores, forecastSuggestionDismissals: forecastSuggestionDismissals,
-    balanceGoal: balanceGoal, budgetViewPreference: budgetViewPreference,
+    balanceGoal: balanceGoal, balanceGoalName: balanceGoalName,
     // Seções que falharam ao carregar. Cada try/catch acima devolve vazio pra uma falha
     // não derrubar as outras — mas devolver vazio EM SILÊNCIO já enganou de um jeito
     // caro: quando readAll_('Transactions') estourava, todo saldo de conta passava a
@@ -1734,28 +1728,6 @@ function getBootstrapData() {
   }));
 }
 
-/**
- * Filtro com que o card de Orçamentos (Início) ABRE: 'rolling' ("Últimos dias", o padrão)
- * ou 'current' (o mês atual, seja qual for -- por isso não guarda "2026-09", que viraria
- * um mês passado no mês seguinte). Um mês passado nunca é candidato a abertura, então o
- * cliente simplesmente não grava nada quando o usuário escolhe um (ver
- * budgetViewPreferenceToSave_, JavaScript.html).
- *
- * Fica nas propriedades do USUÁRIO (PropertiesService), não numa aba da planilha nem em
- * localStorage: é preferência de interface, não dado financeiro; vive no servidor, então
- * vale nos dois aparelhos (o localStorage do iframe do Apps Script não é confiável pra
- * isso) e lê em milissegundos no bootstrap, sem mais uma leitura de aba.
- */
-var BUDGET_VIEW_PREFERENCE_KEY_ = 'BUDGET_VIEW_PREFERENCE';
-function getBudgetViewPreference() {
-  var value = PropertiesService.getUserProperties().getProperty(BUDGET_VIEW_PREFERENCE_KEY_);
-  return value === 'current' ? 'current' : 'rolling';
-}
-function setBudgetViewPreference(value) {
-  if (value !== 'rolling' && value !== 'current') throw new Error('Filtro de orçamentos inválido.');
-  PropertiesService.getUserProperties().setProperty(BUDGET_VIEW_PREFERENCE_KEY_, value);
-  return value;
-}
 
 // ===== Dashboard.js =====
 /** Agregações para a tela inicial. */
@@ -2971,15 +2943,24 @@ function getBalanceGoal() {
   return amount > 0 ? amount : null;
 }
 
-/** Cria a meta ou troca o valor da que já existe (upsert -- nunca acumula linha). */
+/** Nome opcional da meta ("Reserva de emergência"); '' quando não há meta ou nome. */
+function getBalanceGoalName() {
+  var rows = readAll_('BalanceGoal');
+  if (!rows.length || !(Number(rows[0].Amount) > 0)) return '';
+  return String(rows[0].Name || '').trim();
+}
+
+/** Cria a meta ou troca o valor (e o nome) da que já existe (upsert -- nunca acumula linha).
+ *  input = { amount, name? }: name é opcional, aparado e limitado a 40 caracteres. */
 function setBalanceGoal(input) {
   var amount = Number(input && input.amount);
   if (!amount || amount <= 0) throw new Error('Meta precisa ser maior que zero.');
+  var name = String((input && input.name) || '').trim().slice(0, 40);
   var rows = readAll_('BalanceGoal');
   if (rows.length) {
-    updateRowById_('BalanceGoal', rows[0].ID, { Amount: amount, UpdatedAt: nowIso_() });
+    updateRowById_('BalanceGoal', rows[0].ID, { Amount: amount, Name: name, UpdatedAt: nowIso_() });
   } else {
-    appendRow_('BalanceGoal', { Amount: amount, UpdatedAt: nowIso_() });
+    appendRow_('BalanceGoal', { Amount: amount, Name: name, UpdatedAt: nowIso_() });
   }
   return amount;
 }
@@ -3785,7 +3766,7 @@ var SCHEMA = {
   // (uma meta só, só o valor -- sem data). Vive na planilha (não em localStorage) pra
   // sincronizar entre celular e computador. Se "atingida" ou não é sempre DERIVADO do
   // saldo de hoje, nunca gravado aqui.
-  BalanceGoal: ['ID', 'Amount', 'UpdatedAt'],
+  BalanceGoal: ['ID', 'Amount', 'UpdatedAt', 'Name'],
   // Progresso do cacaueiro (ver Tree.js): no máximo UMA linha, com o estado em JSON na coluna
   // State. Vive na planilha (não nas propriedades do usuário nem no navegador) pra nunca se
   // perder ao trocar de aparelho, limpar o navegador ou recriar o acesso.
@@ -4697,7 +4678,6 @@ return {
   removeForecast: (typeof removeForecast === 'function' ? removeForecast : function () { throw new Error('"removeForecast" não existe na versão web.'); }),
   removePlan: (typeof removePlan === 'function' ? removePlan : function () { throw new Error('"removePlan" não existe na versão web.'); }),
   setBalanceGoal: (typeof setBalanceGoal === 'function' ? setBalanceGoal : function () { throw new Error('"setBalanceGoal" não existe na versão web.'); }),
-  setBudgetViewPreference: (typeof setBudgetViewPreference === 'function' ? setBudgetViewPreference : function () { throw new Error('"setBudgetViewPreference" não existe na versão web.'); }),
   setRefundLinksForActiveTransaction: (typeof setRefundLinksForActiveTransaction === 'function' ? setRefundLinksForActiveTransaction : function () { throw new Error('"setRefundLinksForActiveTransaction" não existe na versão web.'); }),
   setRefundSharesForPassiveTransaction: (typeof setRefundSharesForPassiveTransaction === 'function' ? setRefundSharesForPassiveTransaction : function () { throw new Error('"setRefundSharesForPassiveTransaction" não existe na versão web.'); }),
   touchTree: (typeof touchTree === 'function' ? touchTree : function () { throw new Error('"touchTree" não existe na versão web.'); }),

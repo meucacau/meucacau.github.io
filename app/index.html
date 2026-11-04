@@ -171,7 +171,14 @@
   }
 
   /* Plano cujo mês já passou (ver renderBudgets): linha destacada + botão Excluir. */
-  .row.plan-past { background: color-mix(in srgb, var(--warning) 12%, transparent); }
+  /* O fundo passa 12px pra fora dos textos (o card tem 16px de respiro), com cantos arredondados. */
+  .row.plan-past {
+    background: color-mix(in srgb, var(--warning) 12%, transparent);
+    margin: 0 -12px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border-bottom-color: transparent;
+  }
   .plan-past-note { color: var(--warning); font-size: 13px; }
   .plan-past-delete { padding: 4px 10px; font-size: 13px; background: transparent; color: var(--warning); border: 1px solid var(--warning); border-radius: 999px; cursor: pointer; }
   .plan-past-delete.row-x-armed { color: var(--expense); border-color: var(--expense); }
@@ -1316,21 +1323,24 @@
   /* Círculos de ciclo (ver budgetCircleSeries_): um por ciclo FECHADO e o último é o ciclo em
      andamento -- um anel que enche conforme o gasto (--p, 0-100) na cor do status atual.
      Mesma linguagem das bolinhas dos recorrentes (.forecast-dot): 15px de diâmetro maiores
-     aqui (17px) pra caber o anel e a borda de compensação. Estouro 100% compensado ganha
+     aqui (16px) pra caber o anel e a borda de compensação. Estouro 100% compensado ganha
      uma borda VERDE grossa por dentro (inset), o centro continua vermelho. */
   .budget-circles-row { padding: 6px 0 8px; cursor: pointer; border-radius: 8px; }
   .budget-circles-row-empty { display: flex; align-items: center; }
-  .budget-circles-head { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
-  .budget-circles-head .budget-timebar-name { flex: 1 1 110px; min-width: 0; white-space: nowrap; }
-  .budget-circles-advice { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
-  .budget-circles-track { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  /* Nome | círculos | texto de aviso, tudo na mesma linha (como em Lançamentos recorrentes). Nome e aviso
+     crescem por igual, então os círculos ficam alinhados entre os orçamentos. Os círculos (12 x 16px + 3px =
+     225px) nunca encolhem: em tela estreita é o aviso que quebra pra baixo, ocupando a linha toda. */
+  .budget-circles-head { display: flex; align-items: center; gap: 4px 10px; flex-wrap: wrap; }
+  .budget-circles-head .budget-timebar-name { flex: 1 1 70px; min-width: 0; white-space: nowrap; }
+  .budget-circles-advice { flex: 1 1 130px; min-width: 0; font-size: 12px; color: var(--text-muted); }
+  .budget-circles-track { display: inline-flex; align-items: center; gap: 3px; flex: none; }
   .budget-circle {
     -webkit-appearance: none;
     appearance: none;
     display: block;
     box-sizing: border-box;
-    width: 17px;
-    height: 17px;
+    width: 16px;
+    height: 16px;
     padding: 0;
     margin: 0;
     border: none;
@@ -1352,13 +1362,23 @@
   .budget-plan-info { flex: 1 1 160px; min-width: 0; }
   /* Modal de orçamento. O tamanho NUNCA muda ao clicar/digitar: toda área que se atualiza
      (.budget-slot, a prévia, o interruptor do valor) tem altura reservada. */
-  .budget-cycle-capsule { display: inline-flex; align-items: center; height: 38px; margin-bottom: 4px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); overflow: hidden; }
-  .budget-cycle-capsule input { width: 56px; height: 100%; margin: 0; padding: 0 4px 0 16px; box-sizing: border-box; border: none; border-radius: 0; background: transparent; text-align: right; }
+  .budget-cycle-capsule { display: inline-flex; align-items: center; height: 56px; margin-bottom: 4px; border: 1px solid var(--border); border-radius: 28px; background: var(--surface); overflow: hidden; }
+  .budget-cycle-capsule input { width: 56px; height: 100%; margin: 0; padding: 0 4px 0 16px; box-sizing: border-box; border: none; border-radius: 0; background: transparent; text-align: right; font-size: 18px; }
   .budget-cycle-capsule input:focus { outline: none; }
-  .budget-cycle-capsule button { width: 100px; height: 100%; padding: 0 16px 0 4px; border-radius: 0; background: transparent; color: var(--text); text-align: left; }
+  /* Mostrador vertical (estilo relógio/iOS): 3 itens de 28px, o do meio inteiro e os vizinhos cortados e
+     esmaecidos pela máscara. Largura/altura fixas: trocar a unidade nunca muda o tamanho do menu. */
+  .budget-cycle-wheel { position: relative; flex: 0 0 auto; width: 112px; height: 100%; overflow: hidden; cursor: ns-resize; touch-action: none; outline: none; -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 30%, #000 70%, transparent 100%); mask-image: linear-gradient(to bottom, transparent 0, #000 30%, #000 70%, transparent 100%); }
+  .budget-wheel-item { position: absolute; left: 0; top: 14px; width: 100%; height: 28px; margin: 0; padding: 0 12px 0 6px; box-sizing: border-box; border: none; border-radius: 0; background: transparent; box-shadow: none; color: var(--text); font-size: 16px; line-height: 28px; text-align: left; white-space: nowrap; opacity: 0.4; cursor: pointer; }
+  .budget-wheel-item[data-o="0"] { opacity: 1; font-weight: 600; cursor: default; }
+  .budget-cycle-wheel:focus-visible { box-shadow: inset 0 0 0 2px var(--primary); border-radius: 0 28px 28px 0; }
   .budget-slot { display: flex; align-items: center; gap: 8px; min-height: 34px; font-size: 12px; line-height: 1.3; }
   .budget-slot > span { flex: 1 1 auto; min-width: 0; }
   .budget-slot-btn { flex: 0 0 auto; padding: 2px 10px; font-size: 11px; white-space: nowrap; }
+  /* Ciclo sugerido: frase + 3 botões (dias / semanas / meses) numa coluna de altura reservada. */
+  .budget-ideal { flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 6px; min-height: 60px; }
+  .budget-ideal-btns { display: flex; gap: 6px; }
+  .budget-ideal-btns .budget-slot-btn { flex: 1 1 0; min-width: 0; padding: 4px 6px; }
+  .budget-ideal-btns .budget-slot-btn.active, .budget-from-start.active { background: var(--primary); border-color: var(--primary); color: #fff; }
   .budget-typical { font-size: 12px; margin-top: 0; }
   .budget-value-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; min-height: 44px; }
   .budget-value-head > label:first-child { margin-bottom: 6px; }
@@ -1370,7 +1390,10 @@
   .budget-switch input:checked::after { transform: translateX(16px); }
   .budget-start-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
   .budget-start-step { flex: 0 0 auto; width: 38px; height: 38px; padding: 0; border-radius: 50%; font-size: 18px; line-height: 1; }
-  .budget-start-date { position: relative; flex: 1 1 auto; display: flex; align-items: center; justify-content: center; height: 38px; border: 1px solid var(--border); border-radius: 999px; font-size: 14px; color: var(--text); }
+  .budget-first-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 34px; }
+  .budget-first-head > label { margin-bottom: 0; }
+  .budget-from-start { flex: 0 0 auto; padding: 4px 12px; font-size: 12px; white-space: nowrap; }
+  .budget-start-date { position: relative; flex: 1 1 auto; display: flex; align-items: center; justify-content: center; height: 48px; padding: 0 12px; box-sizing: border-box; border: 1px solid var(--border); border-radius: 24px; font-size: 13px; line-height: 1.25; text-align: center; color: var(--text); }
   .budget-start-date input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; opacity: 0; cursor: pointer; }
   .budget-preview-slot { min-height: 56px; }
   #b-preview { min-height: 22px; display: flex; align-items: center; }
@@ -1652,7 +1675,7 @@
 
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=7ad3a37d68"></script>
+  <script src="cacau-web.js?v=7210f65725"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -1666,7 +1689,6 @@
     counterpartyMappings: [], // categoria lembrada por contraparte ("lembrar categoria")
     budgetSuggestionDismissals: [], // sugestões de orçamento descartadas nos últimos 30 dias (ver computeBudgetSuggestions_)
     plans: [], // eventos únicos e futuros pro gráfico de tendência de saldo (ver Plans.js/computeBalanceTrend_)
-    budgetViewPeriod: 'rolling', // 'rolling' = "Ciclo atual" (padrão) ou uma string 'YYYY-MM'; o valor inicial vem da preferência guardada (ver budgetViewPeriodFromPreference_)
     trendIncludeInvestments: false, // toggle "Incluir investimentos" da Projeção do saldo (ver computeBalanceTrend_)
     currentView: 'dashboard',
     txFilters: {},
@@ -1683,8 +1705,8 @@
     refundsFilterPersonId: '', // aba Reembolsos: '' = todas
     forecastCycleIgnores: [], // ciclos "ignorados" da linha de bolinhas de um recorrente (ver computeForecastCycleStatus_)
     forecastSuggestionDismissals: [], // "Sugestão: R$X Aplicar" descartada de um recorrente (ver forecastRowHtml)
-    budgetViewPreference: 'rolling', // como o card de Orçamentos abre ('rolling' | 'current'); editável em Configurações
     balanceGoal: null, // meta de saldo do gráfico de projeção, em R$ (null = sem meta; ver computeBalanceTrend_)
+    balanceGoalName: '', // nome opcional da meta ('' = sem nome)
     counterpartyAliases: [] // nome de estabelecimento lembrado pro texto cru de "Pago a"/"Recebido de" (ver forecastCounterpartyNames_)
   };
 
@@ -2042,9 +2064,9 @@
     var existing = document.getElementById('shared-tooltip');
     if (existing) existing.remove();
   }
-  // Clique/toque num elemento com tooltip: mostra por 3 s (ou até o usuário clicar em outra
+  // Clique/toque num elemento com tooltip: mostra por 15 s (ou até o usuário clicar em outra
   // coisa). Tooltips com regra própria (linhas de lista, dia do calendário, gráficos) não usam.
-  var TOOLTIP_TAP_MS_ = 3000;
+  var TOOLTIP_TAP_MS_ = 15000;
   var tooltipAutoHideTimer_ = null;
   function showTooltipForTap_(anchorEl, text, opts) {
     showTooltip_(anchorEl, text, opts);
@@ -2086,7 +2108,7 @@
    * outro toque em qualquer lugar (ou de novo no mesmo elemento) esconde — reaproveita
    * dismissOnOutsideClick, guardando só UM listener de cada vez (stopTooltipOutsideClick_)
    * pra não empilhar um novo a cada toque. O tooltip aberto por clique/toque some sozinho
-   * em 3 s (showTooltipForTap_).
+   * em 15 s (showTooltipForTap_).
    */
   var stopTooltipOutsideClick_ = null;
   /** delayMs (opcional, 0 = imediato como sempre foi): usado pelo "×" das listas, que
@@ -2108,7 +2130,7 @@
         if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
         hideTooltip_();
       });
-      // Clicar também mostra (e some em 3 s), pra quem clica sem ter passado o mouse antes.
+      // Clicar também mostra (e some em 15 s), pra quem clica sem ter passado o mouse antes.
       el.addEventListener('click', function () {
         if (!tipText_()) return;
         showTooltipForTap_(el, tipText_(), rich);
@@ -3877,13 +3899,6 @@
     STATE.accounts = reapplyPendingEdits_(preserveOptimisticTempEntries_(STATE.accounts, data.accounts), pendingAccountEdits_);
     STATE.categories = reapplyPendingEdits_(preserveOptimisticTempEntries_(STATE.categories, data.categories), pendingCategoryEdits_);
     STATE.dashboard = data.dashboard;
-    STATE.budgetViewPreference = data.budgetViewPreference === 'current' ? 'current' : 'rolling'; // mostrado em Configurações
-    // Filtro de abertura do card de Orçamentos: só na PRIMEIRA carga -- os refreshes que
-    // vêm depois de cada mutação não podem desfazer o que o usuário escolheu no dropdown
-    // desde então (ver budgetViewPeriodFromPreference_).
-    if (!STATE.bootstrapped) {
-      STATE.budgetViewPeriod = budgetViewPeriodFromPreference_(data.budgetViewPreference, data.dashboard && data.dashboard.month);
-    }
     STATE.usage = data.usage || { accounts: {}, categories: {} };
 
     var freshTransactions = reapplyPendingEdits_(data.transactions || [], pendingTxEdits_);
@@ -3926,6 +3941,7 @@
     // local otimista vence o do servidor -- um refresh que já estava a caminho antes da
     // gravação terminar devolveria o valor ANTIGO e faria a linha piscar de volta.
     STATE.balanceGoal = pendingBalanceGoal_ ? pendingBalanceGoal_.value : (data.balanceGoal || null);
+    STATE.balanceGoalName = pendingBalanceGoal_ ? pendingBalanceGoal_.name : (data.balanceGoalName || '');
     STATE.plans = reapplyPendingEdits_(preserveOptimisticTempEntries_(STATE.plans, data.plans || []), pendingPlanEdits_);
     STATE.people = reapplyPendingEdits_(preserveOptimisticTempEntries_(STATE.people, data.people || []), pendingPersonEdits_);
     STATE.refundShares = preserveOptimisticTempEntries_(STATE.refundShares, data.refundShares || []);
@@ -4210,25 +4226,6 @@
     document.querySelectorAll('.time-pin[data-tooltip]').forEach(wireTooltipTrigger_);
     placeTimePinLabels_(root);
     document.querySelectorAll('.amount-expense[data-tooltip], .amount-income[data-tooltip], .tx-flag-icon[data-tooltip]').forEach(wireTooltipTrigger_);
-
-    var periodBtn = document.getElementById('budget-period-btn');
-    if (periodBtn) {
-      periodBtn.onclick = function () {
-        var currentPeriod = STATE.budgetViewPeriod;
-        var monthOpts = budgetMonthOptions_(d.month);
-        if (currentPeriod !== 'rolling' && monthOpts.indexOf(currentPeriod) === -1) currentPeriod = 'rolling';
-        var options = [{ value: 'rolling', label: 'Ciclo atual', selected: currentPeriod === 'rolling' }].concat(
-          monthOpts.slice().reverse().map(function (ym) {
-            return { value: ym, label: fmtMonthYear(ym), selected: currentPeriod === ym };
-          })
-        );
-        openDropdownMenu_(periodBtn, options, function (value) {
-          STATE.budgetViewPeriod = value;
-          saveBudgetViewPreference_(budgetViewPreferenceToSave_(value, d.month));
-          render();
-        });
-      };
-    }
 
     setupBudgetBarMenus_(root);
 
@@ -8157,22 +8154,32 @@
     return rounded > 0 ? { amount: rounded, cycles: sums.length, p75: p75 } : null;
   }
   /**
-   * Ciclo ideal: soma os lançamentos das categorias escolhidas (precisa de 10 ou mais) e
-   * olha o intervalo médio entre lançamentos consecutivos (primeiro ao último ÷ (n-1)),
-   * arredondado pra cima em dias e convertido em dia / semana / mês: menos de 7 dias = N
-   * dias; até 3 semanas = N semanas; daí em diante = N meses (28 a 30 dias = 1 mês).
-   * Devolve { unit, count, days, launches } ou null. spends = [{ d }].
+   * Ciclo sugerido: junta os lançamentos de despesa das categorias escolhidas (precisa de 10 ou
+   * mais), ordena por data e olha JANELAS DESLIZANTES de 10 lançamentos seguidos (25 lançamentos
+   * = 16 janelas). A duração de cada janela é o nº de dias do 1º ao último lançamento dela
+   * (mínimo 1) e a mediana das durações é o ciclo sugerido, oferecido em dias, semanas e meses,
+   * cada um arredondado PRA CIMA a partir da mediana. spends = [{ d }].
+   * Devolve { launches, windows, median, days, weeks, months } ou null.
    */
   function budgetIdealCycle_(spends) {
-    if (!spends || spends.length < BUDGET_IDEAL_MIN_LAUNCHES_) return null;
+    var size = BUDGET_IDEAL_MIN_LAUNCHES_;
+    if (!spends || spends.length < size) return null;
     var dates = spends.map(function (s) { return s.d; }).sort();
-    var span = daysBetweenYmd_(dates[0], dates[dates.length - 1]);
-    var days = Math.max(1, Math.ceil(roundCents_(span / (dates.length - 1))));
-    var out = { days: days, launches: dates.length };
-    if (days < 7) { out.unit = 'day'; out.count = days; }
-    else if (Math.ceil(days / 7) < 4) { out.unit = 'week'; out.count = Math.ceil(days / 7); }
-    else { out.unit = 'month'; out.count = Math.max(1, Math.ceil(days / 30)); }
-    return out;
+    var durations = [];
+    for (var i = 0; i + size <= dates.length; i++) {
+      durations.push(Math.max(1, daysBetweenYmd_(dates[i], dates[i + size - 1])));
+    }
+    var median = medianOfNumbers_(durations);
+    return {
+      launches: dates.length, windows: durations.length, median: median,
+      days: Math.max(1, Math.ceil(median)), weeks: Math.max(1, Math.ceil(median / 7)), months: Math.max(1, Math.ceil(median / 30))
+    };
+  }
+  /** Início do histórico das categorias: data do lançamento mais antigo (spends = [{ d }]) ou null. */
+  function budgetOldestSpendYmd_(spends) {
+    var oldest = null;
+    (spends || []).forEach(function (s) { if (s.d && (!oldest || s.d < oldest)) oldest = s.d; });
+    return oldest;
   }
   /** Início padrão de um orçamento novo: começo do ciclo em andamento (mês: dia 1; semana: domingo; dia: hoje). */
   function budgetDefaultStart_(unit, todayStr) {
@@ -8248,7 +8255,7 @@
   function budgetCirclesTrackHtml_(series) {
     return '<span class="budget-circles-track">' + series.circles.map(budgetCircleHtml_).join('') + '</span>';
   }
-  /** Clique/toque num círculo: tooltip por 3 s (showTooltipForTap_) ou até clicar fora. O clique
+  /** Clique/toque num círculo: tooltip por 15 s (showTooltipForTap_) ou até clicar fora. O clique
    *  nunca sobe pra linha (que abriria o Extrato/o modal de editar). Chamada de novo a cada
    *  render (os elementos são recriados). */
   function wireBudgetCircles_(root) {
@@ -8548,32 +8555,17 @@
     return escapeHtml(text);
   }
   /**
-   * Mesmo intervalo de datas que a barra do orçamento em Início está mostrando AGORA
-   * (ver STATE.budgetViewPeriod/buildBudgetTimelineHtml) — o CICLO atual do orçamento
-   * ("Ciclo atual") ou um mês específico — pra "Ver lançamentos" abrir o Extrato com uma
-   * soma que bate com o valor exibido na barra que foi clicada.
+   * Mesmo intervalo de datas que o último círculo do orçamento em Início está mostrando: o CICLO
+   * atual dele (cada orçamento segue o próprio ciclo; não há mais seletor de período no card) --
+   * pra "Ver lançamentos" abrir o Extrato com uma soma que bate com o valor exibido.
    */
   function budgetProgressDateRange_(b) {
-    var period = budgetSelectedPeriod_();
-    if (period === 'rolling') {
-      var cycle = budgetCycleForDate_(b, todayYmd());
-      return { fromYmd: cycle.fromYmd, toYmd: cycle.toYmd };
-    }
-    return budgetMonthRange_(period);
+    var cycle = budgetCycleForDate_(b, todayYmd());
+    return { fromYmd: cycle.fromYmd, toYmd: cycle.toYmd };
   }
   /** [fromYmd,toYmd] do mês de calendário inteiro (ym = 'YYYY-MM'). */
   function budgetMonthRange_(ym) {
     return { fromYmd: ym + '-01', toYmd: lastDayOfYm_(ym) };
-  }
-  /** Período que o seletor do card de Orçamentos (Início) está mostrando AGORA: 'rolling'
-   *  ("Ciclo atual" -- o nome interno ficou, é o valor guardado na preferência do servidor)
-   *  ou 'YYYY-MM'. Um mês que deixou de ser uma das opções (ex: o único lançamento dele foi
-   *  removido) cai de volta em 'rolling'. Uma fonte só pra barra, o "Ver lançamentos" e o
-   *  resumo do menu de segurar, que precisam sempre concordar. */
-  function budgetSelectedPeriod_() {
-    var period = STATE.budgetViewPeriod;
-    if (period !== 'rolling' && budgetMonthOptions_(STATE.dashboard.month).indexOf(period) === -1) return 'rolling';
-    return period;
   }
   /** "Ver lançamentos" de um orçamento (ou da barra "Não orçamentado", ver
    *  budgetWithEffectiveCategories_): Extrato filtrado pelas categorias dele + o mesmo
@@ -8591,16 +8583,12 @@
     delete scrollPositions_.transactions; // chega com filtro novo — não faz sentido herdar scroll de uma navegação anterior
     render();
   }
-  /** Progresso (spent/limit/status) do orçamento b no período que a tela está exibindo
-   *  agora (STATE.budgetViewPeriod) -- sob demanda pra UM orçamento (usada por
-   *  setupBudgetBarMenus_, que precisa recalcular na hora de abrir o menu -- pode ter
-   *  passado tempo/mudado STATE.allTransactions desde o render da barra). null =
-   *  Automático sem histórico suficiente. */
+  /** Progresso (spent/limit/status) do ciclo atual do orçamento b -- sob demanda pra UM orçamento
+   *  (usada por setupBudgetBarMenus_, que precisa recalcular na hora de abrir o menu -- pode ter
+   *  passado tempo/mudado STATE.allTransactions desde o render). null = Automático sem histórico
+   *  suficiente. */
   function budgetProgressForCurrentPeriod_(b) {
-    var period = budgetSelectedPeriod_();
-    if (period === 'rolling') return computeBudgetCycleProgress_(b);
-    var referenceFraction = period === STATE.dashboard.month ? computeMonthPinsAndReference_(period).referenceFraction : null;
-    return computeBudgetMonthProgress_(b, period, referenceFraction);
+    return computeBudgetCycleProgress_(b);
   }
   /** Dispensa o plano de recuperação de estouro (ver budgetRecoveryState_): os ciclos que
    *  começam antes do ciclo ATUAL deixam de entrar na conta do déficit, e o orçamento
@@ -8642,22 +8630,19 @@
     });
     return card;
   }
-  /** Card de resumo de uma barra (Manual, Automático ou "Não orçamentado") pro período que
-   *  a tela mostra: gasto (clicável, abre o Extrato), limite normal (por ciclo, ou no mês
-   *  numa visão de mês) e -- com plano de recuperação ativo -- o teto de economia e até
-   *  quando ele vale. progress null = Automático sem histórico ainda. */
-  function budgetBarSummaryCard_(b, progress, period, closeMenu) {
+  /** Card de resumo de uma barra (Manual, Automático ou "Não orçamentado") pro ciclo atual: gasto
+   *  (clicável, abre o Extrato), limite normal do ciclo e -- com plano de recuperação ativo -- o teto
+   *  de economia e até quando ele vale. progress null = Automático sem histórico ainda. */
+  function budgetBarSummaryCard_(b, progress, closeMenu) {
     var title = (b.isUnbudgetedCatchAll || b.periodMode === 'auto') ? 'Automático' : 'Manual';
     if (!progress) return buildBudgetMenuSummaryCard_(title, [{ text: 'Histórico insuficiente' }]);
     var spec = budgetCycleSpecOf_(budgetWithEffectiveCategories_(b));
-    var where = period === 'rolling'
-      ? 'neste ciclo (' + fmtDateShort_(progress.cycle.fromYmd) + ' a ' + fmtDateShort_(progress.cycle.toYmd) + ')'
-      : 'em ' + fmtMonthYear(period);
+    var where = 'neste ciclo (' + fmtDateShort_(progress.cycle.fromYmd) + ' a ' + fmtDateShort_(progress.cycle.toYmd) + ')';
     var recovery = progress.recovery && progress.recovery.active ? progress.recovery : null;
     var rows = [
       { text: fmtMoneyNoCents_(progress.spent) + ' gastos ' + where, onClick: function () { closeMenu(); viewBudgetTransactions_(b); } },
       { text: (title === 'Automático' ? 'Limite automático' : 'Limite manual') + ' de ' + fmtMoneyNoCents_(recovery ? recovery.normalLimit : progress.limit) +
-        (period === 'rolling' ? ' · ciclo de ' + budgetCycleLabel_(spec) : ' no mês') }
+        ' · ciclo de ' + budgetCycleLabel_(spec) }
     ];
     if (recovery) {
       rows.push({ text: 'Teto de economia de ' + fmtMoneyNoCents_(progress.limit) + ' (' + Math.round((1 - BUDGET_RECOVERY_MAX_SAVING_) * 100) + '%)' });
@@ -8749,7 +8734,7 @@
         var b = findBudget_(budgetId);
         if (!b) return null;
         var progress = budgetProgressForCurrentPeriod_(b);
-        var items = [budgetBarSummaryCard_(b, progress, budgetSelectedPeriod_(), hold.close)];
+        var items = [budgetBarSummaryCard_(b, progress, hold.close)];
         if (progress && progress.recovery && progress.recovery.active) {
           items.push(budgetMenuCapsule_('Dispensar plano', function () { hold.close(); dismissBudgetRecoveryClient_(b); }));
         }
@@ -8777,7 +8762,7 @@
       var catchAllId = barEl.dataset.budgetCatchall;
       attachBudgetBarMenu_(barEl, function (hold) {
         var b = findBudget_(catchAllId);
-        return b ? [budgetBarSummaryCard_(b, budgetProgressForCurrentPeriod_(b), budgetSelectedPeriod_(), hold.close)] : null;
+        return b ? [budgetBarSummaryCard_(b, budgetProgressForCurrentPeriod_(b), hold.close)] : null;
       }, function () {
         var b = findBudget_(catchAllId);
         if (b) viewBudgetTransactions_(b);
@@ -8798,42 +8783,6 @@
       ratio = limit > 0 ? spent / limit : (spent > 0 ? Infinity : 0);
     }
     return { spent: spent, limit: limit, status: statusForRatio_(ratio) };
-  }
-  /**
-   * Filtro com que o card de Orçamentos ABRE, a partir da preferência guardada no servidor
-   * (ver getBudgetViewPreference, Code.js): 'current' = o mês atual (currentMonth, o mesmo
-   * "mês atual" que buildBudgetTimelineHtml usa pros pinos); qualquer outra coisa (inclusive
-   * nunca ter escolhido nada, ou sem dashboard ainda) = 'rolling' ("Ciclo atual").
-   */
-  function budgetViewPeriodFromPreference_(preference, currentMonth) {
-    return preference === 'current' && currentMonth ? currentMonth : 'rolling';
-  }
-  /**
-   * O que guardar quando o usuário escolhe `value` no dropdown: 'rolling' ("Ciclo atual"),
-   * 'current' (o mês atual -- simbólico, pra abrir no mês atual DE QUANDO o app for aberto,
-   * não no de hoje pra sempre) ou null pra um mês PASSADO. Só os dois primeiros são
-   * candidatos a abertura (pedido do usuário), então olhar um mês passado é uma consulta
-   * passageira: não sobrescreve o que estava guardado (o app volta a abrir no último dos
-   * dois que ele deixou).
-   */
-  function budgetViewPreferenceToSave_(value, currentMonth) {
-    if (value === 'rolling') return 'rolling';
-    if (value === currentMonth) return 'current';
-    return null;
-  }
-  // Gravações em fila (uma depois da outra): google.script.run pode executar chamadas
-  // concorrentes fora de ordem, e trocar o filtro rápido não pode deixar o servidor com o
-  // valor do PENULTIMO clique.
-  var budgetViewSaveChain_ = Promise.resolve();
-  function saveBudgetViewPreference_(preference) {
-    if (!preference) return;
-    budgetViewSaveChain_ = budgetViewSaveChain_.then(function () {
-      return run('setBudgetViewPreference', preference);
-    }).catch(function () { /* só uma preferência de tela: se não salvar, apenas não lembra na próxima abertura */ });
-  }
-  /** "R$ 383 de R$ 551" -- gasto e limite (já escalado pro mês) da barra de um mês PASSADO. */
-  function budgetSpentOfLimitText_(progress) {
-    return fmtMoneyNoCents_(progress.spent) + ' de ' + fmtMoneyNoCents_(progress.limit);
   }
   /** Pinos de Hoje/Pendência mais antiga + a fração de referência, pro mês de calendário informado. */
   function computeMonthPinsAndReference_(targetYm) {
@@ -8897,14 +8846,6 @@
       window.addEventListener('resize', function () { placeTimePinLabels_(document); });
     }
   }
-  /** Meses (YYYY-MM) com pelo menos um lançamento, + o mês atual, em ordem crescente. */
-  function budgetMonthOptions_(currentMonth) {
-    var months = {};
-    STATE.allTransactions.forEach(function (t) { if (t.date) months[t.date.slice(0, 7)] = true; });
-    months[currentMonth] = true;
-    return Object.keys(months).sort();
-  }
-
   /**
    * "color:...;filter:drop-shadow(...)" pro texto (E ícone) de uma barra de orçamento
    * -- regra fixa por TEMA (não mais adaptativa por região/preenchimento, pedido
@@ -8930,18 +8871,12 @@
   }
 
   /**
-   * Card de orçamento do Dashboard: um seletor de período ("Ciclo atual", padrão, ou um
-   * mês específico) seguido das barras. Em "Ciclo atual" cada orçamento mostra o SEU ciclo
-   * (dia/semana/mês, ver budgetCycleForDate_), sem pinos. Num mês específico, todas as
-   * barras representam o mês inteiro (dia 1 a último dia) com o limite proporcional ao
-   * tamanho do mês; os pinos Hoje/Pendência só aparecem se o mês escolhido for o atual.
-   *
-   * "Ciclo atual" e o mês ATUAL (ainda em andamento) mostram o texto de aviso completo
-   * (ver computeBudgetRangeAdvisory_) no lugar do valor gasto/limite cru, dentro da
-   * própria barra (extremidade direita) -- um mês PASSADO já fechado não tem mais o que
-   * "evitar", então mostra só "R$ gasto de R$ limite" (ver budgetSpentOfLimitText_).
-   * Com plano de recuperação ativo (ver budgetRecoveryState_) a barra usa o teto de
-   * economia e uma linha logo abaixo diz até quando.
+   * Card de orçamento do Dashboard: sem seletor de período -- cada orçamento é uma linha de
+   * círculos do PRÓPRIO ciclo (ver budgetCircleSeries_), com o texto de aviso (ver
+   * computeBudgetRangeAdvisory_) à direita do último círculo (quebra pra baixo em tela
+   * estreita). Com plano de recuperação ativo (ver budgetRecoveryState_) o círculo usa o teto
+   * de economia e uma linha logo abaixo diz até quando. "Não orçamentado" e as sugestões de
+   * orçamento novo continuam em barras.
    */
   function buildBudgetTimelineHtml(d) {
     var activeBudgets = STATE.budgets.filter(function (b) { return !b.archived && !b.isUnbudgetedCatchAll; }).sort(byBudgetCategoryNamePt_);
@@ -8949,33 +8884,13 @@
     // sem NENHUM orçamento de verdade ainda, contanto que haja pelo menos 1 sugestão.
     var newBudgetSuggestions = computeBudgetSuggestions_();
 
-    var period = budgetSelectedPeriod_();
-    var periodLabel = period === 'rolling' ? 'Ciclo atual' : fmtMonthYear(period);
-    var selectorHtml = '<button type="button" class="capsule" id="budget-period-btn">' + escapeHtml(periodLabel) + ' ▾</button>';
-
-    var isCurrentMonth = period !== 'rolling' && period === d.month;
-    var pins = isCurrentMonth ? computeMonthPinsAndReference_(period) : null;
-    var referenceFraction = isCurrentMonth ? pins.referenceFraction : null;
-
-    // Uma barra por orçamento (e a "Não orçamentado", um Automático mensal sobre as
-    // categorias sem orçamento real) segue o seletor do mesmo jeito: o ciclo próprio de
-    // cada um em "Ciclo atual", o mês inteiro num mês escolhido. null = Automático sem
-    // histórico suficiente (mediana de pelo menos 3 meses/semanas fechados).
-    function progressOf_(b) {
-      return period === 'rolling' ? computeBudgetCycleProgress_(b) : computeBudgetMonthProgress_(b, period, referenceFraction);
-    }
+    // Cada orçamento segue o PRÓPRIO ciclo (sem seletor de período no card): uma linha de círculos com o
+    // texto de aviso à direita do último. null = Automático sem histórico suficiente (mediana de pelo
+    // menos 3 meses/semanas fechados).
+    function progressOf_(b) { return computeBudgetCycleProgress_(b); }
     function adviceHtmlOf_(b, progress) {
       var eff = budgetWithEffectiveCategories_(b);
-      if (period === 'rolling') {
-        return budgetAdvisoryHtml_(computeBudgetRangeAdvisory_(eff, progress.cycle.fromYmd, progress.cycle.toYmd, progress, true, progress.cycle.toYmd));
-      }
-      if (isCurrentMonth) {
-        var range = budgetMonthRange_(period);
-        return budgetAdvisoryHtml_(computeBudgetRangeAdvisory_(eff, range.fromYmd, range.toYmd, progress, true));
-      }
-      // Mês PASSADO: "R$ gasto de R$ limite" (pedido explícito do usuário, ver
-      // budgetSpentOfLimitText_) -- o mesmo número que o popover de segurar a barra traz.
-      return escapeHtml(budgetSpentOfLimitText_(progress));
+      return budgetAdvisoryHtml_(computeBudgetRangeAdvisory_(eff, progress.cycle.fromYmd, progress.cycle.toYmd, progress, true, progress.cycle.toYmd));
     }
     function recoveryNoteHtmlOf_(progress) {
       return progress.recovery && progress.recovery.active
@@ -8992,26 +8907,23 @@
     if (!activeBudgets.length && !newBudgetSuggestions.length && !showCatchAll) return '';
 
     // Cada orçamento é uma linha de círculos (ver budgetCircleSeries_): um por ciclo fechado e o
-    // último é o ciclo em andamento. Num mês passado do seletor a série termina nesse mês.
-    var circleRefYmd_ = period === 'rolling' ? todayYmd() : (lastDayOfYm_(period) < todayYmd() ? lastDayOfYm_(period) : todayYmd());
+    // último é o ciclo em andamento; o texto de aviso fica À DIREITA do último círculo (como em
+    // Lançamentos recorrentes) e, em tela estreita, quebra pra baixo -- os 12 círculos sempre cabem.
     var barsHtml = activeBudgets.map(function (b) {
       var progress = progressOf_(b);
-      var series = progress ? budgetCircleSeries_(b, { refYmd: circleRefYmd_ }) : null;
+      var series = progress ? budgetCircleSeries_(b, {}) : null;
       if (!progress || !series) {
         return '<div class="budget-circles-row budget-circles-row-empty" data-budget-bar="' + b.id + '">' +
           '<span class="budget-timebar-name" style="flex:1">' + budgetIconHtml_(b) + escapeHtml(b.categoryName) + '</span>' +
           '<span class="muted" style="font-size:12px">Histórico insuficiente</span>' +
         '</div>';
       }
-      // No mês ATUAL do seletor o círculo em andamento segue o ritmo (mesma cor que a barra tinha).
-      var lastCircle = series.circles[series.circles.length - 1];
-      if (lastCircle.partial && period !== 'rolling') lastCircle.status = progress.status;
       return '<div class="budget-circles-row" data-budget-bar="' + b.id + '">' +
         '<div class="budget-circles-head">' +
           '<span class="budget-timebar-name">' + budgetIconHtml_(b) + escapeHtml(b.categoryName) + '</span>' +
           budgetCirclesTrackHtml_(series) +
+          '<div class="budget-circles-advice">' + adviceHtmlOf_(b, progress) + '</div>' +
         '</div>' +
-        '<div class="budget-circles-advice">' + adviceHtmlOf_(b, progress) + '</div>' +
       '</div>' + recoveryNoteHtmlOf_(progress);
     }).join('');
 
@@ -9045,11 +8957,7 @@
       '</div>';
 
     return '<div class="card">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
-        '<h2 style="margin-bottom:0">Orçamentos</h2>' +
-        selectorHtml +
-      '</div>' +
-      (pins ? '<div class="budget-timeline-header">' + pins.pinsHtml + '</div>' : '') +
+      '<h2 style="margin-bottom:10px">Orçamentos</h2>' +
       barsHtml + newSuggestionsHtml + catchAllHtml +
     '</div>';
   }
@@ -9297,7 +9205,13 @@
     if (nextProjectedBalance !== null && nextProjectedBalance !== undefined && Math.round(nextProjectedBalance * 100) >= goalCents) return 'almost';
     return 'active';
   }
-  function balanceGoalLabelText_(status) {
+  function balanceGoalLabelText_(status, name) {
+    // Com nome, o nome ocupa o lugar de "Meta" ("Casa nova - quase lá!", "Casa nova atingida!").
+    if (name) {
+      if (status === 'reached') return name + ' atingida!';
+      if (status === 'almost') return name + ' - quase lá!';
+      return name;
+    }
     if (status === 'reached') return 'Meta atingida!';
     if (status === 'almost') return 'Meta atual - quase lá!';
     return 'Meta atual';
@@ -9311,20 +9225,20 @@
     '<path d="m22 13-.82-.33c-.86-.34-1.82.2-1.98 1.11c-.11.7-.72 1.22-1.43 1.22H17"/>' +
     '<path d="m11 2 .33.82c.34.86-.2 1.82-1.11 1.98C9.52 4.9 9 5.52 9 6.23V7"/>' +
     '<path d="M11 13c1.93 1.93 2.83 4.17 2 5-.83.83-3.07-.07-5-2-1.93-1.93-2.83-4.17-2-5 .83-.83 3.07.07 5 2Z"/></svg>';
-  function balanceGoalLabelHtml_(status) {
-    var text = escapeHtml(balanceGoalLabelText_(status));
+  function balanceGoalLabelHtml_(status, name) {
+    var text = escapeHtml(balanceGoalLabelText_(status, name));
     return status === 'reached' ? BALANCE_GOAL_REACHED_ICON_ + text : text;
   }
   /** Conteúdo do hover no rótulo da meta -- mesma forma do hover das linhas de "X meses
    *  de gasto médio" (valor em cima, detalhe em itálico menor embaixo). "Faltam" arredonda
    *  pra CIMA e "acima da meta" pra BAIXO, pra nunca prometer mais nem menos do que é. */
-  function buildBalanceGoalTooltipHtml_(goal, currentBalance) {
+  function buildBalanceGoalTooltipHtml_(goal, currentBalance, name) {
     var diff = goal - currentBalance;
     var detail;
     if (diff > 0) detail = 'Faltam ' + fmtMoneyNoCents_(Math.ceil(diff));
     else if (Math.floor(-diff) > 0) detail = fmtMoneyNoCents_(Math.floor(-diff)) + ' acima da meta';
     else detail = 'Exatamente na meta';
-    return escapeHtml('Meta: ' + fmtMoneyNoCents_(goal)) + '<br>' +
+    return escapeHtml((name || 'Meta') + ': ' + fmtMoneyNoCents_(goal)) + '<br>' +
       '<span style="font-style:italic;font-size:11px">' + escapeHtml(detail) + '</span>';
   }
 
@@ -9333,16 +9247,20 @@
   var pendingBalanceGoal_ = null;
   /** value: número em R$ (cria/troca a meta) ou null (exclui). Otimista, mesmo padrão de
    *  sempre: aplica na hora, manda pro servidor, desfaz + toast se falhar. */
-  function saveBalanceGoalClient_(value) {
+  function saveBalanceGoalClient_(value, name) {
     var prev = STATE.balanceGoal;
-    var token = { value: value };
+    var prevName = STATE.balanceGoalName || '';
+    var newName = value === null ? '' : String(name || '').trim().slice(0, 40);
+    var token = { value: value, name: newName };
     pendingBalanceGoal_ = token;
     STATE.balanceGoal = value;
+    STATE.balanceGoalName = newName;
     render();
     function release_() { if (pendingBalanceGoal_ === token) pendingBalanceGoal_ = null; }
-    var mutation = value === null ? run('removeBalanceGoal') : run('setBalanceGoal', { amount: value });
+    var mutation = value === null ? run('removeBalanceGoal') : run('setBalanceGoal', { amount: value, name: newName });
     afterMutation_(mutation.then(function (r) { release_(); return r; }, function (err) { release_(); throw err; })).catch(function (err) {
       STATE.balanceGoal = prev;
+      STATE.balanceGoalName = prevName;
       render();
       showToast(err.message, true);
     });
@@ -9362,6 +9280,8 @@
     pop.className = 'confirm-popover';
     pop.innerHTML =
       '<div style="width:200px">' +
+        '<label style="display:block;margin-bottom:4px;font-size:12px">Nome (opcional)</label>' +
+        '<input id="balance-goal-name" type="text" maxlength="40" placeholder="Ex.: Reserva de emergência" style="margin-bottom:8px">' +
         '<label style="display:block;margin-bottom:4px;font-size:12px">Meta de saldo' + (includeInvestments ? ' (com investimentos)' : '') + '</label>' +
         '<input id="balance-goal-input" type="text">' +
         '<div id="balance-goal-error" style="color:var(--expense);font-size:12px;margin-top:6px;display:none"></div>' +
@@ -9372,6 +9292,8 @@
       '</div>';
     positionPopover(anchorEl, pop);
     var input = pop.querySelector('#balance-goal-input');
+    var nameInput = pop.querySelector('#balance-goal-name');
+    nameInput.value = STATE.balanceGoalName || '';
     setupMoneyInput(input, effectiveBalanceGoal_(STATE.balanceGoal, investmentsTotal, includeInvestments) || 0);
     var stopListening;
     function cleanup() { pop.remove(); stopListening(); activeConfirmPopoverCleanup_ = null; }
@@ -9392,14 +9314,16 @@
         return;
       }
       cleanup();
-      saveBalanceGoalClient_(stored);
+      saveBalanceGoalClient_(stored, nameInput.value);
     }
     pop.querySelector('[data-act="ok"]').onclick = save_;
     var deleteBtn = pop.querySelector('[data-act="delete"]');
     if (deleteBtn) deleteBtn.onclick = function () { cleanup(); saveBalanceGoalClient_(null); };
-    input.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') { e.preventDefault(); save_(); }
-      else if (e.key === 'Escape') { cleanup(); }
+    [input, nameInput].forEach(function (el) {
+      el.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); save_(); }
+        else if (e.key === 'Escape') { cleanup(); }
+      });
     });
     input.focus();
     input.select();
@@ -9977,9 +9901,9 @@
         getOrCreateBalanceTooltip_(label._goalCtx.chart).style.opacity = 0;
       });
     }
-    label._goalCtx = { chart: chart, html: buildBalanceGoalTooltipHtml_(trend.goal, trend.values[trend.splitIndex]) };
+    label._goalCtx = { chart: chart, html: buildBalanceGoalTooltipHtml_(trend.goal, trend.values[trend.splitIndex], STATE.balanceGoalName) };
     label.style.color = color;
-    label.innerHTML = balanceGoalLabelHtml_(trend.goalStatus);
+    label.innerHTML = balanceGoalLabelHtml_(trend.goalStatus, STATE.balanceGoalName);
 
     var left = chart.canvas.offsetLeft + area.right - label.offsetWidth;
     var aboveTop = chart.canvas.offsetTop + y - label.offsetHeight - 4;
@@ -11623,12 +11547,24 @@
     }).filter(function (n) { return n; }).sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); }).join(' / ');
   }
 
-  /** Rótulo do "Início" do ciclo: mês = "1º de novembro de 2026"; semana/dia = "Domingo, 01/11/2026". */
-  function budgetStartLabel_(unit, ymd) {
+  /** "11 de outubro de 2026, domingo" (data longa em pt-BR com o dia da semana). */
+  function fmtLongDateWeekday_(ymd) {
     var p = ymd.split('-');
-    if (unit === 'month') return '1º de ' + MONTH_NAMES_PT[Number(p[1]) - 1] + ' de ' + p[0];
-    var wd = WEEKDAY_NAMES_PT[parseYmdLocal_(ymd).getDay()];
-    return wd.charAt(0).toUpperCase() + wd.slice(1) + ', ' + fmtDate(ymd);
+    return Number(p[2]) + ' de ' + MONTH_NAMES_PT[Number(p[1]) - 1] + ' de ' + p[0] + ', ' + WEEKDAY_NAMES_PT[parseYmdLocal_(ymd).getDay()];
+  }
+  /** Texto do "Primeiro ciclo" (o ciclo que começa em startYmd, já normalizado pela unidade):
+   *  mensal = "Outubro de 2026" (vários meses: "Outubro de 2026 a dezembro de 2026"); diário/semanal =
+   *  "11 de outubro de 2026, domingo, a 17 de outubro de 2026, sábado" (início e fim do ciclo, com o dia
+   *  da semana; ciclo de 1 dia só mostra a data). spec = { unit, count }. */
+  function budgetFirstCycleLabel_(spec, startYmd) {
+    var cycle = budgetCycleAtIndex_({ cycleUnit: spec.unit, cycleCount: spec.count, cycleStart: startYmd }, 0);
+    function monthYear_(ymd) { return MONTH_NAMES_PT[Number(ymd.slice(5, 7)) - 1] + ' de ' + ymd.slice(0, 4); }
+    if (spec.unit === 'month') {
+      var first = monthYear_(cycle.fromYmd);
+      first = first.charAt(0).toUpperCase() + first.slice(1);
+      return spec.count > 1 ? first + ' a ' + monthYear_(cycle.toYmd) : first;
+    }
+    return cycle.fromYmd === cycle.toYmd ? fmtLongDateWeekday_(cycle.fromYmd) : fmtLongDateWeekday_(cycle.fromYmd) + ', a ' + fmtLongDateWeekday_(cycle.toYmd);
   }
 
   /**
@@ -11636,18 +11572,20 @@
    * se atualiza (ciclo ideal, gasto típico, valor sugerido, prévia) tem altura reservada
    * (.budget-slot) e o resto só troca de texto. Sem centavos em lugar nenhum (setupIntMoneyInput_).
    *
-   * Ciclo = UMA cápsula: número + unidade; tocar na unidade alterna dia > semana > mês
-   * (plural quando o número passa de 1; padrão 1 mês). Ao lado de "Valor", só em ciclo
-   * mensal, um interruptor "Aumentar/diminuir em meses com mais/menos de 30 dias".
-   * Início: semana sempre começa no DOMINGO, mês no dia 1, dia em qualquer data; pode ser no
-   * passado (padrão = início do ciclo atual) e, com início passado, a prévia já nasce com
-   * histórico real (ciclo de N>1 se ancora no início escolhido). Acima do Salvar, uma prévia
-   * em círculos dos ciclos anteriores com o ciclo/valor escolhidos (mesmas cores e regra de
-   * compensação do Início/Planejamento, ver budgetCircleSeries_). Sugestões: ciclo ideal
-   * (budgetIdealCycle_, só com 10+ lançamentos) e valor sugerido P75 (budgetP75Suggestion_),
-   * cada uma com botão "Usar". Orçamento NOVO é sempre Manual (Automático não é mais oferecido
-   * na criação); um orçamento Automático que já existe continua valendo e só ele mostra o
-   * seletor Automático|Manual na edição.
+   * Ciclo = UMA cápsula: número + mostrador VERTICAL da unidade (dia / semana / mês girando em
+   * círculo, a escolhida no meio e as vizinhas cortadas; muda por rolagem, toque/arraste, setas ou
+   * clique na vizinha; plural quando o número passa de 1; padrão 1 mês). Tocar no número seleciona
+   * tudo. Ao lado de "Valor", só em ciclo mensal, o interruptor "Aumentar/diminuir em meses com
+   * mais/menos de 30 dias".
+   * Primeiro ciclo: padrão "Desde o início" (o ciclo do lançamento mais antigo das categorias);
+   * ‹ › / data escolhem um ciclo específico (semana começa no DOMINGO, mês no dia 1, pode ser no
+   * passado; N>1 se ancora no primeiro ciclo). Acima do Salvar, uma prévia em círculos dos ciclos
+   * anteriores com o ciclo/valor escolhidos (mesmas cores e regra de compensação do
+   * Início/Planejamento, ver budgetCircleSeries_). Sugestões: ciclo sugerido (budgetIdealCycle_,
+   * janelas de 10 lançamentos, 3 botões dia/semana/mês) e valor sugerido P75
+   * (budgetP75Suggestion_) pro ciclo escolhido, com botão "Usar". Orçamento NOVO é sempre Manual
+   * (Automático não é mais oferecido na criação); um orçamento Automático que já existe continua
+   * valendo e só ele mostra o seletor Automático|Manual na edição.
    *
    * opts.suggestion (só quando aberto a partir de uma sugestão -- de NOVO orçamento, ver
    * computeBudgetSuggestions_, ou de TROCA DE MODO, ver budgetModeSwitchSuggestion_):
@@ -11694,6 +11632,7 @@
     // padrão é o começo do ciclo ATUAL; editando, a âncora que o orçamento já tem.
     var anchorYmd = isEdit ? budgetCycleAnchorYmd_(existing) : budgetDefaultStart_(cycleUnit, today);
     var startTouched = false;
+    var fromBeginning = !isEdit;   // "Desde o início": o 1º ciclo é o que tem o lançamento mais antigo das categorias
     var amountTouched = false;   // só regrava o valor se a pessoa mexeu (nunca recalcula em silêncio)
     var amountValue = manualAmount;
 
@@ -11706,7 +11645,8 @@
     // Orçamento Automático guarda só um valor-placeholder (1): ao trocar pra Manual, começa do zero.
     if (isEdit && existing.periodMode === 'auto' && !(manualAmount > 1)) manualAmount = 0;
 
-    var unitCycle = { day: 'week', week: 'month', month: 'day' };
+    var unitCycle = { day: 'week', week: 'month', month: 'day' };   // unidade logo abaixo no mostrador (gira em círculo)
+    var unitPrev = { day: 'month', week: 'day', month: 'week' };    // unidade logo acima
     var unitNames = { day: ['dia', 'dias'], week: ['semana', 'semanas'], month: ['mês', 'meses'] };
     openModal(
       '<h2>' + (isEdit ? 'Editar orçamento' : 'Novo orçamento') + '</h2>' +
@@ -11714,7 +11654,11 @@
       '<div class="field"><label>Ciclo</label>' +
         '<div class="budget-cycle-capsule" id="b-cycle-cap">' +
           '<input id="b-cycle-count" type="text" inputmode="numeric" maxlength="3" autocomplete="off" aria-label="Quantidade">' +
-          '<button type="button" id="b-cycle-unit-btn" title="Tocar para trocar dia, semana ou mês"></button>' +
+          '<div class="budget-cycle-wheel" id="b-cycle-wheel" tabindex="0" role="listbox" aria-label="Unidade do ciclo (role para trocar)">' +
+            '<button type="button" class="budget-wheel-item" data-o="-1" tabindex="-1"></button>' +
+            '<button type="button" class="budget-wheel-item" data-o="0" tabindex="-1" role="option" aria-selected="true"></button>' +
+            '<button type="button" class="budget-wheel-item" data-o="1" tabindex="-1"></button>' +
+          '</div>' +
         '</div>' +
         '<div class="muted budget-slot budget-ideal" id="b-ideal"></div>' +
       '</div>' +
@@ -11733,12 +11677,13 @@
         '<div class="muted budget-slot budget-p75" id="b-p75"></div>' +
       '</div>' +
       '<div class="field budget-preview-block">' +
-        '<label>Início</label>' +
+        '<div class="budget-first-head"><label>Primeiro ciclo</label>' +
+          '<button type="button" class="secondary budget-from-start" id="b-from-start" aria-pressed="false">Desde o início</button></div>' +
         '<div class="budget-start-row">' +
-          '<button type="button" class="secondary budget-start-step" id="b-start-prev" aria-label="Início anterior">‹</button>' +
+          '<button type="button" class="secondary budget-start-step" id="b-start-prev" aria-label="Primeiro ciclo anterior">‹</button>' +
           '<div class="budget-start-date"><span id="b-start-text"></span>' +
-            '<input type="date" id="b-start-date" aria-label="Escolher a data de início"></div>' +
-          '<button type="button" class="secondary budget-start-step" id="b-start-next" aria-label="Início seguinte">›</button>' +
+            '<input type="date" id="b-start-date" aria-label="Escolher o primeiro ciclo"></div>' +
+          '<button type="button" class="secondary budget-start-step" id="b-start-next" aria-label="Primeiro ciclo seguinte">›</button>' +
         '</div>' +
         '<div class="budget-preview-slot"><div id="b-preview"></div><div class="muted budget-preview-note" id="b-preview-note"></div></div>' +
       '</div>' +
@@ -11755,8 +11700,22 @@
       if (!spendsCache_) spendsCache_ = budgetRelevantSpends_(selectedCategoryIds);
       return spendsCache_;
     }
+    // Editando: "Desde o início" já nasce marcado se o orçamento começa no ciclo do lançamento mais antigo.
+    if (isEdit) {
+      var oldestSpend = budgetOldestSpendYmd_(spends_());
+      fromBeginning = !!oldestSpend && budgetCycleBase_({ unit: cycleUnit }, anchorYmd) === budgetCycleBase_({ unit: cycleUnit }, oldestSpend);
+    }
     function currentSpec_() { return { unit: cycleUnit, count: cycleCount }; }
-    function startBase_() { return budgetCycleBase_({ unit: cycleUnit }, anchorYmd); }
+    /** Âncora do primeiro ciclo: com "Desde o início", o lançamento mais antigo das categorias (sem lançamento
+     *  nenhum, o ciclo atual); editando, enquanto a pessoa não mexe no campo vale a âncora que o orçamento já tem. */
+    function effectiveAnchor_() {
+      if (fromBeginning && (!isEdit || startTouched)) {
+        var oldest = budgetOldestSpendYmd_(spends_());
+        return oldest && oldest <= today ? oldest : budgetDefaultStart_(cycleUnit, today);
+      }
+      return anchorYmd;
+    }
+    function startBase_() { return budgetCycleBase_({ unit: cycleUnit }, effectiveAnchor_()); }
     function latestStart_() { return budgetDefaultStart_(cycleUnit, today); }
     function earliestStart_() {
       var oldest = null;
@@ -11768,7 +11727,7 @@
     function pseudoBudget_() {
       return {
         id: isEdit ? existing.id : 'tmp-preview', categoryIds: selectedCategoryIds, cycleUnit: cycleUnit, cycleCount: cycleCount,
-        scaleByDays: cycleUnit === 'month' ? scaleByDays : true, cycleStart: anchorYmd, periodMode: periodMode,
+        scaleByDays: cycleUnit === 'month' ? scaleByDays : true, cycleStart: effectiveAnchor_(), periodMode: periodMode,
         archived: false, recoveryDismissedFrom: isEdit && !startTouched ? existing.recoveryDismissedFrom : null
       };
     }
@@ -11794,15 +11753,28 @@
       }
     }
 
-    /** "Você costuma lançar nestas categorias a cada ~X dias." + botão pra usar esse ciclo. */
+    /** Ciclo sugerido (janelas de 10 lançamentos): frase curta + 3 botões (dias / semanas / meses, cada um
+     *  arredondado pra cima a partir da mediana). Clicar num botão ajusta a cápsula e o número. */
     function renderIdeal_() {
+      var el = document.getElementById('b-ideal');
+      el.textContent = '';
       var ideal = selectedCategoryIds.length ? budgetIdealCycle_(spends_()) : null;
-      if (!ideal) { setSlot_('b-ideal', ''); return; }
-      var same = ideal.unit === cycleUnit && ideal.count === cycleCount;
-      setSlot_('b-ideal', 'Você costuma lançar nestas categorias a cada ~' + ideal.days + (ideal.days === 1 ? ' dia.' : ' dias.'),
-        same ? null : 'Usar ' + budgetCycleLabel_({ unit: ideal.unit, count: ideal.count }), function () {
-          setCycle_(ideal.unit, ideal.count);
-        });
+      if (!ideal) return;
+      var span = document.createElement('span');
+      span.textContent = 'A cada ' + BUDGET_IDEAL_MIN_LAUNCHES_ + ' lançamentos nessas categorias passam-se, em geral, ~' + ideal.days + (ideal.days === 1 ? ' dia.' : ' dias.');
+      el.appendChild(span);
+      var row = document.createElement('div');
+      row.className = 'budget-ideal-btns';
+      [{ unit: 'day', count: ideal.days }, { unit: 'week', count: ideal.weeks }, { unit: 'month', count: ideal.months }].forEach(function (o) {
+        var count = Math.min(BUDGET_CYCLE_MAX_[o.unit], o.count);
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'secondary budget-slot-btn' + (o.unit === cycleUnit && count === cycleCount ? ' active' : '');
+        btn.textContent = budgetCycleLabel_({ unit: o.unit, count: count });
+        btn.onclick = function () { setCycle_(o.unit, count); };
+        row.appendChild(btn);
+      });
+      el.appendChild(row);
     }
     /** Gasto típico (mediana) das categorias escolhidas -- por dia, por semana e por mês -- sem centavos. */
     function renderTypical_() {
@@ -11847,15 +11819,42 @@
         });
       }
     }
+    /** Mostrador vertical da unidade do ciclo: a escolhida no meio, as vizinhas (rotação cíclica) cortadas e
+     *  esmaecidas acima/abaixo. dir != 0 anima a troca (entra deslizando da direção do giro). */
+    var WHEEL_STEP_PX = 28;
+    var pendingWheelDir_ = 0;
+    function renderWheel_(dir) {
+      var units = [unitPrev[cycleUnit], cycleUnit, unitCycle[cycleUnit]];
+      var items = document.querySelectorAll('#b-cycle-wheel .budget-wheel-item');
+      for (var i = 0; i < items.length; i++) {
+        var base = (i - 1) * WHEEL_STEP_PX;
+        items[i].textContent = unitNames[units[i]][cycleCount === 1 ? 0 : 1];
+        items[i].setAttribute('data-unit', units[i]);
+        if (dir) {
+          items[i].style.transition = 'none';
+          items[i].style.transform = 'translateY(' + (base + dir * WHEEL_STEP_PX) + 'px)';
+          void items[i].offsetWidth;
+          items[i].style.transition = 'transform 0.15s ease-out';
+        }
+        items[i].style.transform = 'translateY(' + base + 'px)';
+      }
+    }
+    function stepWheel_(dir) {
+      pendingWheelDir_ = dir;
+      setCycle_(dir > 0 ? unitCycle[cycleUnit] : unitPrev[cycleUnit], cycleCount);
+    }
     function renderCycleControls_() {
-      document.getElementById('b-cycle-unit-btn').textContent = unitNames[cycleUnit][cycleCount === 1 ? 0 : 1];
+      renderWheel_(pendingWheelDir_); pendingWheelDir_ = 0;
       var isMonth = cycleUnit === 'month';
       document.getElementById('b-scale-wrap').classList.toggle('is-hidden', !isMonth);
       document.getElementById('b-scale').checked = scaleByDays;
     }
     function renderStart_() {
       var base = startBase_();
-      document.getElementById('b-start-text').textContent = budgetStartLabel_(cycleUnit, base);
+      document.getElementById('b-start-text').textContent = budgetFirstCycleLabel_(currentSpec_(), base);
+      var fromBtn = document.getElementById('b-from-start');
+      fromBtn.classList.toggle('active', fromBeginning);
+      fromBtn.setAttribute('aria-pressed', fromBeginning ? 'true' : 'false');
       var dateInput = document.getElementById('b-start-date');
       dateInput.min = earliestStart_(); dateInput.max = today; dateInput.value = base;
       document.getElementById('b-start-prev').disabled = base <= earliestStart_();
@@ -11915,16 +11914,52 @@
       }
     };
     countInput.onblur = function () { countInput.value = String(cycleCount); };
-    document.getElementById('b-cycle-unit-btn').onclick = function () { setCycle_(unitCycle[cycleUnit], cycleCount); };
+    // Tocar/clicar no número seleciona tudo (digitar já substitui); o mouseup não pode desfazer a seleção.
+    countInput.onfocus = function () { countInput.select(); };
+    countInput.onclick = function () { countInput.select(); };
+    countInput.onmouseup = function (e) { e.preventDefault(); };
+    var wheelEl = document.getElementById('b-cycle-wheel');
+    var lastWheelAt_ = 0, touchY_ = null;
+    wheelEl.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      var now = Date.now();
+      if (!e.deltaY || now - lastWheelAt_ < 160) return;
+      lastWheelAt_ = now;
+      stepWheel_(e.deltaY > 0 ? 1 : -1);
+    }, { passive: false });
+    wheelEl.addEventListener('touchstart', function (e) { touchY_ = e.touches[0].clientY; }, { passive: true });
+    wheelEl.addEventListener('touchmove', function (e) {
+      e.preventDefault();
+      if (touchY_ === null) return;
+      var dy = touchY_ - e.touches[0].clientY;
+      if (Math.abs(dy) >= WHEEL_STEP_PX) { stepWheel_(dy > 0 ? 1 : -1); touchY_ = e.touches[0].clientY; }
+    }, { passive: false });
+    wheelEl.addEventListener('touchend', function () { touchY_ = null; }, { passive: true });
+    wheelEl.addEventListener('keydown', function (e) {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      e.preventDefault();
+      stepWheel_(e.key === 'ArrowDown' ? 1 : -1);
+    });
+    wheelEl.querySelectorAll('.budget-wheel-item').forEach(function (item) {
+      item.onclick = function () {
+        var o = Number(item.getAttribute('data-o'));
+        if (o) stepWheel_(o);   // clicar na vizinha traz ela pro centro
+      };
+    });
     document.getElementById('b-scale').onchange = function () {
       scaleByDays = document.getElementById('b-scale').checked;
       renderPreview_();
     };
     function moveStart_(next) {
       if (next > latestStart_() || next < earliestStart_()) return;
-      anchorYmd = next; startTouched = true;
+      anchorYmd = next; startTouched = true; fromBeginning = false;
       renderStart_(); renderP75_(); renderPreview_();
     }
+    document.getElementById('b-from-start').onclick = function () {
+      if (fromBeginning) return;
+      fromBeginning = true; startTouched = true;
+      renderStart_(); renderP75_(); renderPreview_();
+    };
     document.getElementById('b-start-prev').onclick = function () { moveStart_(budgetStartStep_(cycleUnit, startBase_(), -1)); };
     document.getElementById('b-start-next').onclick = function () { moveStart_(budgetStartStep_(cycleUnit, startBase_(), 1)); };
     document.getElementById('b-start-date').onchange = function () {
@@ -11933,7 +11968,7 @@
       var next = budgetCycleBase_({ unit: cycleUnit }, v);
       if (next > latestStart_()) next = latestStart_();
       if (next < earliestStart_()) next = earliestStart_();
-      anchorYmd = next; startTouched = true;
+      anchorYmd = next; startTouched = true; fromBeginning = false;
       renderStart_(); renderP75_(); renderPreview_();
     };
     if (showModeToggle) {
@@ -15042,10 +15077,7 @@
       '</select></div></div>';
 
     html += '<div class="settings-section"><h3>Preferências</h3>' +
-      '<div class="field"><label>O card de Orçamentos abre em</label><select id="st-budget-view">' +
-        '<option value="rolling"' + (STATE.budgetViewPreference !== 'current' ? ' selected' : '') + '>Ciclo atual</option>' +
-        '<option value="current"' + (STATE.budgetViewPreference === 'current' ? ' selected' : '') + '>Mês atual</option>' +
-      '</select></div>' +
+      '<div class="field"><label>Nome da meta (opcional)</label><input type="text" id="st-goal-name" maxlength="40" placeholder="Ex.: Reserva de emergência"></div>' +
       '<div class="field" style="margin-top:10px"><label>Meta de saldo (sem contar investimentos)</label><input type="text" id="st-goal"></div>' +
       '<div class="settings-row"><div class="grow"></div>' +
         '<button class="secondary" id="st-goal-remove"' + (STATE.balanceGoal ? '' : ' disabled') + '>Remover meta</button>' +
@@ -15119,23 +15151,22 @@
     document.getElementById('st-nav-side').onchange = function (e) { setNavSide_(e.target.value); };
 
     // Preferências
-    document.getElementById('st-budget-view').onchange = function (e) {
-      STATE.budgetViewPreference = e.target.value;
-      saveBudgetViewPreference_(e.target.value);
-    };
     var goalInput = document.getElementById('st-goal');
+    var goalNameInput = document.getElementById('st-goal-name');
+    goalNameInput.value = STATE.balanceGoalName || '';
     setupMoneyInput(goalInput, STATE.balanceGoal || 0);
     var goalRemove = document.getElementById('st-goal-remove');
     document.getElementById('st-goal-save').onclick = function () {
       var amount = goalInput.getValue();
       if (!amount || amount <= 0) { showToast('Informe uma meta maior que zero.', true); return; }
-      saveBalanceGoalClient_(amount);
+      saveBalanceGoalClient_(amount, goalNameInput.value);
       goalRemove.disabled = false;
       showToast('Meta salva');
     };
     goalRemove.onclick = function () {
       saveBalanceGoalClient_(null);
       goalRemove.disabled = true;
+      goalNameInput.value = '';
       var fresh = document.createElement('input'); // o campo de dinheiro não tem "zerar": troca por um novo
       fresh.type = 'text'; fresh.id = 'st-goal';
       goalInput.parentNode.replaceChild(fresh, goalInput);
