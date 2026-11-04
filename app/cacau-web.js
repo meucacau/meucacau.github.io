@@ -1012,6 +1012,8 @@ function listBudgets(includeArchived) {
         cycleCount: cycle.count,
         scaleByDays: cycle.scaleByDays,
         recoveryDismissedFrom: b.RecoveryDismissedFrom ? String(b.RecoveryDismissedFrom).slice(0, 10) : null,
+        // Início escolhido pro ciclo (pode ser no passado); vazio = o ciclo ancora em createdAt.
+        cycleStart: b.CycleStart ? String(b.CycleStart).slice(0, 10) : null,
         archived: isArchived_(b.Archived),
         isUnbudgetedCatchAll: isCatchAll,
         // A barra catch-all é SEMPRE 'auto' (nunca teve PeriodMode próprio antes desse
@@ -1067,6 +1069,14 @@ function budgetCycleFromInput_(input) {
   return validateBudgetCycle_(derived.unit, derived.count);
 }
 
+/** Início do ciclo (YYYY-MM-DD) opcional; vazio = sem início escolhido. */
+function budgetCycleStartFromInput_(input) {
+  if (input.cycleStart === undefined || input.cycleStart === null || input.cycleStart === '') return '';
+  var s = String(input.cycleStart);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) throw new Error('Data de início inválida.');
+  return s;
+}
+
 /** periodMode 'auto': amount vira só um placeholder inerte (o client já manda um valor
  *  válido qualquer, nunca lido de verdade -- o teto é a mediana de gasto do ciclo, ver
  *  budgetAutoAmount_/openBudgetModal, JavaScript.html) -- só valida de verdade em modo
@@ -1091,7 +1101,8 @@ function createBudget(input) {
   return appendRow_('Budgets', {
     CategoryID: categoryIds.join(','), MonthlyLimit: amount, IntervalDays: budgetCycleApproxDays_(cycle.unit, cycle.count),
     AutoIncludeParentId: classification.autoIncludeParentId || '', Archived: false, PeriodMode: periodMode,
-    CycleUnit: cycle.unit, CycleCount: cycle.count, ScaleByDays: scaleByDays
+    CycleUnit: cycle.unit, CycleCount: cycle.count, ScaleByDays: scaleByDays,
+    CycleStart: budgetCycleStartFromInput_(input)
   });
 }
 
@@ -1123,6 +1134,14 @@ function updateBudget(input) {
     }
   }
   if (input.scaleByDays !== undefined) updates.ScaleByDays = !!input.scaleByDays;
+  if (input.cycleStart !== undefined) {
+    var newStart = budgetCycleStartFromInput_(input);
+    updates.CycleStart = newStart;
+    // Mudar o início muda a grade dos ciclos: a dispensa do plano de recuperação não vale mais.
+    var before = readAll_('Budgets').filter(function (r) { return r.ID === input.id; })[0];
+    var beforeStart = before && before.CycleStart ? String(before.CycleStart).slice(0, 10) : '';
+    if (beforeStart !== newStart) updates.RecoveryDismissedFrom = '';
+  }
   if (input.categoryIds !== undefined) {
     var categoryIds = Array.isArray(input.categoryIds) ? input.categoryIds : parseCategoryIdList_(input.categoryIds);
     validateBudgetCategoryIds_(categoryIds, input.id);
@@ -3659,7 +3678,7 @@ var SCHEMA = {
   // = valor / 30 x dias reais. RecoveryDismissedFrom (YYYY-MM-DD, vazio = sem dispensa):
   // início do ciclo a partir do qual o déficit do plano de recuperação de estouro vale 0
   // (botão "Dispensar", ver budgetRecoveryState_).
-  Budgets: ['ID', 'CategoryID', 'MonthlyLimit', 'Archived', 'CreatedAt', 'IntervalDays', 'AutoIncludeParentId', 'IsUnbudgetedCatchAll', 'PeriodMode', 'CycleUnit', 'CycleCount', 'ScaleByDays', 'RecoveryDismissedFrom'],
+  Budgets: ['ID', 'CategoryID', 'MonthlyLimit', 'Archived', 'CreatedAt', 'IntervalDays', 'AutoIncludeParentId', 'IsUnbudgetedCatchAll', 'PeriodMode', 'CycleUnit', 'CycleCount', 'ScaleByDays', 'RecoveryDismissedFrom', 'CycleStart'],
   // Lançamento recorrente (ver Forecasts.js): um gasto/receita que se repete a cada
   // IntervalDays dias (ex: "Diarista" a cada 7 dias, "Salário" a cada 30) mas não faz
   // sentido como um limite de Orçamento. CategoryID pode ser categoria OU subcategoria
@@ -3795,7 +3814,7 @@ var TEXT_COLUMNS = {
   RecurringRules: ['LastCreatedYm'],
   PendingEntries: ['CreatedAt'],
   Plans: ['Month'],
-  Budgets: ['RecoveryDismissedFrom'],
+  Budgets: ['RecoveryDismissedFrom', 'CycleStart'],
   ForecastCycleIgnores: ['CycleStart']
 };
 
