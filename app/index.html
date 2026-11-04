@@ -1300,22 +1300,11 @@
   }
   .time-pin-label.flip { transform: translateX(calc(-100% - 10px)); }
 
-  .budget-timebar-track {
-    position: relative;
-    box-sizing: border-box;
-    height: 22px;
-    border-radius: 999px;
-    background: var(--border);
-    overflow: hidden;
-    margin-bottom: 6px;
-    cursor: pointer;
-  }
-  /* Sugestão de orçamento (nova OU aumento de período, ver buildBudgetTimelineHtml) --
-     contorno pontilhado azul na borda EXTERNA da barra (pedido explícito do usuário).
-     var(--primary) (não uma cor nova) -- já é o azul de destaque do app inteiro (botão
-     principal, cápsula selecionada etc.), então a sugestão usa a mesma linguagem visual
-     de "isso é interativo/importante" em vez de inventar um tom à parte. */
-  .budget-timebar-track.suggestion { border: 2px dotted var(--primary); }
+  /* Sugestões de orçamento novo (ver buildBudgetTimelineHtml): texto simples + botão "Criar", sem barra. */
+  .budget-suggest-head { font-size: 12px; margin: 10px 0 2px; }
+  .budget-suggest-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; }
+  .budget-suggest-text { flex: 1 1 auto; min-width: 0; font-size: 13px; }
+  .budget-suggest-btn { flex: 0 0 auto; padding: 4px 14px; font-size: 12px; }
   /* Plano de recuperação de estouro (ver budgetRecoveryState_): uma linha pequena colada
      embaixo da barra, "Economizando até dia ..." -- puxada pra cima pra encostar na
      barra (a margem de baixo dela é 6px) e devolver o respiro no fim. */
@@ -1398,33 +1387,7 @@
   .budget-preview-slot { min-height: 56px; }
   #b-preview { min-height: 22px; display: flex; align-items: center; }
   .budget-preview-note { font-size: 12px; margin-top: 6px; min-height: 32px; }
-  /* Só orçamento NOVO fica em itálico (pedido explícito do usuário -- aumento de
-     período, que já tem um orçamento de verdade por baixo, não). */
-  .budget-timebar-track.suggestion-new .budget-timebar-label { font-style: italic; }
-  .budget-timebar-fill { position: absolute; top: 0; left: 0; height: 100%; border-radius: 999px; }
-  .budget-timebar-fill.status-ok { background: var(--income); }
-  .budget-timebar-fill.status-atencao { background: var(--warning); }
-  .budget-timebar-fill.status-estourado { background: var(--expense); }
-
-  /* color/filter NÃO são definidos aqui de propósito -- vêm inline no PRÓPRIO
-     .budget-timebar-label (ver budgetBarTextStyle_/JavaScript.html), fixos por TEMA
-     (branco no escuro, preto no claro), e os 2 filhos abaixo só HERDAM. filter:
-     drop-shadow (não text-shadow) de propósito -- alcança tanto o texto quanto o ÍCONE
-     svg (budgetIconHtml_), que text-shadow não cobre. */
-  .budget-timebar-label {
-    position: absolute;
-    top: 0; left: 0; right: 0; height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 0 12px;
-    font-size: 12px;
-    font-weight: 600;
-    white-space: nowrap;
-  }
   .budget-timebar-name { overflow: hidden; text-overflow: ellipsis; }
-  .budget-timebar-value { font-weight: 500; flex-shrink: 0; }
 
   /* Card de resumo do dropdown de segurar uma barra de orçamento (ver
      buildBudgetMenuSummaryCard_/setupBudgetBarMenus_, JavaScript.html) -- substituiu a
@@ -1675,7 +1638,7 @@
 
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=7210f65725"></script>
+  <script src="cacau-web.js?v=d5db7ac295"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -3292,6 +3255,7 @@
    *  no caso raro de categorias de topo DIFERENTES misturadas, usa a primeira como
    *  representante -- simples e nunca errado, só não cobre as outras. */
   function budgetIconHtml_(b) {
+    if (b.isUnbudgetedCatchAll) return categoryIconSvg_('coin'); // orçamento "Geral": não é uma categoria só
     return categoryIconHtml_(b.categoryIds && b.categoryIds[0]);
   }
 
@@ -7615,7 +7579,7 @@
    */
   function computeBudgetSuggestions_() {
     var budgetedIds = {};
-    STATE.budgets.filter(function (b) { return !b.archived; }).forEach(function (b) {
+    STATE.budgets.filter(function (b) { return !b.archived && !b.isUnbudgetedCatchAll; }).forEach(function (b) {
       b.categoryIds.forEach(function (id) { budgetedIds[id] = true; });
     });
     var dismissedIds = {};
@@ -7885,6 +7849,9 @@
    *  1000 vira 1033 num mês de 31 dias), sem ele é fixo (valor ÷ N por mês). Semana/dia:
    *  taxa por dia (valor ÷ dias do ciclo) × dias do intervalo. */
   function budgetLimitForRange_(b, amount, fromYmd, toYmd) {
+    // Geral automático (ver budgetWithEffectiveCategories_): o limite de cada intervalo é a soma dos
+    // limites dos outros orçamentos nesse mesmo intervalo + a estimativa do que não tem orçamento.
+    if (b.geralLimitFn) return b.geralLimitFn(fromYmd, toYmd);
     var spec = budgetCycleSpecOf_(b);
     var days = daysBetweenYmd_(fromYmd, toYmd) + 1;
     if (spec.unit === 'month') {
@@ -7983,14 +7950,109 @@
   /** Valor-base de um orçamento: o digitado (manual) ou o Automático; null = Automático
    *  ainda sem histórico suficiente. */
   function budgetBaseAmount_(b) {
+    if (b.isUnbudgetedCatchAll) return geralBaseAmount_(b);
     return b.periodMode === 'auto' ? budgetAutoAmount_(b.categoryIds, budgetCycleSpecOf_(b)) : b.amount;
   }
-  /** A barra "Não orçamentado" é uma linha de verdade da planilha (sem categorias), mas
-   *  funciona como um Automático mensal sobre as categorias de despesa sem orçamento --
-   *  devolve um orçamento "efetivo" com isso preenchido; qualquer outro passa direto. */
+
+  // ---------- orçamento "Geral" ----------
+  // O "Geral" é uma linha especial da planilha (IsUnbudgetedCatchAll, sempre existe, não se apaga) que
+  // cobre TODAS as despesas de todas as categorias. Automático: limite do intervalo = soma dos limites
+  // dos orçamentos que existem (cada um proporcional aos dias, ver geralPartLimit_) + a estimativa do que
+  // ainda não tem orçamento (P75 mensal dos últimos 6 meses fechados, ver geralUnbudgetedEstimate_).
+  // Digitando um valor ele vira FIXO (periodMode 'manual') até a pessoa clicar em "Voltar ao automático".
+  var BUDGET_GERAL_NAME_ = 'Geral';
+  /** ids das categorias de despesa (todas -- o Geral cobre tudo). */
+  function geralAllExpenseCategoryIds_() {
+    return (STATE.categories || []).filter(function (c) { return c.kind === 'expense'; }).map(function (c) { return c.id; });
+  }
+  /** true se [fromYmd, toYmd] é feito só de meses de calendário inteiros. */
+  function isWholeMonthsRange_(fromYmd, toYmd) {
+    return fromYmd.slice(8, 10) === '01' && toYmd === lastDayOfYm_(toYmd.slice(0, 7));
+  }
+  /** Limite de um orçamento real dentro do ciclo do Geral: proporcional aos dias (semanal de 100 num ciclo de 31
+   *  dias = 100 ÷ 7 × 31). Orçamento em meses num intervalo que não é de meses inteiros vira taxa de 30 dias. */
+  function geralPartLimit_(rb, amount, fromYmd, toYmd) {
+    var spec = budgetCycleSpecOf_(rb);
+    if (spec.unit === 'month' && !isWholeMonthsRange_(fromYmd, toYmd)) {
+      return amount / spec.count * ((daysBetweenYmd_(fromYmd, toYmd) + 1) / BUDGET_REFERENCE_MONTH_DAYS_);
+    }
+    return budgetLimitForRange_(rb, amount, fromYmd, toYmd);
+  }
+  /** Estimativa mensal do gasto das categorias SEM orçamento: P75 do gasto mensal dos últimos 6 meses fechados
+   *  (meses sem gasto/dado nessas categorias são ignorados), arredondado pra CIMA em múltiplos de R$ 50. Menos de
+   *  3 meses com dado = 0 (o Geral passa a seguir só a soma dos orçamentos). */
+  function geralUnbudgetedEstimate_(categoryIds) {
+    if (!categoryIds.length) return 0;
+    var start = budgetEngagementStart_();
+    if (!start) return 0;
+    var spends = budgetRelevantSpends_(categoryIds);
+    var sums = budgetClosedMonths_(start, todayYmd(), BUDGET_TYPICAL_MONTHS_)
+      .map(function (ym) { return sumSpendsInRange_(spends, ym + '-01', lastDayOfYm_(ym)); })
+      .filter(function (v) { return v > 0.005; });
+    if (sums.length < BUDGET_P75_MIN_CYCLES_) return 0;
+    return Math.ceil(roundCents_(percentile75_(sums)) / BUDGET_SUGGEST_ROUND_) * BUDGET_SUGGEST_ROUND_;
+  }
+  /** Peças do Geral automático: orçamentos reais ativos com valor-base (Automático sem histórico não entra) + a
+   *  estimativa das categorias fora de todos eles. */
+  function geralAutoParts_() {
+    var real = STATE.budgets.filter(function (b) { return !b.archived && !b.isUnbudgetedCatchAll; });
+    var covered = {};
+    var parts = [];
+    real.forEach(function (rb) {
+      (rb.categoryIds || []).forEach(function (id) { covered[id] = true; });
+      var amount = budgetBaseAmount_(rb);
+      if (amount !== null && amount !== undefined && amount > 0) parts.push({ b: rb, amount: amount });
+    });
+    var open = geralAllExpenseCategoryIds_().filter(function (id) { return !covered[id]; });
+    return { parts: parts, estimate: geralUnbudgetedEstimate_(open) };
+  }
+  /** Função (fromYmd, toYmd) -> limite do Geral automático no intervalo. spec = ciclo do próprio Geral. */
+  function geralLimitFn_(spec, auto) {
+    return function (fromYmd, toYmd) {
+      var total = 0;
+      auto.parts.forEach(function (p) { total += geralPartLimit_(p.b, p.amount, fromYmd, toYmd); });
+      if (auto.estimate > 0) {
+        var days = daysBetweenYmd_(fromYmd, toYmd) + 1;
+        if (spec.unit === 'month' && !spec.scaleByDays && isWholeMonthsRange_(fromYmd, toYmd)) {
+          total += auto.estimate * (monthIndexOfYm_(toYmd.slice(0, 7)) - monthIndexOfYm_(fromYmd.slice(0, 7)) + 1);
+        } else {
+          total += auto.estimate * days / BUDGET_REFERENCE_MONTH_DAYS_;
+        }
+      }
+      return total;
+    };
+  }
+  /** Valor-base do Geral: o digitado (fixo) ou, no automático, o limite do ciclo atual normalizado pro "valor do
+   *  ciclo" (mesma unidade de um valor digitado -- um mensal com escala por dias vira taxa de 30 dias). null =
+   *  automático sem nada pra somar (nenhum orçamento e histórico insuficiente). */
+  function geralBaseAmount_(b) {
+    if (b.periodMode === 'manual') return b.amount;
+    var eff = budgetWithEffectiveCategories_(b);
+    if (!eff.geralLimitFn || eff.geralEmpty) return null;
+    var cur = budgetCycleForDate_(eff, todayYmd());
+    var limit = eff.geralLimitFn(cur.fromYmd, cur.toYmd);
+    var unit = budgetLimitForRange_({ cycleUnit: eff.cycleUnit, cycleCount: eff.cycleCount, scaleByDays: eff.scaleByDays }, 1, cur.fromYmd, cur.toYmd);
+    return unit > 0 ? roundCents_(limit / unit) : null;
+  }
+  /** Orçamento "efetivo": o Geral ganha todas as categorias de despesa, o ciclo da própria linha, o início
+   *  (sem início escolhido, o do lançamento mais antigo -- o histórico todo) e, no automático, a função de
+   *  limite (soma + estimativa); qualquer outro orçamento passa direto. Idempotente. */
   function budgetWithEffectiveCategories_(b) {
-    if (!b.isUnbudgetedCatchAll) return b;
-    return Object.assign({}, b, { categoryIds: unbudgetedExpenseCategoryIds_(), periodMode: 'auto', cycleUnit: 'month', cycleCount: 1, scaleByDays: true });
+    if (!b.isUnbudgetedCatchAll || b.geralEffective) return b;
+    var spec = budgetCycleSpecOf_(b);
+    var allIds = geralAllExpenseCategoryIds_();
+    var auto = b.periodMode !== 'manual';
+    var eff = Object.assign({}, b, {
+      geralEffective: true, categoryIds: allIds, categoryName: BUDGET_GERAL_NAME_, periodMode: auto ? 'auto' : 'manual',
+      cycleUnit: spec.unit, cycleCount: spec.count, scaleByDays: spec.scaleByDays
+    });
+    if (!eff.cycleStart) eff.cycleStart = budgetOldestSpendYmd_(budgetRelevantSpends_(allIds)) || todayYmd();
+    if (auto) {
+      var parts = geralAutoParts_();
+      eff.geralLimitFn = geralLimitFn_(spec, parts);
+      eff.geralEmpty = !parts.parts.length && !(parts.estimate > 0);
+    }
+    return eff;
   }
 
   // ---------- plano de recuperação de estouro ----------
@@ -8097,7 +8159,7 @@
       var partial = c.toYmd >= todayStr;
       var limit = normalLimit;
       var recovery = null;
-      if (partial && !b.isUnbudgetedCatchAll) {
+      if (partial) {
         recovery = budgetRecoveryState_(b, amount, todayStr);
         if (recovery.active) limit = recovery.ceiling;
       }
@@ -8286,7 +8348,7 @@
     var todayStr = todayYmd();
     var cycle = budgetCycleForDate_(b, todayStr);
     var normalLimit = budgetLimitForRange_(b, amount, cycle.fromYmd, cycle.toYmd);
-    var recovery = b.isUnbudgetedCatchAll ? { active: false } : budgetRecoveryState_(b, amount, todayStr);
+    var recovery = budgetRecoveryState_(b, amount, todayStr);
     var limit = recovery.active ? recovery.ceiling : normalLimit;
     var spent = spentForBudgetInRange_(b.categoryIds, cycle.fromYmd, cycle.toYmd, true);
     var ratio = limit > 0 ? spent / limit : (spent > 0 ? Infinity : 0);
@@ -8308,7 +8370,7 @@
     var range = budgetMonthRange_(ym);
     var limit = budgetLimitForRange_(b, amount, range.fromYmd, range.toYmd);
     var recovery = { active: false };
-    if (!b.isUnbudgetedCatchAll && ym === todayYmd().slice(0, 7)) {
+    if (ym === todayYmd().slice(0, 7)) {
       var state = budgetRecoveryState_(b, amount, todayYmd());
       if (state.active && state.cycle.fromYmd === range.fromYmd && state.cycle.toYmd === range.toYmd) {
         recovery = state;
@@ -8567,9 +8629,8 @@
   function budgetMonthRange_(ym) {
     return { fromYmd: ym + '-01', toYmd: lastDayOfYm_(ym) };
   }
-  /** "Ver lançamentos" de um orçamento (ou da barra "Não orçamentado", ver
-   *  budgetWithEffectiveCategories_): Extrato filtrado pelas categorias dele + o mesmo
-   *  período que a barra está exibindo agora (o ciclo atual dele, ou o mês escolhido). */
+  /** "Ver lançamentos" de um orçamento (inclusive o Geral, ver budgetWithEffectiveCategories_):
+   *  Extrato filtrado pelas categorias dele + o ciclo atual dele. */
   function viewBudgetTransactions_(b) {
     var eff = budgetWithEffectiveCategories_(b);
     var range = budgetProgressDateRange_(eff);
@@ -8630,11 +8691,11 @@
     });
     return card;
   }
-  /** Card de resumo de uma barra (Manual, Automático ou "Não orçamentado") pro ciclo atual: gasto
+  /** Card de resumo de um orçamento (Manual, Automático ou o Geral) pro ciclo atual: gasto
    *  (clicável, abre o Extrato), limite normal do ciclo e -- com plano de recuperação ativo -- o teto
    *  de economia e até quando ele vale. progress null = Automático sem histórico ainda. */
   function budgetBarSummaryCard_(b, progress, closeMenu) {
-    var title = (b.isUnbudgetedCatchAll || b.periodMode === 'auto') ? 'Automático' : 'Manual';
+    var title = b.periodMode === 'auto' ? 'Automático' : 'Manual';
     if (!progress) return buildBudgetMenuSummaryCard_(title, [{ text: 'Histórico insuficiente' }]);
     var spec = budgetCycleSpecOf_(budgetWithEffectiveCategories_(b));
     var where = 'neste ciclo (' + fmtDateShort_(progress.cycle.fromYmd) + ' a ' + fmtDateShort_(progress.cycle.toYmd) + ')';
@@ -8720,9 +8781,9 @@
    * cada render, então os listeners de uma rodada anterior ficam presos a elementos já
    * descartados (mesmo padrão de todo outro wiring pós-innerHTML deste app). Barras de
    * orçamento de verdade: resumo + (com plano de recuperação ativo) "Dispensar plano" +
-   * "Editar orçamento"; a barra "Não orçamentado" só mostra o resumo (essa linha não é
-   * editável); a de sugestão de orçamento NOVO não tem menu -- o clique simples já abre o
-   * modal com a sugestão anexada, pronta pra revisar/confirmar ou descartar.
+   * "Editar orçamento" (o Geral é uma linha como as outras, só que o editar não tem categorias);
+   * o botão "Criar" de uma sugestão de orçamento NOVO abre o modal com a sugestão anexada, pronta
+   * pra revisar/confirmar ou descartar.
    */
   function setupBudgetBarMenus_(root) {
     function findBudget_(id) { return STATE.budgets.find(function (x) { return x.id === id; }); }
@@ -8746,27 +8807,18 @@
       });
     });
 
+    // Sugestão de orçamento novo: texto + botão "Criar" (sem barra) -- abre o modal já preenchido,
+    // pronto pra revisar/confirmar ou descartar.
     var newSuggestions = computeBudgetSuggestions_();
-    root.querySelectorAll('[data-budget-suggestion]').forEach(function (barEl) {
-      var categoryId = barEl.dataset.budgetSuggestion;
-      barEl.onclick = function () {
+    root.querySelectorAll('[data-budget-suggest]').forEach(function (btn) {
+      var categoryId = btn.dataset.budgetSuggest;
+      btn.onclick = function () {
         var s = newSuggestions.find(function (x) { return x.categoryId === categoryId; });
         if (!s) return;
         openBudgetModal(null, {
           suggestion: { type: 'new', categoryId: s.categoryId, categoryIds: [s.categoryId], suggestedCycleUnit: 'month', suggestedCycleCount: 1, suggestedAmount: s.suggestedAmount }
         });
       };
-    });
-
-    root.querySelectorAll('[data-budget-catchall]').forEach(function (barEl) {
-      var catchAllId = barEl.dataset.budgetCatchall;
-      attachBudgetBarMenu_(barEl, function (hold) {
-        var b = findBudget_(catchAllId);
-        return b ? [budgetBarSummaryCard_(b, budgetProgressForCurrentPeriod_(b), hold.close)] : null;
-      }, function () {
-        var b = findBudget_(catchAllId);
-        if (b) viewBudgetTransactions_(b);
-      });
     });
   }
   /** Gasto do mês inteiro (dia 1 ao último) das categorias, contra `limit` já proporcional
@@ -8846,47 +8898,26 @@
       window.addEventListener('resize', function () { placeTimePinLabels_(document); });
     }
   }
-  /**
-   * "color:...;filter:drop-shadow(...)" pro texto (E ícone) de uma barra de orçamento
-   * -- regra fixa por TEMA (não mais adaptativa por região/preenchimento, pedido
-   * explícito do usuário: modo escuro sempre branco, modo claro sempre preto -- texto
-   * preto no modo escuro ficava ilegível sobre a trilha vazia, e a lógica antiga por
-   * região/fillFraction não resolvia isso de forma previsível o bastante).
-   * currentEffectiveTheme_ já existe (tema toggle) -- reaproveitado aqui, não duplicado.
-   *
-   * A pequena sombra externa que já existia antes (mesmos valores 0 1px 2px) voltou --
-   * pedido explícito do usuário. Usa filter:drop-shadow (não text-shadow) de propósito:
-   * drop-shadow também alcança o ÍCONE svg (budgetIconHtml_/categoryIconHtml_, que
-   * pinta com stroke="currentColor") -- text-shadow só funciona em texto de verdade,
-   * deixando o ícone sem sombra nenhuma.
-   */
-  function budgetBarTextStyle_() {
-    var dark = currentEffectiveTheme_() === 'dark';
-    var color = dark ? '#ffffff' : '#1c1e21';
-    // Mais sutil que antes (pedido explícito do usuário) -- blur menor (1px, era 2px) e
-    // opacidade mais baixa, só o suficiente pra ajudar a ler na borda entre a barra
-    // preenchida e a vazia, sem "engordar" o texto/ícone.
-    var shadowColor = dark ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.45)';
-    return 'color:' + color + ';filter:drop-shadow(0 1px 1px ' + shadowColor + ')';
-  }
 
   /**
-   * Card de orçamento do Dashboard: sem seletor de período -- cada orçamento é uma linha de
+   * Card de orçamento do Dashboard: sem barras e sem seletor de período -- cada orçamento é uma linha de
    * círculos do PRÓPRIO ciclo (ver budgetCircleSeries_), com o texto de aviso (ver
    * computeBudgetRangeAdvisory_) à direita do último círculo (quebra pra baixo em tela
-   * estreita). Com plano de recuperação ativo (ver budgetRecoveryState_) o círculo usa o teto
-   * de economia e uma linha logo abaixo diz até quando. "Não orçamentado" e as sugestões de
-   * orçamento novo continuam em barras.
+   * estreita). A PRIMEIRA linha é o orçamento Geral (todas as despesas, ver
+   * budgetWithEffectiveCategories_). Com plano de recuperação ativo (ver budgetRecoveryState_) o círculo
+   * usa o teto de economia e uma linha logo abaixo diz até quando. As sugestões de orçamento novo ficam
+   * no fim, em texto simples com um botão "Criar".
    */
   function buildBudgetTimelineHtml(d) {
     var activeBudgets = STATE.budgets.filter(function (b) { return !b.archived && !b.isUnbudgetedCatchAll; }).sort(byBudgetCategoryNamePt_);
+    var geralBudget = STATE.budgets.find(function (b) { return b.isUnbudgetedCatchAll && !b.archived; });
     // Sugestão de orçamento NOVO (ver computeBudgetSuggestions_) -- card aparece mesmo
     // sem NENHUM orçamento de verdade ainda, contanto que haja pelo menos 1 sugestão.
     var newBudgetSuggestions = computeBudgetSuggestions_();
 
     // Cada orçamento segue o PRÓPRIO ciclo (sem seletor de período no card): uma linha de círculos com o
     // texto de aviso à direita do último. null = Automático sem histórico suficiente (mediana de pelo
-    // menos 3 meses/semanas fechados).
+    // menos 3 meses/semanas fechados; o Geral: nenhum orçamento ainda e histórico insuficiente).
     function progressOf_(b) { return computeBudgetCycleProgress_(b); }
     function adviceHtmlOf_(b, progress) {
       var eff = budgetWithEffectiveCategories_(b);
@@ -8897,68 +8928,47 @@
         ? '<div class="budget-recovery-note">' + escapeHtml(budgetRecoveryNote_(progress.recovery)) + '</div>'
         : '';
     }
-    function fillFractionOf_(progress) {
-      return progress.limit > 0 ? Math.min(1, progress.spent / progress.limit) : (progress.spent > 0 ? 1 : 0);
-    }
 
-    var catchAllBudget = STATE.budgets.find(function (b) { return b.isUnbudgetedCatchAll && !b.archived; });
-    var catchAllProgress = catchAllBudget ? progressOf_(catchAllBudget) : null;
-    var showCatchAll = !!(catchAllProgress && (catchAllProgress.limit > 0 || catchAllProgress.spent > 0));
-    if (!activeBudgets.length && !newBudgetSuggestions.length && !showCatchAll) return '';
+    var geralProgress = geralBudget ? progressOf_(geralBudget) : null;
+    if (!activeBudgets.length && !newBudgetSuggestions.length && !geralProgress) return '';
 
     // Cada orçamento é uma linha de círculos (ver budgetCircleSeries_): um por ciclo fechado e o
     // último é o ciclo em andamento; o texto de aviso fica À DIREITA do último círculo (como em
     // Lançamentos recorrentes) e, em tela estreita, quebra pra baixo -- os 12 círculos sempre cabem.
-    var barsHtml = activeBudgets.map(function (b) {
-      var progress = progressOf_(b);
+    var barsHtml = (geralBudget ? [geralBudget] : []).concat(activeBudgets).map(function (b) {
+      var progress = b === geralBudget ? geralProgress : progressOf_(b);
       var series = progress ? budgetCircleSeries_(b, {}) : null;
+      var name = b.isUnbudgetedCatchAll ? BUDGET_GERAL_NAME_ : b.categoryName;
       if (!progress || !series) {
         return '<div class="budget-circles-row budget-circles-row-empty" data-budget-bar="' + b.id + '">' +
-          '<span class="budget-timebar-name" style="flex:1">' + budgetIconHtml_(b) + escapeHtml(b.categoryName) + '</span>' +
+          '<span class="budget-timebar-name" style="flex:1">' + budgetIconHtml_(b) + escapeHtml(name) + '</span>' +
           '<span class="muted" style="font-size:12px">Histórico insuficiente</span>' +
         '</div>';
       }
       return '<div class="budget-circles-row" data-budget-bar="' + b.id + '">' +
         '<div class="budget-circles-head">' +
-          '<span class="budget-timebar-name">' + budgetIconHtml_(b) + escapeHtml(b.categoryName) + '</span>' +
+          '<span class="budget-timebar-name">' + budgetIconHtml_(b) + escapeHtml(name) + '</span>' +
           budgetCirclesTrackHtml_(series) +
           '<div class="budget-circles-advice">' + adviceHtmlOf_(b, progress) + '</div>' +
         '</div>' +
       '</div>' + recoveryNoteHtmlOf_(progress);
     }).join('');
 
-    // Barra própria (não um orçamento real por baixo) pontilhada em azul e em itálico --
-    // progresso usa os mesmos dados já apurados pela sugestão (gasto na janela ÷ valor
-    // sugerido), com o valor sugerido no lugar do limite configurado.
-    var newSuggestionsHtml = newBudgetSuggestions.map(function (s) {
-      var ratio = s.suggestedAmount > 0 ? s.total / s.suggestedAmount : (s.total > 0 ? Infinity : 0);
-      var status = statusForRatio_(ratio);
-      var fillFraction = Math.min(1, s.suggestedAmount > 0 ? s.total / s.suggestedAmount : (s.total > 0 ? 1 : 0));
-      return '<div class="budget-timebar-track suggestion suggestion-new" data-budget-suggestion="' + s.categoryId + '">' +
-        '<div class="budget-timebar-fill status-' + status + '" style="width:' + (fillFraction * 100) + '%"></div>' +
-        '<div class="budget-timebar-label" style="' + budgetBarTextStyle_() + '">' +
-          '<span class="budget-timebar-name">' + categoryIconHtml_(s.categoryId) + escapeHtml(s.categoryName) + '</span>' +
-          '<span class="budget-timebar-value">' + escapeHtml(fmtMoneyNoCents_(s.suggestedAmount)) + '</span>' +
-        '</div>' +
-      '</div>';
-    }).join('');
-
-    // Barra própria pras despesas que não caem em nenhum orçamento real (segue o seletor
-    // de período). Sem ícone (não é uma categoria só) e sem borda pontilhada/itálico (não é
-    // uma sugestão pra confirmar ou descartar -- ela mesma já é "de verdade", só que
-    // auto-gerenciada). Mesmo texto de aviso das demais barras, não "X de Y".
-    var catchAllHtml = !showCatchAll ? '' :
-      '<div class="budget-timebar-track" data-budget-catchall="' + catchAllBudget.id + '">' +
-        '<div class="budget-timebar-fill status-' + catchAllProgress.status + '" style="width:' + (fillFractionOf_(catchAllProgress) * 100) + '%"></div>' +
-        '<div class="budget-timebar-label" style="' + budgetBarTextStyle_() + '">' +
-          '<span class="budget-timebar-name">Não orçamentado</span>' +
-          '<span class="budget-timebar-value">' + adviceHtmlOf_(catchAllBudget, catchAllProgress) + '</span>' +
-        '</div>' +
-      '</div>';
+    // Sugestão de orçamento novo: SEM barra -- uma linha de texto (categoria + valor sugerido por mês) com o
+    // botão "Criar", que abre o modal já preenchido pra revisar (ver setupBudgetBarMenus_).
+    var suggestionsHtml = !newBudgetSuggestions.length ? '' :
+      '<div class="budget-suggest-head muted">Sugestões de orçamento</div>' +
+      newBudgetSuggestions.map(function (s) {
+        return '<div class="budget-suggest-row">' +
+          '<span class="budget-suggest-text">' + categoryIconHtml_(s.categoryId) + escapeHtml(s.categoryName) + ' ' +
+            '<span class="muted">· ' + escapeHtml(fmtMoneyNoCents_(s.suggestedAmount)) + ' por mês</span></span>' +
+          '<button type="button" class="secondary budget-suggest-btn" data-budget-suggest="' + escapeHtml(s.categoryId) + '">Criar</button>' +
+        '</div>';
+      }).join('');
 
     return '<div class="card">' +
       '<h2 style="margin-bottom:10px">Orçamentos</h2>' +
-      barsHtml + newSuggestionsHtml + catchAllHtml +
+      barsHtml + suggestionsHtml +
     '</div>';
   }
 
@@ -11168,6 +11178,7 @@
    * "R$ X / mês" do cabeçalho de Orçamentos, da ordem da lista e da projeção de saldo.
    */
   function budgetMonthlyAmount_(b, ym) {
+    b = budgetWithEffectiveCategories_(b);
     var amount = budgetBaseAmount_(b);
     if (amount === null) return 0;
     return budgetLimitForRange_(b, amount, ym + '-01', lastDayOfYm_(ym));
@@ -11195,6 +11206,23 @@
     });
   }
 
+  /** Linha do orçamento Geral na lista de Planejamento: sempre a PRIMEIRA, sem botão de remover (não se apaga;
+   *  o espaço do botão fica reservado, invisível, pros círculos alinharem com as outras linhas), sem sugestão de
+   *  trocar Manual<->Automático. Clicar abre o menu de edição (sem seletor de categoria, ver openBudgetModal). */
+  function geralPlanRowHtml_(g) {
+    if (!g) return '';
+    var base = budgetBaseAmount_(g);
+    var subtitle = base !== null
+      ? (g.periodMode === 'manual' ? 'Manual' : 'Automático') + ' · ' + fmtMoneyNoCents_(base) + ' · ' + budgetCycleLabel_(budgetCycleSpecOf_(g))
+      : 'Automático · histórico insuficiente';
+    var rowRecovery = base !== null ? budgetRecoveryState_(budgetWithEffectiveCategories_(g), base, todayYmd()) : null;
+    if (rowRecovery && rowRecovery.active) subtitle += '<br>' + escapeHtml(budgetRecoveryNote_(rowRecovery));
+    var series = base !== null ? budgetCircleSeries_(g, { amount: base }) : null;
+    return '<div class="row budget-plan-row" data-row-budget="' + escapeHtml(g.id) + '"><span class="budget-plan-info">' + budgetIconHtml_(g) + escapeHtml(BUDGET_GERAL_NAME_) + '<br><span class="muted">' + subtitle + '</span></span>' +
+      '<span class="forecast-row-right">' + (series ? budgetCirclesTrackHtml_(series) : '') +
+        '<span class="row-actions" style="visibility:hidden">' + rowRemoveButtonHtml_('data-remove-geral', g.id, 'Remover') + '</span></span></div>';
+  }
+
   function renderBudgets() {
     var root = document.getElementById('view-root');
     var d = STATE.dashboard;
@@ -11217,7 +11245,8 @@
     var activeBudgets = STATE.budgets.filter(function (b) { return !b.archived && !b.isUnbudgetedCatchAll; });
     activeBudgets.forEach(function (b) { budgetMonthlyById_[b.id] = budgetMonthlyAmount_(b, d.month); });
     var budgets = sortBudgetsByMonthlyDesc_(activeBudgets, budgetMonthlyById_);
-    var budgetsHtml = budgets.map(function (b) {
+    var geralRowHtml = geralPlanRowHtml_(STATE.budgets.find(function (b) { return b.isUnbudgetedCatchAll && !b.archived; }));
+    var budgetsHtml = geralRowHtml + budgets.map(function (b) {
       // Modo + Valor (o que está REALMENTE valendo, mesmo em Automático -- pedido
       // explícito do usuário, antes só mostrava o período nesse caso) + Período, sempre
       // nessa ordem, pros 2 modos.
@@ -11603,13 +11632,16 @@
     opts = opts || {};
     var suggestion = opts.suggestion || null;
     var isEdit = !!existing;
+    // Orçamento "Geral" (só editando): mesmo menu SEM o seletor de categoria (cobre todas as despesas). O valor
+    // começa mostrando o Automático (soma + estimativa); digitar vira valor FIXO e aparece "Voltar ao automático".
+    var isGeral = isEdit && !!existing.isUnbudgetedCatchAll && !suggestion;
     // Categorias/subs já usadas em QUALQUER OUTRO orçamento ativo — lista estática, sem
     // rollup automático de subcategoria (ver spentForBudgetInRange_): uma subcategoria
     // só sai da oferta se ela mesma (não só a categoria-mãe) já estiver noutro orçamento.
     // Ao editar, as categorias do PRÓPRIO orçamento não contam como "já usadas" (senão
     // sumiriam da oferta e não daria pra mantê-las selecionadas).
     var budgetedCategoryIds = [];
-    STATE.budgets.filter(function (b) { return !b.archived && (!isEdit || b.id !== existing.id); })
+    STATE.budgets.filter(function (b) { return !b.archived && !b.isUnbudgetedCatchAll && (!isEdit || b.id !== existing.id); })
       .forEach(function (b) { budgetedCategoryIds = budgetedCategoryIds.concat(b.categoryIds); });
 
     // forcesManual: sugestão de orçamento NOVO (type 'new') sempre força manual (nunca
@@ -11626,11 +11658,11 @@
     var cycleCount = (suggestion && suggestion.suggestedCycleCount) || existingSpec.count;
     var scaleByDays = (suggestion && suggestion.suggestedScaleByDays != null) ? suggestion.suggestedScaleByDays : existingSpec.scaleByDays;
     var manualAmount = (suggestion && suggestion.suggestedAmount != null) ? suggestion.suggestedAmount : (isEdit ? existing.amount : 0);
-    var selectedCategoryIds = isEdit ? existing.categoryIds.slice() : ((suggestion && suggestion.categoryIds) ? suggestion.categoryIds.slice() : []);
+    var selectedCategoryIds = isGeral ? geralAllExpenseCategoryIds_() : (isEdit ? existing.categoryIds.slice() : ((suggestion && suggestion.categoryIds) ? suggestion.categoryIds.slice() : []));
     var today = todayYmd();
     // Início: âncora crua (a unidade normaliza: semana = domingo, mês = dia 1). Criando, o
     // padrão é o começo do ciclo ATUAL; editando, a âncora que o orçamento já tem.
-    var anchorYmd = isEdit ? budgetCycleAnchorYmd_(existing) : budgetDefaultStart_(cycleUnit, today);
+    var anchorYmd = isEdit ? budgetCycleAnchorYmd_(isGeral ? budgetWithEffectiveCategories_(existing) : existing) : budgetDefaultStart_(cycleUnit, today);
     var startTouched = false;
     var fromBeginning = !isEdit;   // "Desde o início": o 1º ciclo é o que tem o lançamento mais antigo das categorias
     var amountTouched = false;   // só regrava o valor se a pessoa mexeu (nunca recalcula em silêncio)
@@ -11639,7 +11671,7 @@
     var recoveryNow = null;
     if (isEdit && !suggestion) {
       var existingBase = budgetBaseAmount_(existing);
-      var existingRecovery = existingBase !== null ? budgetRecoveryState_(existing, existingBase, todayYmd()) : null;
+      var existingRecovery = existingBase !== null ? budgetRecoveryState_(budgetWithEffectiveCategories_(existing), existingBase, todayYmd()) : null;
       if (existingRecovery && existingRecovery.active) recoveryNow = existingRecovery;
     }
     // Orçamento Automático guarda só um valor-placeholder (1): ao trocar pra Manual, começa do zero.
@@ -11649,8 +11681,8 @@
     var unitPrev = { day: 'month', week: 'day', month: 'week' };    // unidade logo acima
     var unitNames = { day: ['dia', 'dias'], week: ['semana', 'semanas'], month: ['mês', 'meses'] };
     openModal(
-      '<h2>' + (isEdit ? 'Editar orçamento' : 'Novo orçamento') + '</h2>' +
-      '<div class="field"><label>Categoria (pode escolher mais de uma)</label><div id="b-category-field" class="capsule-field"></div></div>' +
+      '<h2>' + (isGeral ? 'Editar orçamento Geral' : (isEdit ? 'Editar orçamento' : 'Novo orçamento')) + '</h2>' +
+      (isGeral ? '' : '<div class="field"><label>Categoria (pode escolher mais de uma)</label><div id="b-category-field" class="capsule-field"></div></div>') +
       '<div class="field"><label>Ciclo</label>' +
         '<div class="budget-cycle-capsule" id="b-cycle-cap">' +
           '<input id="b-cycle-count" type="text" inputmode="numeric" maxlength="3" autocomplete="off" aria-label="Quantidade">' +
@@ -11673,6 +11705,7 @@
             '</div>'
           : '') +
         '<div id="b-amount-field"></div>' +
+        (isGeral ? '<div class="muted budget-slot" id="b-geral-note"></div>' : '') +
         '<div class="muted budget-slot budget-typical" id="b-typical"></div>' +
         '<div class="muted budget-slot budget-p75" id="b-p75"></div>' +
       '</div>' +
@@ -11728,13 +11761,22 @@
       return {
         id: isEdit ? existing.id : 'tmp-preview', categoryIds: selectedCategoryIds, cycleUnit: cycleUnit, cycleCount: cycleCount,
         scaleByDays: cycleUnit === 'month' ? scaleByDays : true, cycleStart: effectiveAnchor_(), periodMode: periodMode,
-        archived: false, recoveryDismissedFrom: isEdit && !startTouched ? existing.recoveryDismissedFrom : null
+        archived: false, recoveryDismissedFrom: isEdit && !startTouched ? existing.recoveryDismissedFrom : null,
+        isUnbudgetedCatchAll: isGeral
       };
     }
+    /** Valor Automático do Geral com o ciclo/início escolhidos agora (soma + estimativa); null = nada pra somar. */
+    function geralAutoAmount_() {
+      var p = pseudoBudget_();
+      p.periodMode = 'auto';
+      return geralBaseAmount_(p);
+    }
     function currentAmount_() {
-      return periodMode === 'auto'
-        ? (selectedCategoryIds.length ? budgetAutoAmount_(selectedCategoryIds, currentSpec_()) : null)
-        : (amountTouched ? amountValue : manualAmount);
+      if (periodMode === 'auto') {
+        if (isGeral) return geralAutoAmount_();
+        return selectedCategoryIds.length ? budgetAutoAmount_(selectedCategoryIds, currentSpec_()) : null;
+      }
+      return amountTouched ? amountValue : manualAmount;
     }
     function setSlot_(id, text, buttonLabel, onClick) {
       var el = document.getElementById(id);
@@ -11802,8 +11844,35 @@
           renderPreview_(); renderP75_();
         });
     }
+    /** Geral: linha logo abaixo do valor -- Automático explica de onde vem; fixo mostra "Voltar ao automático". */
+    function renderGeralNote_() {
+      if (!isGeral) return;
+      if (periodMode === 'manual') {
+        var auto = geralAutoAmount_();
+        setSlot_('b-geral-note', 'Valor fixo' + (auto !== null ? ' (o automático seria ' + fmtMoneyNoCents_(auto) + ').' : '.'), 'Voltar ao automático', function () {
+          periodMode = 'auto'; amountTouched = false;
+          renderAmountField_(); renderGeralNote_(); renderP75_(); renderPreview_();
+        });
+      } else {
+        setSlot_('b-geral-note', geralAutoAmount_() !== null
+          ? 'Automático: soma dos orçamentos + estimativa do que não tem orçamento. Digite um valor para fixar.'
+          : 'Nada para somar ainda (sem orçamentos nem histórico). Digite um valor para fixar.');
+      }
+    }
     function renderAmountField_() {
       var field = document.getElementById('b-amount-field');
+      if (isGeral) {
+        // Sempre editável: no Automático mostra o valor calculado; digitar vira valor fixo (nunca recalcula em silêncio).
+        field.innerHTML = '<input id="b-amount" type="text">';
+        setupIntMoneyInput_(document.getElementById('b-amount'), periodMode === 'auto' ? geralAutoAmount_() : (amountTouched ? amountValue : manualAmount), function (v) {
+          amountTouched = true; amountValue = v;
+          var wasAuto = periodMode === 'auto';
+          periodMode = 'manual';
+          if (wasAuto) renderGeralNote_();
+          renderPreview_(); renderP75_();
+        });
+        return;
+      }
       if (periodMode === 'auto') {
         // Continua um <input> de verdade (mesma forma/tamanho de sempre, só bloqueado) --
         // pra deixar claro que normalmente seria editável, só que nesse modo o valor vem do
@@ -11867,7 +11936,7 @@
       box.innerHTML = '';
       var amount = currentAmount_();
       if (!selectedCategoryIds.length) { note.textContent = 'Escolha uma categoria para ver a prévia.'; return; }
-      if (periodMode === 'auto' && amount === null) { note.textContent = 'Histórico insuficiente para calcular o valor Automático.'; return; }
+      if (periodMode === 'auto' && amount === null) { note.textContent = isGeral ? 'Sem orçamentos nem histórico para somar: digite um valor.' : 'Histórico insuficiente para calcular o valor Automático.'; return; }
       if (!(amount > 0)) { note.textContent = 'Digite o valor para ver a prévia.'; return; }
       var series = budgetCircleSeries_(pseudoBudget_(), { amount: amount, spends: spends_() });
       if (!series) { note.textContent = ''; return; }
@@ -11880,7 +11949,14 @@
     function renderModeToggle_() {
       document.querySelectorAll('#b-mode-toggle button').forEach(function (btn) { btn.classList.toggle('active', btn.dataset.m === periodMode); });
     }
+    /** Geral automático: ciclo/início/escala mudam o valor calculado -- atualiza o campo e a frase. */
+    function syncGeral_() {
+      if (!isGeral) return;
+      if (periodMode === 'auto') renderAmountField_();
+      renderGeralNote_();
+    }
     function refresh_() {
+      syncGeral_();
       renderCycleControls_();
       renderIdeal_();
       renderStart_();
@@ -11948,17 +12024,18 @@
     });
     document.getElementById('b-scale').onchange = function () {
       scaleByDays = document.getElementById('b-scale').checked;
+      syncGeral_();
       renderPreview_();
     };
     function moveStart_(next) {
       if (next > latestStart_() || next < earliestStart_()) return;
       anchorYmd = next; startTouched = true; fromBeginning = false;
-      renderStart_(); renderP75_(); renderPreview_();
+      syncGeral_(); renderStart_(); renderP75_(); renderPreview_();
     }
     document.getElementById('b-from-start').onclick = function () {
       if (fromBeginning) return;
       fromBeginning = true; startTouched = true;
-      renderStart_(); renderP75_(); renderPreview_();
+      syncGeral_(); renderStart_(); renderP75_(); renderPreview_();
     };
     document.getElementById('b-start-prev').onclick = function () { moveStart_(budgetStartStep_(cycleUnit, startBase_(), -1)); };
     document.getElementById('b-start-next').onclick = function () { moveStart_(budgetStartStep_(cycleUnit, startBase_(), 1)); };
@@ -11969,7 +12046,7 @@
       if (next > latestStart_()) next = latestStart_();
       if (next < earliestStart_()) next = earliestStart_();
       anchorYmd = next; startTouched = true; fromBeginning = false;
-      renderStart_(); renderP75_(); renderPreview_();
+      syncGeral_(); renderStart_(); renderP75_(); renderPreview_();
     };
     if (showModeToggle) {
       document.querySelectorAll('#b-mode-toggle button').forEach(function (btn) {
@@ -11983,7 +12060,7 @@
       });
     }
 
-    buildCategoryFilterField_(document.getElementById('b-category-field'), selectedCategoryIds, function () {
+    if (!isGeral) buildCategoryFilterField_(document.getElementById('b-category-field'), selectedCategoryIds, function () {
       spendsCache_ = null;
       // Só re-renderiza o valor em modo Automático (o campo ali é só um placeholder
       // bloqueado, nada a perder) -- em modo Manual re-renderizar aqui apagaria o que o
@@ -12027,7 +12104,7 @@
     document.getElementById('m-submit').onclick = function () {
       var submitBtn = document.getElementById('m-submit');
       var categoryIds = selectedCategoryIds.slice();
-      if (!categoryIds.length) { errorPopover(submitBtn, 'Escolha pelo menos uma categoria.'); return; }
+      if (!isGeral && !categoryIds.length) { errorPopover(submitBtn, 'Escolha pelo menos uma categoria.'); return; }
       if (!(cycleCount >= 1)) { errorPopover(submitBtn, 'Ciclo precisa ser de pelo menos 1.'); return; }
       var scale = cycleUnit === 'month' ? scaleByDays : true;
       var amount;
@@ -12054,7 +12131,9 @@
         var prevSpec = budgetCycleSpecOf_(existing);
         var cycleChanged = prevSpec.unit !== cycleUnit || prevSpec.count !== cycleCount;
         if (b) {
-          b.categoryIds = categoryIds; b.categoryName = joinBudgetCategoryNames_(categoryIds); b.periodMode = periodMode;
+          // O Geral não tem categorias próprias (cobre todas): categoryIds/categoryName ficam como estão.
+          if (!isGeral) { b.categoryIds = categoryIds; b.categoryName = joinBudgetCategoryNames_(categoryIds); }
+          b.periodMode = periodMode;
           b.cycleUnit = cycleUnit; b.cycleCount = cycleCount; b.scaleByDays = scale;
           if (startTouched) b.cycleStart = chosenStart;
           if (cycleChanged || startTouched) b.recoveryDismissedFrom = null; // ciclo/início novo = plano novo, sem a dispensa do antigo
@@ -12066,11 +12145,12 @@
         // esse PRÓPRIO orçamento também pode ainda estar com ID temporário (acabou de
         // ser criado e o usuário já clicou em editar antes do servidor confirmar) — ver
         // comentário grande logo abaixo, no handler de "Remover".
-        afterMutation_(Promise.all([resolveRealId_(existing.id)].concat(categoryIds.map(resolveRealId_))).then(function (resolved) {
+        afterMutation_(Promise.all([resolveRealId_(existing.id)].concat(isGeral ? [] : categoryIds.map(resolveRealId_))).then(function (resolved) {
           var updates = {
-            id: resolved[0], categoryIds: resolved.slice(1), periodMode: periodMode,
+            id: resolved[0], periodMode: periodMode,
             cycleUnit: cycleUnit, cycleCount: cycleCount, scaleByDays: scale
           };
+          if (!isGeral) updates.categoryIds = resolved.slice(1);
           // Só manda o início se a pessoa mexeu nele (senão a âncora que o orçamento já tem fica como está).
           if (startTouched) updates.cycleStart = chosenStart;
           // Só manda amount quando o modo for manual -- trocar PRA Automático não deve

@@ -913,13 +913,13 @@ function classifyBudgetCategorySelection_(categoryIds, allCategories) {
 }
 
 /**
- * Garante que a linha especial de "não orçamentado" (ver computeBudgetAutoProgress_,
- * JavaScript.html) já exista, criando-a na primeira vez que alguém abrir o app depois
- * desse recurso existir -- sem precisar de nenhuma migração manual. CategoryID fica
- * vazio de propósito (a cobertura de categoria é sempre recalculada ao vivo, nunca lida
- * dessa linha). PeriodMode 'auto' sempre -- essa barra não tem período/valor manual
- * configurável, unificada com todo orçamento Automático (usa o mesmo X derivado de Y),
- * ver listBudgets/grilling.
+ * Garante que a linha especial do orçamento "Geral" (antes "não orçamentado"; ver
+ * budgetWithEffectiveCategories_, JavaScript.html) já exista, criando-a na primeira vez que
+ * alguém abrir o app -- sem migração manual. Linha antiga de "não orçamentado" vira o Geral
+ * sozinha (mesma marca IsUnbudgetedCatchAll). CategoryID fica vazio de propósito (o Geral cobre
+ * todas as despesas, sempre calculado ao vivo). Só guarda o que é da pessoa: ciclo, início e,
+ * se ela digitou um valor, o valor fixo (PeriodMode 'manual' + MonthlyLimit); PeriodMode
+ * 'auto' = soma dos orçamentos + estimativa, calculada no cliente.
  */
 function ensureUnbudgetedCatchAllBudget_(rows) {
   var existing = rows.filter(function (b) { return parseBoolCell_(b.IsUnbudgetedCatchAll); })[0];
@@ -1016,10 +1016,10 @@ function listBudgets(includeArchived) {
         cycleStart: b.CycleStart ? String(b.CycleStart).slice(0, 10) : null,
         archived: isArchived_(b.Archived),
         isUnbudgetedCatchAll: isCatchAll,
-        // A barra catch-all é SEMPRE 'auto' (nunca teve PeriodMode próprio antes desse
-        // recurso existir) -- pra todo o resto, linha antiga sem essa coluna = 'manual'
-        // (ver SCHEMA, SheetService.js).
-        periodMode: isCatchAll ? 'auto' : (b.PeriodMode || 'manual'),
+        // O Geral é 'auto' (soma + estimativa) até a pessoa digitar um valor fixo ('manual', com o
+        // valor em MonthlyLimit); "Voltar ao automático" devolve 'auto' -- pra todo o resto, linha
+        // antiga sem essa coluna = 'manual' (ver SCHEMA, SheetService.js).
+        periodMode: isCatchAll ? (b.PeriodMode === 'manual' ? 'manual' : 'auto') : (b.PeriodMode || 'manual'),
         createdAt: b.CreatedAt ? String(b.CreatedAt).slice(0, 10) : null
       };
     });
@@ -1114,6 +1114,9 @@ function createBudget(input) {
 function updateBudget(input) {
   if (!input.id) throw new Error('ID do orçamento é obrigatório.');
   var updates = {};
+  // O Geral cobre todas as categorias: nunca troca de categorias (ignora categoryIds do cliente).
+  var targetRow = readAll_('Budgets').filter(function (r) { return r.ID === input.id; })[0];
+  var isGeral = !!targetRow && parseBoolCell_(targetRow.IsUnbudgetedCatchAll);
   if (input.periodMode !== undefined) updates.PeriodMode = input.periodMode === 'auto' ? 'auto' : 'manual';
   if (input.amount !== undefined) {
     var amount = Number(input.amount);
@@ -1142,7 +1145,7 @@ function updateBudget(input) {
     var beforeStart = before && before.CycleStart ? String(before.CycleStart).slice(0, 10) : '';
     if (beforeStart !== newStart) updates.RecoveryDismissedFrom = '';
   }
-  if (input.categoryIds !== undefined) {
+  if (input.categoryIds !== undefined && !isGeral) {
     var categoryIds = Array.isArray(input.categoryIds) ? input.categoryIds : parseCategoryIdList_(input.categoryIds);
     validateBudgetCategoryIds_(categoryIds, input.id);
     updates.CategoryID = categoryIds.join(',');
@@ -1167,6 +1170,9 @@ function dismissBudgetRecovery(input) {
 }
 
 function removeBudget(id) {
+  // O orçamento "Geral" sempre existe: não pode ser apagado (só editado).
+  var target = readAll_('Budgets').filter(function (r) { return r.ID === id; })[0];
+  if (target && parseBoolCell_(target.IsUnbudgetedCatchAll)) throw new Error('O orçamento Geral não pode ser removido.');
   var removed = deleteRowById_('Budgets', id);
   if (!removed) throw new Error('Orçamento não encontrado.');
   return true;
@@ -3638,9 +3644,11 @@ var SCHEMA = {
   // criada depois entrar automaticamente sem precisar editar o orçamento (ver
   // classifyBudgetCategorySelection_/effectiveCategoryIdsForBudgetRow_, Budgets.js).
   // IsUnbudgetedCatchAll marca a ÚNICA linha especial (auto-criada por listBudgets,
-  // Budgets.js) que rastreia despesas fora de qualquer orçamento -- CategoryID fica
-  // vazio nela (categorias de verdade são recalculadas ao vivo, ver JavaScript.html),
-  // só CreatedAt importa (âncora do período de 30 dias que ela mesma controla).
+  // Budgets.js): o orçamento "Geral", que cobre TODAS as despesas -- CategoryID fica
+  // vazio nela (as categorias são recalculadas ao vivo, ver JavaScript.html). Guarda só o
+  // que é da pessoa: ciclo (CycleUnit/CycleCount/ScaleByDays), CycleStart e, se ela
+  // digitou um valor fixo, PeriodMode 'manual' + MonthlyLimit (PeriodMode 'auto' = soma
+  // dos orçamentos + estimativa, calculada no cliente). Não pode ser removida.
   // PeriodMode ('manual'|'auto', linha antiga sem essa coluna = 'manual'): 'auto' faz
   // o orçamento usar o período/teto derivados de Y (data de engajamento real) em vez
   // de IntervalDays/MonthlyLimit -- ver budgetAutoWindowDays_/computeBudgetAutoProgress_,
