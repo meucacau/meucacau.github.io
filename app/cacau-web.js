@@ -129,13 +129,26 @@ var CacauGAS = (function () {
     setItem: function (k, v) { memoryStore[k] = String(v); },
     removeItem: function (k) { delete memoryStore[k]; }
   };
-  function useStorage(store) { storage = store; }
+  var customStorage = false;
+  function useStorage(store) { storage = store; customStorage = true; }
 
+  // Propriedades do usuário (estado do cacaueiro, preferências) precisam sobreviver ao F5: no
+  // Apps Script elas ficam no servidor; aqui ficam no localStorage, separadas por e-mail. O ID da
+  // planilha NÃO entra: quem guarda esse é o backend.js, que o apaga ao sair da conta. Sem
+  // localStorage (testes em Node, navegador bloqueando), cai pra memória.
+  function durableStore_() {
+    if (customStorage) return null;
+    try { return typeof localStorage !== 'undefined' ? localStorage : null; } catch (e) { return null; }
+  }
   function propertyStore_(prefix) {
+    function slot_(key) {
+      var durable = /SPREADSHEET/.test(key) ? null : durableStore_();
+      return durable ? { store: durable, name: prefix + (identity.email || '') + ':' + key } : { store: storage, name: prefix + key };
+    }
     return {
-      getProperty: function (key) { return storage.getItem(prefix + key); },
-      setProperty: function (key, value) { storage.setItem(prefix + key, value); return this; },
-      deleteProperty: function (key) { storage.removeItem(prefix + key); return this; }
+      getProperty: function (key) { var s = slot_(key); try { return s.store.getItem(s.name); } catch (e) { return null; } },
+      setProperty: function (key, value) { var s = slot_(key); try { s.store.setItem(s.name, String(value)); } catch (e) { /* sem espaço: segue sem guardar */ } return this; },
+      deleteProperty: function (key) { var s = slot_(key); try { s.store.removeItem(s.name); } catch (e) { /* segue */ } return this; }
     };
   }
   var PropertiesService = {

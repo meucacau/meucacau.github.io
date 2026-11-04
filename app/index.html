@@ -171,7 +171,7 @@
   }
 
   /* Plano cujo mês já passou (ver renderBudgets): linha destacada + botão Excluir. */
-  .row.plan-past { background: color-mix(in srgb, var(--warning) 12%, transparent); box-shadow: inset 3px 0 0 var(--warning); }
+  .row.plan-past { background: color-mix(in srgb, var(--warning) 12%, transparent); }
   .plan-past-note { color: var(--warning); font-size: 13px; }
   .plan-past-delete { padding: 4px 10px; font-size: 13px; background: transparent; color: var(--warning); border: 1px solid var(--warning); border-radius: 999px; cursor: pointer; }
   .plan-past-delete.row-x-armed { color: var(--expense); border-color: var(--expense); }
@@ -1598,7 +1598,7 @@
 
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=8c01241132"></script>
+  <script src="cacau-web.js?v=c04fe90f63"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -1984,8 +1984,17 @@
     setPopupTip_(tip, centerX, above);
   }
   function hideTooltip_() {
+    if (tooltipAutoHideTimer_) { clearTimeout(tooltipAutoHideTimer_); tooltipAutoHideTimer_ = null; }
     var existing = document.getElementById('shared-tooltip');
     if (existing) existing.remove();
+  }
+  // Clique/toque num elemento com tooltip: mostra por 3 s (ou até o usuário clicar em outra
+  // coisa). Tooltips com regra própria (linhas de lista, dia do calendário, gráficos) não usam.
+  var TOOLTIP_TAP_MS_ = 3000;
+  var tooltipAutoHideTimer_ = null;
+  function showTooltipForTap_(anchorEl, text, opts) {
+    showTooltip_(anchorEl, text, opts);
+    tooltipAutoHideTimer_ = setTimeout(hideTooltip_, TOOLTIP_TAP_MS_);
   }
   // position:fixed é relativo à VIEWPORT, então por si só já não deveria se mover com o
   // scroll — mas como a posição é calculada só UMA VEZ (na hora de abrir, ver
@@ -2022,7 +2031,8 @@
    * — só existia mouseenter, então tocar um pino não mostrava nada). Um toque mostra;
    * outro toque em qualquer lugar (ou de novo no mesmo elemento) esconde — reaproveita
    * dismissOnOutsideClick, guardando só UM listener de cada vez (stopTooltipOutsideClick_)
-   * pra não empilhar um novo a cada toque.
+   * pra não empilhar um novo a cada toque. O tooltip aberto por clique/toque some sozinho
+   * em 3 s (showTooltipForTap_).
    */
   var stopTooltipOutsideClick_ = null;
   /** delayMs (opcional, 0 = imediato como sempre foi): usado pelo "×" das listas, que
@@ -2044,11 +2054,16 @@
         if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
         hideTooltip_();
       });
+      // Clicar também mostra (e some em 3 s), pra quem clica sem ter passado o mouse antes.
+      el.addEventListener('click', function () {
+        if (!tipText_()) return;
+        showTooltipForTap_(el, tipText_(), rich);
+      });
     } else {
       el.addEventListener('click', function () {
         if (!tipText_()) return;
         if (stopTooltipOutsideClick_) stopTooltipOutsideClick_();
-        showTooltip_(el, tipText_(), rich);
+        showTooltipForTap_(el, tipText_(), rich);
         stopTooltipOutsideClick_ = dismissOnOutsideClick(el, function () {
           hideTooltip_();
           stopTooltipOutsideClick_ = null;
