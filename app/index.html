@@ -6912,8 +6912,7 @@
       container.querySelectorAll('.day-bar-cell[data-date]').forEach(function (el) {
         wireDayCell_(el, function () { scrollToTxDay_(el.dataset.date); });
       });
-      container.onscroll = function () { STATE.txCalendarScrollLeft = container.scrollLeft; };
-      container.scrollLeft = STATE.txCalendarScrollLeft !== null ? STATE.txCalendarScrollLeft : container.scrollWidth;
+      positionTxCalendarScroll_(container);
       return;
     }
     var weekColumns = buildWeekColumns_(range.minDate, range.maxDate);
@@ -6926,8 +6925,42 @@
     container.querySelectorAll('.mini-cal-day[data-date]').forEach(function (el) {
       wireDayCell_(el, function () { scrollToTxDay_(el.dataset.date); });
     });
-    container.onscroll = function () { STATE.txCalendarScrollLeft = container.scrollLeft; };
-    container.scrollLeft = STATE.txCalendarScrollLeft !== null ? STATE.txCalendarScrollLeft : container.scrollWidth;
+    positionTxCalendarScroll_(container);
+  }
+
+  /** Posiciona a rolagem horizontal do Resumo/calendário depois de reconstruir o conteúdo.
+   *  Sem posição guardada (app recém-aberto ou filtro novo) vai pra DATA ATUAL (centraliza o
+   *  dia de hoje; sem hoje no intervalo, vai ao fim). Antes, a rolagem do navegador ao trocar
+   *  o innerHTML disparava um onscroll com scrollLeft 0 que sobrescrevia a posição guardada, e
+   *  um render com a aba ainda sem layout (largura 0) não conseguia rolar: o Resumo abria todo
+   *  à esquerda. Por isso o onscroll só é ligado depois que a posição assenta e, sem layout
+   *  ainda, tenta de novo no próximo quadro (até ~20). */
+  function positionTxCalendarScroll_(container) {
+    container.onscroll = null;
+    var tries = 0;
+    function place() {
+      if (!container.isConnected) return;
+      if (container.clientWidth === 0 && tries < 20) { tries++; requestAnimationFrame(place); return; }
+      var saved = STATE.txCalendarScrollLeft;
+      if (saved !== null) {
+        container.scrollLeft = saved;
+      } else {
+        var cell = container.querySelector('[data-date="' + todayYmd() + '"]');
+        if (cell) {
+          var cellLeft = cell.getBoundingClientRect().left - container.getBoundingClientRect().left + container.scrollLeft;
+          container.scrollLeft = Math.max(0, cellLeft - (container.clientWidth - cell.offsetWidth) / 2);
+        } else {
+          container.scrollLeft = container.scrollWidth;
+        }
+        if (container.clientWidth > 0) STATE.txCalendarScrollLeft = container.scrollLeft;
+      }
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          container.onscroll = function () { STATE.txCalendarScrollLeft = container.scrollLeft; };
+        });
+      });
+    }
+    place();
   }
 
   /** Chamada pelo primeiro render do Extrato e sempre que os filtros mudam (ver
@@ -14200,6 +14233,16 @@
       'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + d + '"/></svg>';
   }
 
+  /** Valor CSS de `cursor` com a seta grossa (mesmo desenho do marginArrowSvg_) apontando pro
+   *  lado da troca de aba: traço escuro com contorno claro, legível em tema claro e escuro. */
+  function marginCursorCss_(direction) {
+    var d = direction < 0 ? 'M19 6l-8 8 8 8' : 'M13 6l8 8-8 8';
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none" ' +
+      'stroke-linecap="round" stroke-linejoin="round"><path d="' + d + '" stroke="#fff" stroke-width="8"/>' +
+      '<path d="' + d + '" stroke="#222" stroke-width="4"/></svg>';
+    return 'url("data:image/svg+xml,' + encodeURIComponent(svg) + '") 16 16, ' + (direction < 0 ? 'w-resize' : 'e-resize');
+  }
+
   function removeMarginButton_() {
     if (marginLeaveTimer_) { clearTimeout(marginLeaveTimer_); marginLeaveTimer_ = null; }
     if (marginButtonEl_) { marginButtonEl_.remove(); marginButtonEl_ = null; }
@@ -14289,23 +14332,34 @@
       document.body.appendChild(zone);
 
       if (HOVER_CAPABLE_) {
-        var lastX = null, lastY = null;
-        zone.addEventListener('mouseenter', function (e) {
-          lastX = e.clientX; lastY = e.clientY;
-          if (marginButtonEl_) return; // já tem um botão vivo (de um hover anterior) -- não reagenda
+        // No PC não há mais botão redondo: com o mouse parado MARGIN_HOVER_DELAY_MS_ na margem,
+        // o PRÓPRIO CURSOR vira uma seta apontando pro lado da troca, e o clique na margem
+        // troca de aba. Mexer o mouse antes do prazo reinicia a espera.
+        var cursorArmed = false;
+        function armCursor() {
+          if (isSwipeBlocked_() || !marginButtonTargetView_(spec.direction)) return;
+          cursorArmed = true;
+          zone.style.cursor = marginCursorCss_(spec.direction);
+        }
+        function disarmCursor() {
+          cursorArmed = false;
+          zone.style.cursor = '';
+        }
+        function scheduleArm() {
           if (marginRevealTimer_) clearTimeout(marginRevealTimer_);
-          marginRevealTimer_ = setTimeout(function () {
-            marginRevealTimer_ = null;
-            // Já na ponta (Início arrastando pra direita, Reembolsos pra esquerda) --
-            // não tem vizinho nesse sentido, clicar não faria nada, então nem mostra
-            // o botão (bug relatado).
-            if (isSwipeBlocked_() || !marginButtonTargetView_(spec.direction)) return;
-            createMarginButton_(lastX, lastY, spec.direction);
-          }, MARGIN_HOVER_DELAY_MS_);
-        });
-        zone.addEventListener('mousemove', function (e) { lastX = e.clientX; lastY = e.clientY; });
+          marginRevealTimer_ = setTimeout(function () { marginRevealTimer_ = null; armCursor(); }, MARGIN_HOVER_DELAY_MS_);
+        }
+        zone.addEventListener('mouseenter', function () { disarmCursor(); scheduleArm(); });
+        zone.addEventListener('mousemove', function () { if (!cursorArmed) scheduleArm(); });
         zone.addEventListener('mouseleave', function () {
           if (marginRevealTimer_) { clearTimeout(marginRevealTimer_); marginRevealTimer_ = null; }
+          disarmCursor();
+        });
+        zone.addEventListener('click', function () {
+          if (isSwipeBlocked_()) return;
+          var target = marginButtonTargetView_(spec.direction);
+          if (target) switchViewAnimated_(target);
+          if (!marginButtonTargetView_(spec.direction)) disarmCursor(); // chegou na ponta: sem vizinho, cursor volta ao normal
         });
       } else {
         zone.addEventListener('touchstart', function (e) {
