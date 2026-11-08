@@ -1402,15 +1402,17 @@
   .budget-slot { display: flex; align-items: center; gap: 8px; min-height: 34px; font-size: 12px; line-height: 1.3; }
   .budget-slot > span { flex: 1 1 auto; min-width: 0; }
   .budget-slot-btn { flex: 0 0 auto; padding: 2px 10px; font-size: 11px; white-space: nowrap; }
-  /* Ciclo sugerido: frase + 3 botões (dias / semanas / meses) numa coluna de altura reservada. */
-  .budget-ideal { flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 6px; min-height: 60px; }
-  .budget-ideal-btns { display: flex; gap: 6px; }
-  .budget-ideal-btns .budget-slot-btn { flex: 1 1 0; min-width: 0; padding: 4px 6px; }
-  .budget-ideal-btns .budget-slot-btn.active, .budget-from-start.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+  /* Ciclo sugerido: uma frase (o botão "X meses (sugerido)" fica no cabeçalho do Ciclo) numa área de altura reservada. */
+  .budget-ideal { min-height: 34px; }
+  .budget-from-start.active { background: var(--primary); border-color: var(--primary); color: #fff; }
   .budget-typical { font-size: 12px; margin-top: 0; }
-  .budget-value-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; min-height: 44px; }
-  .budget-value-head > label:first-child { margin-bottom: 6px; }
-  .budget-switch { display: flex; align-items: center; justify-content: flex-end; gap: 8px; max-width: 62%; margin: 0 0 4px; font-size: 11px; line-height: 1.25; text-align: right; cursor: pointer; }
+  /* − campo + : botões redondos dos lados do ciclo e do valor. */
+  .budget-stepper { display: flex; align-items: center; gap: 8px; }
+  .budget-stepper .budget-cycle-capsule { margin-bottom: 0; }
+  .budget-stepper #b-amount-field { flex: 1 1 auto; min-width: 0; }
+  .budget-stepper #b-amount-field input { margin: 0; }
+  .budget-start-step:disabled { opacity: 0.4; cursor: default; }
+  .budget-switch { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; margin: 8px 0 0; font-size: 11px; line-height: 1.25; cursor: pointer; }
   .budget-switch.is-hidden { visibility: hidden; pointer-events: none; }
   .budget-switch input { -webkit-appearance: none; appearance: none; position: relative; flex: 0 0 auto; width: 36px; min-width: 36px; height: 20px; margin: 0; padding: 0; border: none; border-radius: 999px; background: var(--border); cursor: pointer; transition: background 0.15s; }
   .budget-switch input::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 0.15s; }
@@ -1423,6 +1425,7 @@
   .budget-from-start { flex: 0 0 auto; padding: 4px 12px; font-size: 12px; white-space: nowrap; }
   .budget-start-date { position: relative; flex: 1 1 auto; display: flex; align-items: center; justify-content: center; height: 48px; padding: 0 12px; box-sizing: border-box; border: 1px solid var(--border); border-radius: 24px; font-size: 13px; line-height: 1.25; text-align: center; color: var(--text); }
   .budget-start-date input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; opacity: 0; cursor: pointer; }
+  .budget-preview-title { display: block; margin: 4px 0 6px; }
   .budget-preview-slot { min-height: 56px; }
   #b-preview { min-height: 22px; display: flex; align-items: center; }
   .budget-preview-note { font-size: 12px; margin-top: 6px; min-height: 32px; }
@@ -7856,6 +7859,8 @@
   // (b.cycleStart, ou b.createdAt em orçamento sem início escolhido) e se repete a cada N unidades. A lógica antiga de "últimos N dias"
   // (janela móvel) está guardada na tag git reserva-orcamento-ultimos-dias.
   var BUDGET_CYCLE_MAX_ = { day: 999, week: 104, month: 60 };
+  var BUDGET_AMOUNT_MAX_ = 999999999;   // o campo de valor aceita 9 dígitos (setupIntMoneyInput_)
+  var BUDGET_AMOUNT_STEP_ = 50;         // passo dos botões − e + do valor
   var BUDGET_CYCLE_FALLBACK_ANCHOR_ = '2023-12-31'; // domingo -- só pra linha sem CreatedAt
   var BUDGET_REFERENCE_MONTH_DAYS_ = 30; // taxa de referência do toggle "ajustar pelos dias do mês"
   var BUDGET_TYPICAL_MONTHS_ = 6;
@@ -11754,7 +11759,7 @@
    * passado; N>1 se ancora no primeiro ciclo). Acima do Salvar, uma prévia em círculos dos ciclos
    * anteriores com o ciclo/valor escolhidos (mesmas cores e regra de compensação do
    * Início/Planejamento, ver budgetCircleSeries_). Sugestões: ciclo sugerido (budgetIdealCycle_,
-   * janelas de 10 lançamentos, 3 botões dia/semana/mês) e valor sugerido P75
+   * janelas de 10 lançamentos, botão "X meses (sugerido)") e valor sugerido P75
    * (budgetP75Suggestion_) pro ciclo escolhido, com botão "Usar". Orçamento NOVO é sempre Manual
    * (Automático não é mais oferecido na criação); um orçamento Automático que já existe continua
    * valendo e só ele mostra o seletor Automático|Manual na edição.
@@ -11826,7 +11831,11 @@
     openModal(
       '<h2>' + (isGeral ? 'Editar orçamento Geral' : (isEdit ? 'Editar orçamento' : 'Novo orçamento')) + '</h2>' +
       (isGeral ? '' : '<div class="field"><label>Categoria (pode escolher mais de uma)</label><div id="b-category-field" class="capsule-field"></div></div>') +
-      '<div class="field"><label>Ciclo</label>' +
+      '<div class="field">' +
+        '<div class="budget-first-head"><label>Ciclo</label>' +
+          '<button type="button" class="secondary budget-from-start" id="b-cycle-sug" style="display:none"></button></div>' +
+        '<div class="budget-stepper">' +
+        '<button type="button" class="secondary budget-start-step" id="b-cycle-minus" aria-label="Diminuir o ciclo em 1">−</button>' +
         '<div class="budget-cycle-capsule" id="b-cycle-cap">' +
           '<input id="b-cycle-count" type="text" inputmode="numeric" maxlength="3" autocomplete="off" aria-label="Quantidade">' +
           '<div class="budget-cycle-wheel" id="b-cycle-wheel" tabindex="0" role="listbox" aria-label="Unidade do ciclo (role para trocar)">' +
@@ -11835,22 +11844,28 @@
             '<button type="button" class="budget-wheel-item" data-o="1" tabindex="-1"></button>' +
           '</div>' +
         '</div>' +
+        '<button type="button" class="secondary budget-start-step" id="b-cycle-plus" aria-label="Aumentar o ciclo em 1">+</button>' +
+        '</div>' +
         '<div class="muted budget-slot budget-ideal" id="b-ideal"></div>' +
       '</div>' +
       '<div class="field budget-value-field">' +
-        '<div class="budget-value-head"><label>Valor</label>' +
-          '<label class="budget-switch" id="b-scale-wrap"><span>Aumentar/diminuir em meses com mais/menos de 30 dias</span>' +
-            '<input type="checkbox" id="b-scale" role="switch"></label></div>' +
+        '<div class="budget-first-head"><label>Valor</label>' +
+          '<button type="button" class="secondary budget-from-start" id="b-amount-sug" style="display:none"></button></div>' +
         (showModeToggle
           ? '<div class="kind-toggle" id="b-mode-toggle" style="margin-bottom:8px">' +
               '<button type="button" data-m="auto">Automático</button>' +
               '<button type="button" data-m="manual">Manual</button>' +
             '</div>'
           : '') +
-        '<div id="b-amount-field"></div>' +
+        '<div class="budget-stepper">' +
+          '<button type="button" class="secondary budget-start-step" id="b-amount-minus" aria-label="Diminuir o valor em R$ 50">−</button>' +
+          '<div id="b-amount-field"></div>' +
+          '<button type="button" class="secondary budget-start-step" id="b-amount-plus" aria-label="Aumentar o valor em R$ 50">+</button>' +
+        '</div>' +
+        '<label class="budget-switch" id="b-scale-wrap"><span>Aumentar/diminuir em meses com mais/menos de 30 dias</span>' +
+          '<input type="checkbox" id="b-scale" role="switch"></label>' +
         (isGeral ? '<div class="muted budget-slot" id="b-geral-note"></div>' : '') +
         '<div class="muted budget-slot budget-typical" id="b-typical"></div>' +
-        '<div class="muted budget-slot budget-p75" id="b-p75"></div>' +
       '</div>' +
       '<div class="field budget-preview-block">' +
         '<div class="budget-first-head"><label>Primeiro ciclo</label>' +
@@ -11861,6 +11876,7 @@
             '<input type="date" id="b-start-date" aria-label="Escolher o primeiro ciclo"></div>' +
           '<button type="button" class="secondary budget-start-step" id="b-start-next" aria-label="Primeiro ciclo seguinte">›</button>' +
         '</div>' +
+        '<label class="budget-preview-title">Prévia</label>' +
         '<div class="budget-preview-slot"><div id="b-preview"></div><div class="muted budget-preview-note" id="b-preview-note"></div></div>' +
       '</div>' +
       (recoveryNow ? '<div class="muted budget-typical" style="margin-bottom:10px">' + escapeHtml(budgetRecoveryNote_(recoveryNow)) +
@@ -11938,28 +11954,26 @@
       }
     }
 
-    /** Ciclo sugerido (janelas de 10 lançamentos): frase curta + 3 botões (dias / semanas / meses, cada um
-     *  arredondado pra cima a partir da mediana). Clicar num botão ajusta a cápsula e o número. */
+    /** "nesta categoria" / "nestas categorias", conforme quantas estão escolhidas. */
+    function theseCategories_() { return selectedCategoryIds.length === 1 ? 'nesta categoria' : 'nestas categorias'; }
+    /** Ciclo sugerido (janelas de 10 lançamentos): uma frase e o botão "X meses (sugerido)" no cabeçalho do Ciclo
+     *  (a mediana arredondada pra cima em meses). Clicar ajusta a cápsula. */
     function renderIdeal_() {
       var el = document.getElementById('b-ideal');
+      var btn = document.getElementById('b-cycle-sug');
       el.textContent = '';
       var ideal = selectedCategoryIds.length ? budgetIdealCycle_(spends_()) : null;
-      if (!ideal) return;
+      if (!ideal) { btn.style.display = 'none'; return; }
       var span = document.createElement('span');
-      span.textContent = 'A cada ' + BUDGET_IDEAL_MIN_LAUNCHES_ + ' lançamentos nessas categorias passam-se, em geral, ~' + ideal.days + (ideal.days === 1 ? ' dia.' : ' dias.');
+      span.textContent = 'Você leva cerca de ' + ideal.days + (ideal.days === 1 ? ' dia' : ' dias') + ' para acumular ' + BUDGET_IDEAL_MIN_LAUNCHES_ + ' lançamentos ' + theseCategories_();
       el.appendChild(span);
-      var row = document.createElement('div');
-      row.className = 'budget-ideal-btns';
-      [{ unit: 'day', count: ideal.days }, { unit: 'week', count: ideal.weeks }, { unit: 'month', count: ideal.months }].forEach(function (o) {
-        var count = Math.min(BUDGET_CYCLE_MAX_[o.unit], o.count);
-        var btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'secondary budget-slot-btn' + (o.unit === cycleUnit && count === cycleCount ? ' active' : '');
-        btn.textContent = budgetCycleLabel_({ unit: o.unit, count: count });
-        btn.onclick = function () { setCycle_(o.unit, count); };
-        row.appendChild(btn);
-      });
-      el.appendChild(row);
+      var months = Math.min(BUDGET_CYCLE_MAX_.month, ideal.months);
+      var on = cycleUnit === 'month' && cycleCount === months;
+      btn.style.display = '';
+      btn.textContent = budgetCycleLabel_({ unit: 'month', count: months }) + ' (sugerido)';
+      btn.classList.toggle('active', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      btn.onclick = function () { setCycle_('month', months); };
     }
     /** Gasto típico (mediana) das categorias escolhidas -- por dia, por semana e por mês -- sem centavos. */
     function renderTypical_() {
@@ -11967,39 +11981,60 @@
       if (!selectedCategoryIds.length) { el.textContent = ''; return; }
       var typical = budgetTypicalSpend_(selectedCategoryIds);
       if (typical.month === null && typical.week === null) {
-        el.textContent = 'Gasto típico: histórico insuficiente (menos de ' + BUDGET_TYPICAL_MIN_CYCLES_ + ' ciclos fechados).';
+        el.textContent = 'Gasto típico: histórico insuficiente (menos de ' + BUDGET_TYPICAL_MIN_CYCLES_ + ' ciclos fechados)';
         return;
       }
       function part_(value, unitText) { return value === null ? null : fmtMoneyNoCents_(value) + ' por ' + unitText; }
-      el.textContent = 'Gasto típico: ' + [part_(typical.day, 'dia'), part_(typical.week, 'semana'), part_(typical.month, 'mês')]
-        .filter(function (x) { return x; }).join(' · ') + '.';
+      el.textContent = 'Você gasta cerca de ' + [part_(typical.day, 'dia'), part_(typical.week, 'semana'), part_(typical.month, 'mês')]
+        .filter(function (x) { return x; }).join(' · ') + ' ' + theseCategories_();
     }
-    /** Valor sugerido (P75 dos ciclos fechados, pra cima em múltiplos de R$ 50) + botão pra usar. */
+    /** Valor sugerido (P75 dos ciclos fechados, pra cima em múltiplos de R$ 50): botão "R$ 450 (sugerido)" no
+     *  cabeçalho do Valor. Também mantém o − e o + do valor (ficam desligados quando não dá pra mexer). */
     function renderP75_() {
+      var btn = document.getElementById('b-amount-sug');
       var sug = (periodMode === 'manual' && selectedCategoryIds.length) ? budgetP75Suggestion_(pseudoBudget_(), { spends: spends_() }) : null;
-      if (!sug) { setSlot_('b-p75', ''); return; }
       var current = currentAmount_();
-      setSlot_('b-p75', 'Valor sugerido: ' + fmtMoneyNoCents_(sug.amount),
-        current === sug.amount ? null : 'Usar', function () {
-          amountTouched = true; amountValue = sug.amount;
-          var input = document.getElementById('b-amount');
-          if (input && input.setValue) input.setValue(sug.amount);
-          renderPreview_(); renderP75_();
-        });
+      if (!sug) {
+        btn.style.display = 'none';
+      } else {
+        btn.style.display = '';
+        btn.textContent = fmtMoneyNoCents_(sug.amount) + ' (sugerido)';
+        btn.classList.toggle('active', current === sug.amount);
+        btn.setAttribute('aria-pressed', current === sug.amount ? 'true' : 'false');
+        btn.onclick = function () { setAmount_(sug.amount); };
+      }
+      var locked = periodMode === 'auto' && !isGeral;   // Automático (fora o Geral): o valor vem do cálculo, não de clique
+      document.getElementById('b-amount-minus').disabled = locked || !(Math.round(current || 0) > 0);
+      document.getElementById('b-amount-plus').disabled = locked || Math.round(current || 0) >= BUDGET_AMOUNT_MAX_;
+    }
+    /** Grava um valor escolhido por clique (sugerido, − ou +): mesmo efeito de digitar -- no Geral automático vira valor fixo. */
+    function setAmount_(v) {
+      v = Math.max(0, Math.min(BUDGET_AMOUNT_MAX_, Math.round(v)));
+      amountTouched = true; amountValue = v;
+      var wasAuto = periodMode === 'auto';
+      periodMode = 'manual';
+      var input = document.getElementById('b-amount');
+      if (input && input.setValue) input.setValue(v);
+      if (wasAuto) renderGeralNote_();
+      renderPreview_(); renderP75_();
+    }
+    function stepAmount_(delta) {
+      if (periodMode === 'auto' && !isGeral) return;
+      setAmount_(Math.round(currentAmount_() || 0) + delta);
     }
     /** Geral: linha logo abaixo do valor -- Automático explica de onde vem; fixo mostra "Voltar ao automático". */
     function renderGeralNote_() {
       if (!isGeral) return;
       if (periodMode === 'manual') {
         var auto = geralAutoAmount_();
-        setSlot_('b-geral-note', 'Valor fixo' + (auto !== null ? ' (o automático seria ' + fmtMoneyNoCents_(auto) + ').' : '.'), 'Voltar ao automático', function () {
+        setSlot_('b-geral-note', 'Valor fixo' + (auto !== null ? ' (o automático seria ' + fmtMoneyNoCents_(auto) + ')' : ''), 'Voltar ao automático', function () {
           periodMode = 'auto'; amountTouched = false;
           renderAmountField_(); renderGeralNote_(); renderP75_(); renderPreview_();
         });
       } else {
         setSlot_('b-geral-note', geralAutoAmount_() !== null
-          ? 'Automático: soma dos orçamentos + estimativa do que não tem orçamento. Digite um valor para fixar.'
-          : 'Nada para somar ainda (sem orçamentos nem histórico). Digite um valor para fixar.');
+          ? 'Automático: soma dos orçamentos + estimativa do que não tem orçamento. Digite um valor para fixar'
+          : 'Nada para somar ainda (sem orçamentos nem histórico). Digite um valor para fixar');
       }
     }
     function renderAmountField_() {
@@ -12060,6 +12095,8 @@
       var isMonth = cycleUnit === 'month';
       document.getElementById('b-scale-wrap').classList.toggle('is-hidden', !isMonth);
       document.getElementById('b-scale').checked = scaleByDays;
+      document.getElementById('b-cycle-minus').disabled = cycleCount <= 1;
+      document.getElementById('b-cycle-plus').disabled = cycleCount >= BUDGET_CYCLE_MAX_[cycleUnit];
     }
     function renderStart_() {
       var base = startBase_();
@@ -12078,16 +12115,14 @@
       var note = document.getElementById('b-preview-note');
       box.innerHTML = '';
       var amount = currentAmount_();
-      if (!selectedCategoryIds.length) { note.textContent = 'Escolha uma categoria para ver a prévia.'; return; }
-      if (periodMode === 'auto' && amount === null) { note.textContent = isGeral ? 'Sem orçamentos nem histórico para somar: digite um valor.' : 'Histórico insuficiente para calcular o valor Automático.'; return; }
-      if (!(amount > 0)) { note.textContent = 'Digite o valor para ver a prévia.'; return; }
+      if (!selectedCategoryIds.length) { note.textContent = 'Escolha uma categoria para ver a prévia'; return; }
+      if (periodMode === 'auto' && amount === null) { note.textContent = isGeral ? 'Sem orçamentos nem histórico para somar: digite um valor' : 'Histórico insuficiente para calcular o valor Automático'; return; }
+      if (!(amount > 0)) { note.textContent = 'Digite o valor para ver a prévia'; return; }
       var series = budgetCircleSeries_(pseudoBudget_(), { amount: amount, spends: spends_() });
       if (!series) { note.textContent = ''; return; }
       box.innerHTML = budgetCirclesTrackHtml_(series);
       wireBudgetCircles_(box);
-      note.textContent = series.circles.length > 1
-        ? 'Como seriam os ciclos anteriores com este valor (toque num círculo).'
-        : 'Ainda sem ciclos fechados: o círculo é o ciclo atual.';
+      note.textContent = '';
     }
     function renderModeToggle_() {
       document.querySelectorAll('#b-mode-toggle button').forEach(function (btn) { btn.classList.toggle('active', btn.dataset.m === periodMode); });
@@ -12165,6 +12200,10 @@
         if (o) stepWheel_(o);   // clicar na vizinha traz ela pro centro
       };
     });
+    document.getElementById('b-cycle-minus').onclick = function () { setCycle_(cycleUnit, cycleCount - 1); };
+    document.getElementById('b-cycle-plus').onclick = function () { setCycle_(cycleUnit, cycleCount + 1); };
+    document.getElementById('b-amount-minus').onclick = function () { stepAmount_(-BUDGET_AMOUNT_STEP_); };
+    document.getElementById('b-amount-plus').onclick = function () { stepAmount_(BUDGET_AMOUNT_STEP_); };
     document.getElementById('b-scale').onchange = function () {
       scaleByDays = document.getElementById('b-scale').checked;
       syncGeral_();
