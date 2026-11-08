@@ -470,6 +470,8 @@
     margin-right: 4px;
     margin-bottom: calc((60px - var(--dock-btn)) / 2);
   }
+  /* Bolinha vermelha (novo estágio ainda não visto): mesmo canto do selo do botão "para confirmar". */
+  .tree-badge { position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; box-sizing: border-box; border-radius: 50%; background: var(--expense); box-shadow: 0 1px 3px rgba(0,0,0,0.3); pointer-events: none; }
   .tree-fab .tab-ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   html[data-nav-side="left"] .tree-fab { grid-column: 3; justify-self: start; margin-right: 0; margin-left: 4px; }
   @media (max-width: 409px) {
@@ -747,6 +749,23 @@
   .tree-pop-fill { background: var(--primary); }
   .tree-bar { height: 10px; border-radius: 5px; background: var(--border); overflow: hidden; margin: 10px 0 4px; }
   .tree-bar > span { display: block; height: 100%; border-radius: 5px; background: var(--primary); transition: width .4s ease; }
+  /* Linha do tempo dos estágios (treeTimelineHtml_): rolagem lateral; cada etapa é uma coluna posicionada pelo tempo médio. */
+  .tree-tl-scroll { overflow-x: auto; margin: 14px -4px 4px; padding-bottom: 6px; -webkit-overflow-scrolling: touch; }
+  .tree-tl { position: relative; height: 130px; }
+  .tree-tl-line { position: absolute; top: 65px; height: 2px; border-radius: 1px; background: var(--border); }
+  .tree-tl-line > span { display: block; height: 100%; border-radius: 1px; background: var(--primary); }
+  .tree-tl-item { position: absolute; top: 0; width: 84px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .tree-tl-imgbox { position: relative; width: 56px; height: 56px; margin-bottom: 4px; display: flex; align-items: flex-end; justify-content: center; }
+  .tree-tl-img { max-width: 100%; max-height: 100%; }
+  .tree-tl-img.off { filter: url(#tree-sil); opacity: .3; }
+  .tree-tl-check { position: absolute; top: -2px; right: 2px; width: 16px; height: 16px; border-radius: 50%; background: #2e9e57; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px var(--surface, #fff); }
+  .tree-tl-check svg { width: 10px; height: 10px; fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .tree-tl-dot { width: 10px; height: 10px; margin: 1px 0 5px; border-radius: 50%; background: var(--surface, #fff); border: 2px solid var(--border); box-sizing: border-box; }
+  .tree-tl-item.reached .tree-tl-dot { background: var(--primary); border-color: var(--primary); }
+  .tree-tl-item.current .tree-tl-dot { width: 14px; height: 14px; margin: -1px 0 3px; box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 25%, transparent); }
+  .tree-tl-name { font-size: 11px; line-height: 1.2; }
+  .tree-tl-sub { font-size: 10.5px; line-height: 1.3; color: var(--text-muted); }
+  .tree-tl-item:not(.reached) .tree-tl-name { color: var(--text-muted); font-weight: 600; }
   .tree-facts { text-align: left; margin: 14px 0 12px; border-top: 1px solid var(--border); }
   .tree-facts > div { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
   .tree-facts > div > span:first-child { color: var(--text-muted); }
@@ -14501,8 +14520,33 @@
     return run('touchTree', input).then(function (view) {
       treeState_ = view;
       if (scores) treeHealth_ = scores;
+      treeUpdateBadge_(view);
       return view;
     });
+  }
+  // Bolinha vermelha no botão do cacaueiro: a árvore subiu de estágio e a pessoa ainda não abriu a
+  // janela pra ver. "Visto" = último estágio com a janela aberta, guardado neste aparelho. Na
+  // primeira vez no aparelho não há nada a descobrir: grava o estágio atual sem acender a bolinha.
+  var TREE_ACK_KEY_ = 'cacau-tree-ack';
+  function treeAckGet_() { try { var v = parseInt(localStorage.getItem(TREE_ACK_KEY_), 10); return isFinite(v) ? v : 0; } catch (e) { return 0; } }
+  function treeAckSet_(stage) { try { localStorage.setItem(TREE_ACK_KEY_, String(stage)); } catch (e) { /* sem armazenamento: a bolinha só não aparece */ } }
+  function treeBadgeShouldShow_(stage, ack) { return ack > 0 && stage > ack; }
+  function treeUpdateBadge_(view) {
+    var btn = document.getElementById('tree-open');
+    if (!btn || !view) return;
+    var ack = treeAckGet_();
+    if (ack === 0) { treeAckSet_(view.stage); ack = view.stage; }
+    var show = treeBadgeShouldShow_(view.stage, ack);
+    var dot = btn.querySelector('.tree-badge');
+    if (show && !dot) {
+      dot = document.createElement('span');
+      dot.className = 'tree-badge';
+      dot.setAttribute('aria-hidden', 'true');
+      btn.appendChild(dot);
+    } else if (!show && dot) dot.remove();
+    var label = show ? 'Meu cacaueiro: novo estágio' : 'Meu cacaueiro';
+    btn.setAttribute('aria-label', label);
+    btn.title = label;
   }
   function treeNoteEntry_() {
     treeTouch_(true).then(function () {
@@ -14560,6 +14604,71 @@
   function treeSeenGet_() { try { return localStorage.getItem(TREE_SEEN_KEY_) || ''; } catch (e) { return ''; } }
   function treeSeenSet_(file) { try { localStorage.setItem(TREE_SEEN_KEY_, file); } catch (e) { /* sem armazenamento: só não faz a transição */ } }
   function treeImgSrc_(file) { return TREE_IMG_BASE_ + file + '.webp'; }
+  // ---------- linha do tempo dos estágios (janela do cacaueiro) ----------
+  /**
+   * Os 8 estágios numa linha horizontal. Etapa alcançada: desenho + check verde; ainda não
+   * alcançada: só a silhueta, bem esmaecida. A distância entre as etapas segue o tempo MÉDIO
+   * (pontos ÷ TREE_TL_PTS_PER_DAY_), comprimida pela raiz quadrada: sem isso as primeiras
+   * etapas (3 dias) ficariam coladas e as últimas (meses) gigantes. Os números de cada etapa
+   * são sempre desde o começo: "X pts até aqui" e "em ~Y".
+   */
+  var TREE_TL_PTS_PER_DAY_ = 2;  // ritmo assumido: abre todo dia e lança em alguns
+  var TREE_TL_UNIT_PX_ = 52;     // largura por unidade de raiz(dias)
+  var TREE_TL_ITEM_PX_ = 84;     // largura da coluna de cada etapa
+  /** "~3 dias" (até 14 dias), "~6 semanas" (15 dias a 8 semanas), "~3 meses" (60 dias em diante). */
+  function treeDurationLabel_(days) {
+    if (days < 15) { var d = Math.max(1, Math.round(days)); return d + (d === 1 ? ' dia' : ' dias'); }
+    if (days < 60) return Math.round(days / 7) + ' semanas';
+    var m = Math.round(days / 30);
+    return m + (m === 1 ? ' mês' : ' meses');
+  }
+  /** Posição (px, a partir do 1º estágio) e tempo médio de cada estágio. */
+  function treeTimelineLayout_() {
+    return TREE_POINTS_.map(function (pts) {
+      var days = pts / TREE_TL_PTS_PER_DAY_;
+      return { pts: pts, days: days, x: Math.sqrt(days) * TREE_TL_UNIT_PX_ };
+    });
+  }
+  /** Posição (px) do progresso atual: interpola entre o estágio atual e o próximo. */
+  function treeTimelineCursorX_(layout, view) {
+    var i = view.stage - 1, here = layout[i], next = layout[i + 1];
+    if (!next) return here.x;
+    var frac = Math.max(0, Math.min(1, (view.points - here.pts) / (next.pts - here.pts)));
+    return here.x + frac * (next.x - here.x);
+  }
+  function treeTimelineHtml_(view) {
+    var layout = treeTimelineLayout_();
+    var pad = TREE_TL_ITEM_PX_ / 2;
+    var lastX = layout[layout.length - 1].x;
+    var cursorX = treeTimelineCursorX_(layout, view);
+    // Silhueta: os desenhos têm um disco verde-claro de fundo (luminância ~0,91); pinta de cinza só o que é
+    // mais escuro que o disco (a planta e a terra) e deixa o disco e o fora do desenho transparentes.
+    // A coluna do alfa: 16,67 × (0,86 − luminância) e o termo do alfa original zera os pixels transparentes.
+    var html = '<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><filter id="tree-sil" color-interpolation-filters="sRGB">' +
+      '<feColorMatrix type="matrix" values="0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 .5  -3.54 -11.92 -1.2 40 -25.67"/></filter></svg>' +
+      '<div class="tree-tl-scroll" aria-label="Linha do tempo dos estágios"><div class="tree-tl" style="width:' + (lastX + TREE_TL_ITEM_PX_) + 'px">' +
+      '<div class="tree-tl-line" style="left:' + pad + 'px;width:' + lastX + 'px"><span style="width:' + cursorX + 'px"></span></div>';
+    layout.forEach(function (st, i) {
+      var reached = view.stage >= i + 1;
+      var name = escapeHtml(TREE_STAGES_[i].name);
+      html += '<div class="tree-tl-item' + (view.stage === i + 1 ? ' current' : '') + (reached ? ' reached' : '') + '" data-stage="' + (i + 1) + '" style="left:' + (pad + st.x) + 'px">' +
+        '<div class="tree-tl-imgbox"><img class="tree-tl-img' + (reached ? '' : ' off') + '" alt="' + (reached ? name : '') + '" src="' + treeImgSrc_(TREE_STAGES_[i].img) + '">' +
+          (reached ? '<span class="tree-tl-check" aria-label="Alcançado"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.3l2.2 2.2 4.8-5"/></svg></span>' : '') + '</div>' +
+        '<span class="tree-tl-dot"></span>' +
+        '<b class="tree-tl-name">' + name + '</b>' +
+        (i === 0 ? '<span class="tree-tl-sub">começo</span>'
+          : '<span class="tree-tl-sub">' + treePts_(st.pts) + ' pts até aqui</span><span class="tree-tl-sub">em ~' + treeDurationLabel_(st.days) + '</span>') +
+        '</div>';
+    });
+    return html + '</div></div>';
+  }
+  /** Centraliza o estágio atual na primeira vez; nas seguintes mantém onde a pessoa deixou. */
+  function treePositionTimeline_(scroll, view, keepLeft) {
+    if (!scroll) return;
+    if (keepLeft !== null && keepLeft !== undefined) { scroll.scrollLeft = keepLeft; return; }
+    var cur = scroll.querySelector('.tree-tl-item.current');
+    if (cur) scroll.scrollLeft = Math.max(0, cur.offsetLeft - scroll.clientWidth / 2);
+  }
   function treeModalHtml_(view, health, prevFile) {
     var stage = TREE_STAGES_[view.stage - 1];
     var file = treeImageFile_(view);
@@ -14581,6 +14690,7 @@
       html += '<div class="tree-note">Sua árvore ficou um tempo sem cuidado e secou um pouco. Faltam ' + treePts_(view.recoveryLeft, 'up') +
         ' pontos para ela se recuperar; enquanto isso os pontos novos vão para a recuperação e não para o crescimento.</div>';
     }
+    html += treeTimelineHtml_(view);
     html += '<div class="tree-facts">' +
       '<div><span>Pontos no total</span><b>' + treePts_(view.points) + '</b></div>' +
       '<div><span>Hoje</span><b>' + (view.todayBase === 3 ? 'abriu o app e lançou (3)' : 'abriu o app (1)') + ' × ' + treeFmt_(view.todayMult, 2) + ' = ' + treePts_(view.todayPoints, 'round') + ' pontos</b></div>' +
@@ -14603,8 +14713,13 @@
     if (!modal || !treeState_) return;
     var file = treeImageFile_(treeState_);
     var oldWrap = modal.querySelector('.tree-img-wrap');
+    var oldTimeline = modal.querySelector('.tree-tl-scroll');
+    var keepLeft = oldTimeline ? oldTimeline.scrollLeft : null;
     modal.innerHTML = treeModalHtml_(treeState_, treeHealth_, treeSeenGet_());
+    treePositionTimeline_(modal.querySelector('.tree-tl-scroll'), treeState_, keepLeft);
     treeSeenSet_(file);
+    treeAckSet_(treeState_.stage); // abriu a janela: o estágio novo foi visto, a bolinha vermelha some
+    treeUpdateBadge_(treeState_);
     // Redesenhar o texto (pontos novos) não pode reiniciar o balanço nem a transição em andamento.
     var newWrap = modal.querySelector('.tree-img-wrap');
     if (oldWrap && newWrap && oldWrap.getAttribute('data-key') === newWrap.getAttribute('data-key')) newWrap.parentNode.replaceChild(oldWrap, newWrap);
@@ -14699,7 +14814,9 @@
     var file = treeImageFile_(view);
     var firstFile = stageUp ? TREE_STAGES_[prev.stage - 1].img : file;
     treeProgSet_(view); // posição REAL, nunca a do enfeite
-    treeSeenSet_(file); // a janela do cacaueiro não repete a troca de figura que este pop-up já mostrou
+    // Subiu de estágio: o pop-up mostra a troca, mas NÃO marca a figura como vista: a janela do
+    // cacaueiro (que a bolinha vermelha convida a abrir) toca a transição entre estágios.
+    if (!stageUp) treeSeenSet_(file);
 
     var pop = document.createElement('div');
     pop.id = 'tree-pop';
