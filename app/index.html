@@ -1384,13 +1384,13 @@
   /* Modal de orçamento. O tamanho NUNCA muda ao clicar/digitar: toda área que se atualiza
      (.budget-slot, a prévia, o interruptor do valor) tem altura reservada. */
   .budget-cycle-capsule { display: inline-flex; align-items: center; height: 56px; margin-bottom: 4px; border: 1px solid var(--border); border-radius: 28px; background: var(--surface); overflow: hidden; }
-  .budget-cycle-capsule input { width: 56px; height: 100%; margin: 0; padding: 0 4px 0 16px; box-sizing: border-box; border: none; border-radius: 0; background: transparent; text-align: right; font-size: 18px; }
+  .budget-cycle-capsule input { width: 56px; height: 100%; margin: 0; padding: 0 4px 0 16px; box-sizing: border-box; border: none; border-radius: 0; background: transparent; text-align: right; font: inherit; font-size: 18px; font-weight: 600; line-height: 22px; color: var(--text); }
   .budget-cycle-capsule input:focus { outline: none; }
-  /* Mostrador vertical (estilo relógio/iOS): 3 itens de 28px, o do meio inteiro e os vizinhos cortados e
+  /* Mostrador vertical (estilo relógio/iOS): 3 itens de 22px (passo 22), o do meio inteiro e os vizinhos cortados e
      esmaecidos pela máscara. Largura/altura fixas: trocar a unidade nunca muda o tamanho do menu. */
-  .budget-cycle-wheel { position: relative; flex: 0 0 auto; width: 112px; height: 100%; overflow: hidden; cursor: ns-resize; touch-action: none; outline: none; -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 30%, #000 70%, transparent 100%); mask-image: linear-gradient(to bottom, transparent 0, #000 30%, #000 70%, transparent 100%); }
-  .budget-wheel-item { position: absolute; left: 0; top: 14px; width: 100%; height: 28px; margin: 0; padding: 0 12px 0 6px; box-sizing: border-box; border: none; border-radius: 0; background: transparent; box-shadow: none; color: var(--text); font-size: 16px; line-height: 28px; text-align: left; white-space: nowrap; opacity: 0.4; cursor: pointer; }
-  .budget-wheel-item[data-o="0"] { opacity: 1; font-weight: 600; cursor: default; }
+  .budget-cycle-wheel { position: relative; flex: 0 0 auto; width: 112px; height: 100%; overflow: hidden; cursor: ns-resize; touch-action: none; outline: none; -webkit-mask-image: linear-gradient(to bottom, transparent 0, rgba(0,0,0,.7) 10%, #000 28%, #000 72%, rgba(0,0,0,.7) 90%, transparent 100%); mask-image: linear-gradient(to bottom, transparent 0, rgba(0,0,0,.7) 10%, #000 28%, #000 72%, rgba(0,0,0,.7) 90%, transparent 100%); }
+  .budget-wheel-item { position: absolute; left: 0; top: 16px; width: 100%; height: 22px; margin: 0; padding: 0 12px 0 6px; box-sizing: border-box; border: none; border-radius: 0; background: transparent; box-shadow: none; color: var(--text); font: inherit; font-size: 14px; line-height: 22px; text-align: left; white-space: nowrap; opacity: 0.55; cursor: pointer; }
+  .budget-wheel-item[data-o="0"] { opacity: 1; font-size: 18px; font-weight: 600; cursor: default; }
   .budget-cycle-wheel:focus-visible { box-shadow: inset 0 0 0 2px var(--primary); border-radius: 0 28px 28px 0; }
   .budget-slot { display: flex; align-items: center; gap: 8px; min-height: 34px; font-size: 12px; line-height: 1.3; }
   .budget-slot > span { flex: 1 1 auto; min-width: 0; }
@@ -1578,6 +1578,9 @@
   .has-tip::after {
     content: ''; position: absolute; left: var(--tip-x, 50%); bottom: -5px; width: 10px; height: 10px; margin-left: -5px;
     background: inherit; transform: rotate(45deg); border-radius: 0 0 2px 0; pointer-events: none; box-sizing: border-box;
+    /* Atrás do conteúdo da caixa (z-index negativo dentro do contexto da própria caixa, que é fixed + z-index): a metade
+       de dentro do quadradinho girado chegava a 7 px dentro da caixa e cobria o texto. */
+    z-index: -1;
   }
   .has-tip.tip-below::after { bottom: auto; top: -5px; border-radius: 2px 0 0 0; }
   .confirm-popover.has-tip::after, .tree-pop.has-tip::after { border: 1px solid var(--border); border-top-color: transparent; border-left-color: transparent; }
@@ -9334,9 +9337,10 @@
     return 'active';
   }
   function balanceGoalLabelText_(status, name) {
-    // Com nome, o nome ocupa o lugar de "Meta" ("Casa nova - quase lá!", "Casa nova atingida!").
+    // Com nome: "Meta de Casa nova atingida!" quando atingida; nos demais estados o nome ocupa o lugar de "Meta"
+    // ("Casa nova - quase lá!", "Casa nova").
     if (name) {
-      if (status === 'reached') return name + ' atingida!';
+      if (status === 'reached') return 'Meta de ' + name + ' atingida!';
       if (status === 'almost') return name + ' - quase lá!';
       return name;
     }
@@ -11358,7 +11362,7 @@
     // Dashboard (ver buildBudgetTimelineHtml), não tem categoria/valor pra mostrar aqui
     // e não deveria poder ser removida por essa lista (ver wireRowRemoveButtons_ abaixo).
     // Maior valor mensal (proporcional ao mês de referência) primeiro -- pedido explícito
-    // do usuário; o mesmo número alimenta o "R$ X / mês" do título, logo abaixo.
+    // do usuário; (o total "R$ X / mês" saiu do título -- o Geral já resume o mês).
     var budgetMonthlyById_ = {};
     var activeBudgets = STATE.budgets.filter(function (b) { return !b.archived && !b.isUnbudgetedCatchAll; });
     activeBudgets.forEach(function (b) { budgetMonthlyById_[b.id] = budgetMonthlyAmount_(b, d.month); });
@@ -11420,18 +11424,7 @@
 
     var listHtml = (budgetsHtml || '<div class="empty-state">Nenhum orçamento definido ainda.</div>') + suggestionsHtml;
 
-    // Proporcional de todos os orçamentos ativos pro mês de referência (mesma escala de
-    // scaledLimitForMonth_, já usada pra projetar um orçamento de N dias num mês --
-    // pedido explícito do usuário, na mesma linha do título do card). Some vazio (sem
-    // subtítulo) quando não há nenhum orçamento -- "R$ 0 / mês" ao lado de "Nenhum
-    // orçamento definido ainda" só repetiria a mesma informação. Só o "R$ X" fica
-    // colorido (amount-expense -- orçamento só existe pra categoria de despesa), não o
-    // "/ mês" (pedido explícito do usuário).
-    // Automático sem histórico conta 0, Automático com histórico usa o teto derivado
-    // escalado pro mês -- ver budgetMonthlyAmount_.
-    var budgetsMonthlyTotal = budgets.reduce(function (sum, b) { return sum + budgetMonthlyById_[b.id]; }, 0);
-    var budgetsSubtitleHtml = !budgets.length ? '' :
-      '<div style="font-size:13px;color:var(--text-muted)"><span class="amount-expense">' + escapeHtml(fmtMoneyNoCents_(budgetsMonthlyTotal)) + '</span> / mês</div>';
+    // O cabeçalho de Orçamentos não mostra mais o total "R$ X / mês": o orçamento Geral já resume o mês (pedido do usuário).
 
     // Receitas primeiro, despesas depois, cada grupo do maior pro menor valor MENSAL
     // (proporcional ao período de cada recorrência, pedido explícito do usuário) -- ver
@@ -11512,7 +11505,7 @@
       '<div class="card"><h2>Planos</h2>' + plansHtml + '</div>' +
       '<div class="card"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px"><h2 style="margin:0">Lançamentos recorrentes</h2>' + forecastsSubtitleHtml + '</div>' + forecastListHtml + '</div>' +
       '<div style="text-align:left;margin-bottom:16px"><button id="add-forecast">Novo lançamento recorrente</button></div>' +
-      '<div class="card"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px"><h2 style="margin:0">Orçamentos</h2>' + budgetsSubtitleHtml + '</div>' + listHtml + '</div>' +
+      '<div class="card"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px"><h2 style="margin:0">Orçamentos</h2></div>' + listHtml + '</div>' +
       '<div style="text-align:left;margin-bottom:16px"><button id="add-budget">Novo orçamento</button></div>';
 
     renderBalanceTrendChart_();
@@ -11699,12 +11692,12 @@
   }
   /** Texto do "Primeiro ciclo" (o ciclo que começa em startYmd, já normalizado pela unidade):
    *  mensal = "Outubro de 2026" (vários meses: "Outubro de 2026 a dezembro de 2026"); diário/semanal =
-   *  "11 de outubro de 2026, domingo, a 17 de outubro de 2026, sábado" (início e fim do ciclo, com o dia
+   *  "11 de outubro de 2026, domingo  →  17 de outubro de 2026, sábado" (início e fim do ciclo, com o dia
    *  da semana; ciclo de 1 dia só mostra a data). spec = { unit, count }. */
   function budgetFirstCycleLabel_(spec, startYmd) {
     var cycle = budgetCycleAtIndex_({ cycleUnit: spec.unit, cycleCount: spec.count, cycleStart: startYmd }, 0);
     if (spec.unit === 'month') return budgetCyclePeriodText_(cycle.fromYmd, cycle.toYmd);
-    return cycle.fromYmd === cycle.toYmd ? fmtLongDateWeekday_(cycle.fromYmd) : fmtLongDateWeekday_(cycle.fromYmd) + ', a ' + fmtLongDateWeekday_(cycle.toYmd);
+    return cycle.fromYmd === cycle.toYmd ? fmtLongDateWeekday_(cycle.fromYmd) : fmtLongDateWeekday_(cycle.fromYmd) + '  →  ' + fmtLongDateWeekday_(cycle.toYmd);
   }
 
   /**
@@ -11947,7 +11940,7 @@
       var sug = (periodMode === 'manual' && selectedCategoryIds.length) ? budgetP75Suggestion_(pseudoBudget_(), { spends: spends_() }) : null;
       if (!sug) { setSlot_('b-p75', ''); return; }
       var current = currentAmount_();
-      setSlot_('b-p75', 'Valor sugerido: ' + fmtMoneyNoCents_(sug.amount) + ' (cobre 3 de cada 4 dos últimos ' + sug.cycles + ' ciclos).',
+      setSlot_('b-p75', 'Valor sugerido: ' + fmtMoneyNoCents_(sug.amount) + ' (teria sido suficiente em 75% dos últimos ' + sug.cycles + (sug.cycles === 1 ? ' ciclo).' : ' ciclos).'),
         current === sug.amount ? null : 'Usar', function () {
           amountTouched = true; amountValue = sug.amount;
           var input = document.getElementById('b-amount');
@@ -12001,7 +11994,7 @@
     }
     /** Mostrador vertical da unidade do ciclo: a escolhida no meio, as vizinhas (rotação cíclica) cortadas e
      *  esmaecidas acima/abaixo. dir != 0 anima a troca (entra deslizando da direção do giro). */
-    var WHEEL_STEP_PX = 28;
+    var WHEEL_STEP_PX = 22;
     var pendingWheelDir_ = 0;
     function renderWheel_(dir) {
       var units = [unitPrev[cycleUnit], cycleUnit, unitCycle[cycleUnit]];
@@ -13753,7 +13746,8 @@
    * é descartado e STATE.currentView/scroll/destaque da barra voltam pra trás na mão,
    * sem precisar re-renderizar o que já estava certo).
    */
-  var SWIPE_TAB_ORDER_ = ['dashboard', 'transactions', 'accounts', 'categories', 'budgets', 'refunds'];
+  // Mesma ordem da barra: Início, Extrato, Planejamento, Reembolsos e, no painel "Mais", Contas e Categorias.
+  var SWIPE_TAB_ORDER_ = ['dashboard', 'transactions', 'budgets', 'refunds', 'accounts', 'categories'];
   var SWIPE_DECIDE_THRESHOLD_PX_ = 8; // até aqui, ainda não decidiu se é gesto horizontal ou só rolagem vertical
   var SWIPE_COMMIT_FRACTION_ = 0.35; // arrastar mais que isso da largura do painel já troca de aba ao soltar
   var SWIPE_ANIMATION_MS_ = 220;
@@ -14236,7 +14230,7 @@
    * flashMarginButtonForTouch_) -- puramente cosmético, não precisa de um segundo toque
    * confirmando.
    */
-  var MARGIN_HOVER_DELAY_MS_ = 200; // pedido explícito do usuário (era 500)
+  var MARGIN_HOVER_DELAY_MS_ = 0; // sem espera: o cursor vira seta assim que entra na margem (pedido do usuário; era 200, antes 500)
   var MARGIN_BUTTON_SIZE_PX_ = 44; // um pouco menor que o .fab (56px)
   var MARGIN_ZONE_MIN_WIDTH_PX_ = 56; // margem mais estreita que isso não cabe o botão com folga -- fica morta
   var marginRevealTimer_ = null;
@@ -14351,7 +14345,7 @@
       document.body.appendChild(zone);
 
       if (HOVER_CAPABLE_) {
-        // No PC não há mais botão redondo: com o mouse parado MARGIN_HOVER_DELAY_MS_ na margem,
+        // No PC não há mais botão redondo: ao entrar na margem (sem espera; MARGIN_HOVER_DELAY_MS_ = 0),
         // o PRÓPRIO CURSOR vira uma seta apontando pro lado da troca, e o clique na margem
         // troca de aba. Mexer o mouse antes do prazo reinicia a espera.
         var cursorArmed = false;
@@ -14366,6 +14360,7 @@
         }
         function scheduleArm() {
           if (marginRevealTimer_) clearTimeout(marginRevealTimer_);
+          if (!MARGIN_HOVER_DELAY_MS_) { marginRevealTimer_ = null; armCursor(); return; }
           marginRevealTimer_ = setTimeout(function () { marginRevealTimer_ = null; armCursor(); }, MARGIN_HOVER_DELAY_MS_);
         }
         zone.addEventListener('mouseenter', function () { disarmCursor(); scheduleArm(); });
