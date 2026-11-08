@@ -1392,6 +1392,9 @@
   .budget-wheel-item { position: absolute; left: 0; top: 16px; width: 100%; height: 22px; margin: 0; padding: 0 12px 0 6px; box-sizing: border-box; border: none; border-radius: 0; background: transparent; box-shadow: none; color: var(--text); font: inherit; font-size: 14px; line-height: 22px; text-align: left; white-space: nowrap; opacity: 0.55; cursor: pointer; }
   .budget-wheel-item[data-o="0"] { opacity: 1; font-size: 18px; font-weight: 600; cursor: default; }
   .budget-cycle-wheel:focus-visible { box-shadow: inset 0 0 0 2px var(--primary); border-radius: 0 28px 28px 0; }
+  /* Cabeçalho do card Contas (Início): Dinheiro / Crédito / Total. */
+  .accounts-sum { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: -4px 0 10px; font-size: 13px; font-weight: 600; }
+  .accounts-sum-part .muted { font-weight: 400; }
   .budget-slot { display: flex; align-items: center; gap: 8px; min-height: 34px; font-size: 12px; line-height: 1.3; }
   .budget-slot > span { flex: 1 1 auto; min-width: 0; }
   .budget-slot-btn { flex: 0 0 auto; padding: 2px 10px; font-size: 11px; white-space: nowrap; }
@@ -4163,6 +4166,24 @@
   }
 
   // ---------- dashboard ----------
+  /** Resumo do cabeçalho do card "Contas" do Início: Dinheiro (contas que não são cartão), Crédito (limite restante dos
+   *  cartões -- o saldo de um cartão começa no LIMITE, cada compra reduz e cada pagamento de fatura devolve) e Total (a soma). */
+  function accountsSummary_(accounts) {
+    var cash = 0, credit = 0, cards = 0;
+    accounts.forEach(function (a) {
+      if (a.type === 'investment') return;
+      if (a.type === 'credit_card') { credit += a.balance; cards++; } else cash += a.balance;
+    });
+    return { cash: cash, credit: credit, total: cash + credit, hasCards: cards > 0 };
+  }
+  function accountsSummaryHtml_(accounts) {
+    var sm = accountsSummary_(accounts);
+    function part(label, value) {
+      return '<span class="accounts-sum-part"><span class="muted">' + label + '</span> <span class="' + (value < 0 ? 'amount-expense' : 'amount-income') + '">' + escapeHtml(fmtMoney(value)) + '</span></span>';
+    }
+    return '<div class="accounts-sum">' + (sm.hasCards ? part('Dinheiro', sm.cash) + part('Crédito', sm.credit) : '') + part('Total', sm.total) + '</div>';
+  }
+
   function renderDashboard() {
     var d = STATE.dashboard;
     var root = document.getElementById('view-root');
@@ -4209,7 +4230,7 @@
       buildBalanceTrendHtml_() +
       budgetTimelineHtml +
       '<div class="card">' +
-        '<h2>Contas</h2>' + accountsHtml +
+        '<h2>Contas</h2>' + accountsSummaryHtml_(d.accounts) + accountsHtml +
       '</div>' +
       (billsHtml ? '<div class="card"><h2>Faturas de cartão</h2>' + billsHtml + '</div>' : '') +
       '<div class="card">' +
@@ -7221,6 +7242,12 @@
   }
 
 
+  /** Rótulo do campo de saldo do formulário de conta: cartão = limite (novo) / limite restante (editando). */
+  function accountBalanceLabel_(type, editing) {
+    if (type === 'credit_card') return editing ? 'Limite restante' : 'Limite do cartão';
+    return editing ? 'Saldo atual' : 'Saldo inicial';
+  }
+
   function openAccountModal(existing) {
     var isEdit = !!existing;
     // Editar o saldo SEMPRE significa "saldo atual", e a diferença sempre vira um
@@ -7244,8 +7271,9 @@
       '<div class="field"><label>Tipo</label><div id="m-type-field" class="capsule-field"></div>' +
         (isEdit && existing.hasTransactions ? '<div class="muted">Essa conta já tem lançamentos, por isso o tipo não pode mais ser alterado.</div>' : '') +
       '</div>' +
-      '<div class="field"><label>' + (editingCurrentBalance ? 'Saldo atual' : 'Saldo inicial') + '</label><input id="m-balance" type="text"></div>' +
-      (editingCurrentBalance ? '<div class="muted" style="font-size:12px;margin-top:-8px;margin-bottom:12px">Mudar esse valor cria um lançamento de ajuste na data de hoje, cobrindo a diferença.</div>' : '') +
+      '<div class="field"><label id="m-balance-label">' + (editingCurrentBalance ? 'Saldo atual' : 'Saldo inicial') + '</label><input id="m-balance" type="text"></div>' +
+      (editingCurrentBalance ? '<div class="muted" id="m-balance-note" style="font-size:12px;margin-top:-8px;margin-bottom:12px">Mudar esse valor cria um lançamento de ajuste na data de hoje, cobrindo a diferença.</div>' : '') +
+      '<div class="muted" id="m-limit-note" style="display:none;font-size:12px;margin-top:-8px;margin-bottom:12px">O saldo do cartão é o limite que ainda sobra: cada compra reduz e cada pagamento de fatura devolve.</div>' +
       '<div id="m-cc-fields" style="display:none">' +
         '<div class="field"><label>Dia de fechamento</label><input id="m-closing" type="number" min="1" max="31" value="' + (isEdit && existing.closingDay ? existing.closingDay : '') + '"></div>' +
         '<div class="field"><label>Dia de vencimento</label><input id="m-due" type="number" min="1" max="31" value="' + (isEdit && existing.dueDay ? existing.dueDay : '') + '"></div>' +
@@ -7292,6 +7320,9 @@
     function syncTypeFields() {
       var type = typeField.getValue();
       document.getElementById('m-cc-fields').style.display = type === 'credit_card' ? 'block' : 'none';
+      // Cartão: o "saldo inicial" é o LIMITE do cartão; ao editar, o saldo atual é o limite restante.
+      document.getElementById('m-balance-label').textContent = accountBalanceLabel_(type, editingCurrentBalance);
+      document.getElementById('m-limit-note').style.display = type === 'credit_card' ? 'block' : 'none';
       document.getElementById('m-inv-fields').style.display = type === 'investment' ? 'block' : 'none';
     }
     var typeField = createCapsuleField(document.getElementById('m-type-field'), {
@@ -7309,6 +7340,10 @@
       var duplicate = STATE.accounts.some(function (a) { return (!isEdit || a.id !== existing.id) && namesMatch(a.name, name); });
       if (duplicate) { errorPopover(document.getElementById('m-submit'), 'Já existe uma conta com esse nome.'); return; }
       var balanceValue = document.getElementById('m-balance').getValue();
+      if (!isEdit && type === 'credit_card' && balanceValue < 0) {
+        errorPopover(document.getElementById('m-submit'), 'O limite do cartão não pode ser negativo.');
+        return;
+      }
       if (isEdit && type !== 'credit_card' && balanceValue < 0) {
         errorPopover(document.getElementById('m-submit'), 'Saldo não pode ser negativo nesse tipo de conta.');
         return;
