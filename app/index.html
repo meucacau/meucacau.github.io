@@ -750,7 +750,11 @@
   .tree-bar { height: 10px; border-radius: 5px; background: var(--border); overflow: hidden; margin: 10px 0 4px; }
   .tree-bar > span { display: block; height: 100%; border-radius: 5px; background: var(--primary); transition: width .4s ease; }
   /* Linha do tempo dos estágios (treeTimelineHtml_): rolagem lateral; cada etapa é uma coluna posicionada pelo tempo médio. */
-  .tree-tl-scroll { overflow-x: auto; margin: 14px -4px 4px; padding-bottom: 6px; -webkit-overflow-scrolling: touch; }
+  /* Sem barra de rolagem: rola arrastando com o mouse (treeSetupTimelineDrag_), por toque ou shift+roda. */
+  .tree-tl-scroll { overflow-x: auto; margin: 14px -4px 4px; -webkit-overflow-scrolling: touch; scrollbar-width: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+  .tree-tl-scroll::-webkit-scrollbar { display: none; }
+  .tree-tl-scroll.dragging { cursor: grabbing; }
+  .tree-tl-scroll img { -webkit-user-drag: none; pointer-events: none; }
   .tree-tl { position: relative; height: 130px; }
   .tree-tl-line { position: absolute; top: 65px; height: 2px; border-radius: 1px; background: var(--border); }
   .tree-tl-line > span { display: block; height: 100%; border-radius: 1px; background: var(--primary); }
@@ -11975,7 +11979,7 @@
       var sug = (periodMode === 'manual' && selectedCategoryIds.length) ? budgetP75Suggestion_(pseudoBudget_(), { spends: spends_() }) : null;
       if (!sug) { setSlot_('b-p75', ''); return; }
       var current = currentAmount_();
-      setSlot_('b-p75', 'Valor sugerido: ' + fmtMoneyNoCents_(sug.amount) + ' (teria sido suficiente em 75% dos últimos ' + sug.cycles + (sug.cycles === 1 ? ' ciclo).' : ' ciclos).'),
+      setSlot_('b-p75', 'Valor sugerido: ' + fmtMoneyNoCents_(sug.amount),
         current === sug.amount ? null : 'Usar', function () {
           amountTouched = true; amountValue = sug.amount;
           var input = document.getElementById('b-amount');
@@ -14659,12 +14663,28 @@
       return { pts: pts, days: days, x: Math.sqrt(days) * TREE_TL_UNIT_PX_ };
     });
   }
+  /** Quanto falta (pontos e dias médios) a partir de AGORA para alcançar o estágio de índice i (0-based). Só faz
+   *  sentido para estágios à frente do atual. O próximo usa view.toNext (o mesmo número da barra grande);
+   *  os mais distantes somam a distância entre os estágios. */
+  function treeRemainingTo_(view, i) {
+    var pts = view.toNext + (TREE_POINTS_[i] - TREE_POINTS_[view.stage]);
+    return { pts: pts, days: pts / TREE_TL_PTS_PER_DAY_ };
+  }
   /** Posição (px) do progresso atual: interpola entre o estágio atual e o próximo. */
   function treeTimelineCursorX_(layout, view) {
     var i = view.stage - 1, here = layout[i], next = layout[i + 1];
     if (!next) return here.x;
     var frac = Math.max(0, Math.min(1, (view.points - here.pts) / (next.pts - here.pts)));
     return here.x + frac * (next.x - here.x);
+  }
+  /** Textos sob cada estágio. Já alcançados: "alcançado" / "com X pts" (o atual diz "estágio atual"). À frente: o
+   *  que falta a partir de agora, no mesmo número da barra grande ("faltam 13 pts") e o tempo médio disso. */
+  function treeTimelineSubHtml_(view, i, st) {
+    if (i === 0) return '<span class="tree-tl-sub">' + (view.stage === 1 ? 'estágio atual' : 'começo') + '</span>';
+    if (view.stage > i + 1) return '<span class="tree-tl-sub">alcançado</span><span class="tree-tl-sub">com ' + treePts_(st.pts) + ' pts</span>';
+    if (view.stage === i + 1) return '<span class="tree-tl-sub">estágio atual</span><span class="tree-tl-sub">desde ' + treePts_(st.pts) + ' pts</span>';
+    var left = treeRemainingTo_(view, i);
+    return '<span class="tree-tl-sub">faltam ' + treePts_(left.pts, 'up') + ' pts</span><span class="tree-tl-sub">em ~' + treeDurationLabel_(left.days) + '</span>';
   }
   function treeTimelineHtml_(view) {
     var layout = treeTimelineLayout_();
@@ -14686,8 +14706,7 @@
           (reached ? '<span class="tree-tl-check" aria-label="Alcançado"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.3l2.2 2.2 4.8-5"/></svg></span>' : '') + '</div>' +
         '<span class="tree-tl-dot"></span>' +
         '<b class="tree-tl-name">' + name + '</b>' +
-        (i === 0 ? '<span class="tree-tl-sub">começo</span>'
-          : '<span class="tree-tl-sub">' + treePts_(st.pts) + ' pts até aqui</span><span class="tree-tl-sub">em ~' + treeDurationLabel_(st.days) + '</span>') +
+        treeTimelineSubHtml_(view, i, st) +
         '</div>';
     });
     return html + '</div></div>';
@@ -14698,6 +14717,57 @@
     if (keepLeft !== null && keepLeft !== undefined) { scroll.scrollLeft = keepLeft; return; }
     var cur = scroll.querySelector('.tree-tl-item.current');
     if (cur) scroll.scrollLeft = Math.max(0, cur.offsetLeft - scroll.clientWidth / 2);
+  }
+  /**
+   * Arrastar pra rolar a linha do tempo com o mouse (sem barra de rolagem, sem selecionar texto), no mesmo
+   * jeito do card de Resumo do Extrato, inclusive a inércia de velocidade constante. Os listeners ficam no
+   * próprio elemento (com captura do ponteiro), então somem junto com ele quando a janela é redesenhada e
+   * não disputam document.onmousemove com o calendário. Toque continua com a rolagem nativa.
+   */
+  function treeSetupTimelineDrag_(scroll) {
+    if (!scroll) return;
+    var DRAG_MIN_PX = 4, GLIDE_MAX = 0.55, GLIDE_MIN = 0.15;
+    var down = false, moved = false, startX = 0, startLeft = 0, samples = [], glide = null, pid = null;
+    function stopGlide() { if (glide) { cancelAnimationFrame(glide); glide = null; } }
+    function startGlide(v0) {
+      if (Math.abs(v0) < GLIDE_MIN) return;
+      var v = Math.max(-GLIDE_MAX, Math.min(GLIDE_MAX, v0)), last = performance.now();
+      var step = function (now) {
+        scroll.scrollLeft -= v * (now - last); last = now;
+        var atStart = scroll.scrollLeft <= 0, atEnd = scroll.scrollLeft >= scroll.scrollWidth - scroll.clientWidth;
+        if ((v > 0 && atStart) || (v < 0 && atEnd) || !scroll.isConnected) { glide = null; return; }
+        glide = requestAnimationFrame(step);
+      };
+      glide = requestAnimationFrame(step);
+    }
+    scroll.addEventListener('pointerdown', function (e) {
+      if (e.pointerType !== 'mouse' || e.button !== 0) return;
+      stopGlide(); down = true; moved = false; startX = e.clientX; startLeft = scroll.scrollLeft; pid = e.pointerId;
+      samples = [{ t: performance.now(), x: e.clientX }];
+      e.preventDefault(); // sem seleção de texto nem arrastar de imagem
+    });
+    scroll.addEventListener('pointermove', function (e) {
+      if (!down || e.pointerId !== pid) return;
+      var dx = e.clientX - startX;
+      if (!moved) {
+        if (Math.abs(dx) < DRAG_MIN_PX) return;
+        moved = true; scroll.classList.add('dragging');
+        try { scroll.setPointerCapture(pid); } catch (err) { /* sem captura: segue só enquanto o cursor estiver em cima */ }
+      }
+      scroll.scrollLeft = startLeft - dx;
+      var now = performance.now();
+      samples.push({ t: now, x: e.clientX });
+      while (samples.length > 2 && now - samples[0].t > 80) samples.shift();
+    });
+    function end(e) {
+      if (!down || (e && e.pointerId !== pid)) return;
+      down = false; scroll.classList.remove('dragging');
+      if (!moved || samples.length < 2) return;
+      var a = samples[0], b = samples[samples.length - 1];
+      if (b.t > a.t) startGlide((b.x - a.x) / (b.t - a.t));
+    }
+    scroll.addEventListener('pointerup', end);
+    scroll.addEventListener('pointercancel', end);
   }
   function treeModalHtml_(view, health, prevFile) {
     var stage = TREE_STAGES_[view.stage - 1];
@@ -14715,7 +14785,7 @@
       '<div class="tree-bar"><span style="width:' + pct.toFixed(1) + '%"></span></div>' +
       '<div class="muted">' + (view.nextAt === null
         ? 'Você chegou ao último estágio. Continue usando para manter a árvore carregada.'
-        : 'Faltam ' + treePts_(view.toNext, 'up') + ' pontos para ' + escapeHtml(TREE_STAGES_[view.stage].name)) + '</div>';
+        : 'Faltam ' + treePts_(view.toNext, 'up') + ' pontos para ' + escapeHtml(TREE_STAGES_[view.stage].name.toLowerCase())) + '</div>';
     if (view.dryLevel > 0) {
       html += '<div class="tree-note">Sua árvore ficou um tempo sem cuidado e secou um pouco. Faltam ' + treePts_(view.recoveryLeft, 'up') +
         ' pontos para ela se recuperar; enquanto isso os pontos novos vão para a recuperação e não para o crescimento.</div>';
@@ -14747,6 +14817,7 @@
     var keepLeft = oldTimeline ? oldTimeline.scrollLeft : null;
     modal.innerHTML = treeModalHtml_(treeState_, treeHealth_, treeSeenGet_());
     treePositionTimeline_(modal.querySelector('.tree-tl-scroll'), treeState_, keepLeft);
+    treeSetupTimelineDrag_(modal.querySelector('.tree-tl-scroll'));
     treeSeenSet_(file);
     treeAckSet_(treeState_.stage); // abriu a janela: o estágio novo foi visto, a bolinha vermelha some
     treeUpdateBadge_(treeState_);
