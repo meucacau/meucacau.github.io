@@ -472,7 +472,8 @@
   }
   /* Bolinha vermelha (novo estágio ainda não visto): mesmo canto do selo do botão "para confirmar". */
   .tree-badge { position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; box-sizing: border-box; border-radius: 50%; background: var(--expense); box-shadow: 0 1px 3px rgba(0,0,0,0.3); pointer-events: none; }
-  .tree-fab .tab-ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  /* Ícone do cacau bicromático: preenchido com a cor do botão, nervuras vazadas por máscara no próprio SVG. */
+  .tree-fab .tab-ico { width: 30px; height: 30px; fill: none; stroke: none; }
   html[data-nav-side="left"] .tree-fab { grid-column: 3; justify-self: start; margin-right: 0; margin-left: 4px; }
   @media (max-width: 409px) {
     .dock-side, html[data-nav-side="left"] .dock-side { position: absolute; right: 0; left: auto; bottom: calc(100% + 8px); margin: 0; }
@@ -1663,7 +1664,7 @@
       <button class="review-fab" id="review-pending" aria-label="Para confirmar" hidden><span class="review-ico"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg><span class="review-badge"></span></span><span class="tab-label"></span></button>
       <button class="fab" id="fab-add"><span class="fab-icon">+</span></button>
     </div>
-    <button class="fab tree-fab" id="tree-open" aria-label="Meu cacaueiro" title="Meu cacaueiro"><svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c4 2 6.5 7 6.5 11S16 21 12 22c-4-1-6.5-5-6.5-9S8 4 12 2z"/><path d="M12 2v20M9 4.5c-1.3 5-1.3 10 0 15M15 4.5c1.3 5 1.3 10 0 15"/></svg></button>
+    <button class="fab tree-fab" id="tree-open" aria-label="Meu cacaueiro" title="Meu cacaueiro"><svg class="tab-ico tree-ico" viewBox="0 0 512 512" aria-hidden="true"><defs><mask id="tree-ico-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512"><rect width="512" height="512" fill="#fff"/><g transform="rotate(-24 256 280)" fill="none" stroke="#000" stroke-width="16" stroke-linecap="round"><path d="M282 56 C 316 44, 346 44, 370 48" stroke-width="8"/><path d="M256 132 C 214 220, 214 340, 256 424"/><path d="M256 132 C 298 220, 298 340, 256 424"/><path d="M182 176 C 164 252, 184 340, 218 392" stroke-width="13"/><path d="M330 176 C 348 252, 328 340, 294 392" stroke-width="13"/></g></mask></defs><g mask="url(#tree-ico-mask)"><g transform="rotate(-24 256 280)" fill="currentColor" stroke="currentColor" stroke-linejoin="round" stroke-linecap="round"><path d="M256 96 C 256 80, 260 66, 270 54" fill="none" stroke-width="22"/><path d="M268 62 C 296 14, 358 14, 382 48 C 356 84, 296 88, 268 62 Z" stroke-width="8"/><path d="M256 104 C 352 104, 396 214, 368 322 C 350 392, 300 448, 256 448 C 212 448, 162 392, 144 322 C 116 214, 160 104, 256 104 Z" stroke-width="10"/></g></g></svg></button>
   </div>
 
   <div id="modal-root"></div>
