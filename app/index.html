@@ -1315,14 +1315,25 @@
      aqui (16px) pra caber o anel e a borda de compensação. Estouro 100% compensado ganha
      uma borda VERDE grossa por dentro (inset), o centro continua vermelho. */
   .budget-circles-row { padding: 6px 0 8px; cursor: pointer; border-radius: 8px; }
-  .budget-circles-row-empty { display: flex; align-items: center; }
-  /* Nome | círculos | texto de aviso, tudo na mesma linha (como em Lançamentos recorrentes). Nome e aviso
-     crescem por igual, então os círculos ficam alinhados entre os orçamentos. Os círculos (12 x 16px + 3px =
-     225px) nunca encolhem: em tela estreita é o aviso que quebra pra baixo, ocupando a linha toda. */
-  .budget-circles-head { display: flex; align-items: center; gap: 4px 10px; flex-wrap: wrap; }
-  .budget-circles-head .budget-timebar-name { flex: 1 1 70px; min-width: 0; white-space: nowrap; }
-  .budget-circles-advice { flex: 1 1 130px; min-width: 0; font-size: 12px; color: var(--text-muted); }
-  .budget-circles-track { display: inline-flex; align-items: center; gap: 3px; flex: none; }
+  /* Nome | 8 slots de círculo | texto de aviso: COLUNAS FIXAS (grid), iguais em todas as linhas, então o x de
+     cada slot e o do texto não dependem do tamanho do nome nem do texto. Os slots (8 x 16px + 7 x 3px = 149px)
+     nunca encolhem; o texto fica à direita (alinhado à direita, largura fixa, no máximo 2 linhas). Em tela
+     estreita (até 520px) o nome ocupa a linha de cima e círculos + texto ficam embaixo, nas mesmas 2 colunas
+     em todas as linhas -- cabe nos ~310px de um celular sem rolagem lateral. */
+  .budget-circles-row { --budget-track-w: 149px; --budget-advice-w: 170px; }
+  .budget-circles-head { display: grid; grid-template-columns: minmax(0, 1fr) var(--budget-track-w) var(--budget-advice-w); align-items: center; column-gap: 10px; }
+  .budget-circles-head .budget-timebar-name { min-width: 0; white-space: nowrap; }
+  .budget-circles-advice {
+    min-width: 0; font-size: 12px; line-height: 1.3; color: var(--text-muted); text-align: right;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+  }
+  @media (max-width: 520px) {
+    .budget-circles-head { grid-template-columns: var(--budget-track-w) minmax(0, 1fr); grid-template-areas: "name name" "track advice"; row-gap: 4px; }
+    .budget-circles-head .budget-timebar-name { grid-area: name; }
+    .budget-circles-head .budget-circles-track { grid-area: track; }
+    .budget-circles-head .budget-circles-advice { grid-area: advice; }
+  }
+  .budget-circles-track { display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px; flex: none; width: 149px; }
   .budget-circle {
     -webkit-appearance: none;
     appearance: none;
@@ -1347,6 +1358,8 @@
     mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3px));
   }
   .budget-circle-comp { box-shadow: inset 0 0 0 3px var(--income); }
+  /* Slot ANTES do 1º ciclo do orçamento: só um contorno bem discreto (sem preenchimento, não clicável). */
+  .budget-circle-blank { background: transparent; box-shadow: inset 0 0 0 1px var(--border); opacity: 0.7; cursor: default; }
   .budget-plan-row { flex-wrap: wrap; row-gap: 8px; }
   .budget-plan-info { flex: 1 1 160px; min-width: 0; }
   /* Modal de orçamento. O tamanho NUNCA muda ao clicar/digitar: toda área que se atualiza
@@ -7568,14 +7581,9 @@
    * importam aqui, 'increase' é outra coisa — ver computeBudgetPeriodIncreaseSuggestions_).
    * Ordenadas por quantidade de lançamentos, desempatando por maior valor total gasto.
    *
-   * Valor sugerido = valor médio dos lançamentos × (30 ÷ intervalo médio ENTRE eles),
-   * arredondado pra CIMA no múltiplo de R$50 mais próximo (pedido explícito do usuário).
-   * "Intervalo médio entre lançamentos" pra N datas ordenadas é sempre (última - primeira)
-   * ÷ (N-1) -- a soma dos intervalos consecutivos é uma soma telescópica que se reduz
-   * exatamente a isso, então não tem ambiguidade em "como calcular a média" aqui. Com
-   * N>=3 (mínimo exigido), N-1>=2, nunca divide por zero; se as N caíram todas no MESMO
-   * dia (intervalo real = 0), trata como 1 dia pra não estourar a razão 30/intervalo pra
-   * infinito.
+   * Ciclo e valor sugeridos são os MESMOS do menu "Novo orçamento" (ver budgetSuggestedPlan_: ciclo
+   * pelas janelas de 10 lançamentos e valor P75 dos ciclos fechados, múltiplo de R$ 50 pra cima).
+   * Sem valor sugerido (histórico curto demais pro P75) a categoria não vira sugestão.
    */
   function computeBudgetSuggestions_() {
     var budgetedIds = {};
@@ -7599,24 +7607,20 @@
       (byCategory[t.categoryId] = byCategory[t.categoryId] || []).push(t);
     });
 
+    var engagementStart = budgetEngagementStart_(); // uma vez só (o P75 de cada categoria usa o mesmo início do histórico)
     return Object.keys(byCategory)
       .filter(function (id) { return byCategory[id].length >= BUDGET_SUGGESTION_MIN_TRANSACTIONS && !budgetedIds[id] && !dismissedIds[id]; })
       .map(function (id) {
         var cat = STATE.categories.find(function (c) { return c.id === id; });
         if (!cat) return null;
-        var txs = byCategory[id].slice().sort(function (a, b) { return a.date < b.date ? -1 : (a.date > b.date ? 1 : 0); });
-        var n = txs.length;
-        var total = txs.reduce(function (sum, t) { return sum + t.amount; }, 0);
-        var avgValue = total / n;
-        var spanDays = (parseYmdLocal_(txs[n - 1].date) - parseYmdLocal_(txs[0].date)) / 86400000;
-        var avgIntervalDays = Math.max(1, spanDays / (n - 1));
-        // Arredonda pros centavos ANTES de dividir por 50: sem isso, o ida-e-volta
-        // divisão/multiplicação de ponto flutuante podia devolver algo como
-        // 1000.0000000000001 pra um total que já era um múltiplo exato de 50,
-        // empurrando o teto pro múltiplo SEGUINTE à toa (1050 em vez de 1000).
-        var projected = Math.round(avgValue * (BUDGET_SUGGESTION_WINDOW_DAYS / avgIntervalDays) * 100) / 100;
-        var suggestedAmount = Math.ceil(projected / 50) * 50;
-        return { categoryId: id, categoryName: cat.name, count: n, total: total, suggestedAmount: suggestedAmount };
+        var n = byCategory[id].length;
+        var total = byCategory[id].reduce(function (sum, t) { return sum + t.amount; }, 0);
+        var plan = budgetSuggestedPlan_([id], { engagementStart: engagementStart });
+        if (!plan) return null;
+        return {
+          categoryId: id, categoryName: cat.name, count: n, total: total,
+          suggestedAmount: plan.amount, suggestedCycleUnit: plan.unit, suggestedCycleCount: plan.count
+        };
       })
       .filter(Boolean)
       .sort(function (a, b) {
@@ -8100,7 +8104,7 @@
   }
 
   // ---------- círculos de ciclo: histórico, compensação retroativa, sugestões ----------
-  var BUDGET_CIRCLES_SHOWN_ = 12;      // círculos exibidos por orçamento (o último é o ciclo em andamento)
+  var BUDGET_CIRCLES_SHOWN_ = 8;       // círculos (slots) por orçamento: o último é o ciclo em andamento; slots antes do 1º ciclo viram só um contorno
   var BUDGET_CIRCLES_HISTORY_ = 36;    // ciclos olhados pra conta da compensação (os mais antigos só consomem economia)
   var BUDGET_SUGGEST_ROUND_ = 50;      // valor sugerido sempre em múltiplos de R$ 50, pra cima
   var BUDGET_P75_MAX_CYCLES_ = 12;
@@ -8132,7 +8136,7 @@
     });
   }
   /**
-   * Série de círculos de um orçamento (do mais antigo ao mais novo, até 12): cada círculo
+   * Série de círculos de um orçamento (do mais antigo ao mais novo, até 8): cada círculo
    * é um ciclo fechado e o ÚLTIMO é o ciclo que contém refYmd -- em andamento (partial:
    * true) se ele ainda não terminou hoje, fechado se já terminou (mês passado do seletor).
    * Cor = mesma regra das barras (statusForRatio_ do gasto ÷ limite do ciclo; no ciclo em
@@ -8216,6 +8220,50 @@
     return rounded > 0 ? { amount: rounded, cycles: sums.length, p75: p75 } : null;
   }
   /**
+   * Ciclo ÚNICO a sugerir a partir do ciclo sugerido pelas janelas (budgetIdealCycle_, que oferece dias,
+   * semanas e meses): mediana de até 6 dias = em dias; até 4 semanas (28 dias) = em semanas; acima disso =
+   * em meses (cada um arredondado pra cima). Sem lançamentos suficientes (ideal null) = 1 mês, o padrão do menu.
+   */
+  function budgetSuggestedCycleChoice_(ideal) {
+    if (!ideal) return { unit: 'month', count: 1 };
+    if (ideal.days < 7) return { unit: 'day', count: Math.min(BUDGET_CYCLE_MAX_.day, ideal.days) };
+    if (ideal.weeks <= 4) return { unit: 'week', count: ideal.weeks };
+    return { unit: 'month', count: Math.min(BUDGET_CYCLE_MAX_.month, ideal.months) };
+  }
+  /**
+   * Ciclo + valor sugeridos pra um orçamento NOVO nessas categorias -- o MESMO que o menu "Novo orçamento"
+   * calcula (ciclo pelas janelas de 10 lançamentos, budgetIdealCycle_; valor P75 dos ciclos fechados desse
+   * ciclo, múltiplo de R$ 50 pra cima, budgetP75Suggestion_, com a grade ancorada no lançamento mais antigo
+   * = "Desde o início"). Devolve { unit, count, amount, cycles } ou null (P75 indisponível). opts: { spends,
+   * todayStr, engagementStart }.
+   */
+  function budgetSuggestedPlan_(categoryIds, opts) {
+    opts = opts || {};
+    var todayStr = opts.todayStr || todayYmd();
+    var spends = opts.spends || budgetRelevantSpends_(categoryIds);
+    var cycle = budgetSuggestedCycleChoice_(budgetIdealCycle_(spends));
+    var oldest = budgetOldestSpendYmd_(spends);
+    var pseudo = {
+      id: 'tmp-preview', categoryIds: categoryIds, cycleUnit: cycle.unit, cycleCount: cycle.count, scaleByDays: true,
+      cycleStart: oldest && oldest <= todayStr ? oldest : budgetDefaultStart_(cycle.unit, todayStr),
+      periodMode: 'manual', archived: false, recoveryDismissedFrom: null
+    };
+    var p75 = budgetP75Suggestion_(pseudo, { todayStr: todayStr, spends: spends, engagementStart: opts.engagementStart });
+    return p75 ? { unit: cycle.unit, count: cycle.count, amount: p75.amount, cycles: p75.cycles } : null;
+  }
+  /** "por mês" (ciclo de 1) ou "a cada 2 semanas" -- o ciclo de uma sugestão de orçamento novo. */
+  function budgetSuggestionCycleText_(unit, count) {
+    if (count === 1) return { day: 'por dia', week: 'por semana', month: 'por mês' }[unit];
+    return 'a cada ' + budgetCycleLabel_({ unit: unit, count: count });
+  }
+  /** Sugestão de orçamento novo (item de computeBudgetSuggestions_) no formato que openBudgetModal espera. */
+  function budgetNewSuggestionForModal_(s) {
+    return {
+      type: 'new', categoryId: s.categoryId, categoryIds: [s.categoryId],
+      suggestedCycleUnit: s.suggestedCycleUnit, suggestedCycleCount: s.suggestedCycleCount, suggestedAmount: s.suggestedAmount
+    };
+  }
+  /**
    * Ciclo sugerido: junta os lançamentos de despesa das categorias escolhidas (precisa de 10 ou
    * mais), ordena por data e olha JANELAS DESLIZANTES de 10 lançamentos seguidos (25 lançamentos
    * = 16 janelas). A duração de cada janela é o nº de dias do 1º ao último lançamento dela
@@ -8256,8 +8304,18 @@
   // ---------- círculos de ciclo: HTML, tooltip e clique ----------
   var BUDGET_STATUS_TONE_ = { ok: 'ok', atencao: 'warn', estourado: 'bad' };
   var BUDGET_STATUS_VERDICT_ = { ok: 'Dentro do teto', atencao: 'Perto do teto', estourado: 'Teto estourado' };
-  /** "01/10 a 31/10" (ou só "05/11" num ciclo de 1 dia). */
+  /** "outubro de 2026" (minúsculo) de uma data YYYY-MM-DD. */
+  function monthYearLongOfYmd_(ymd) {
+    return MONTH_NAMES_PT[Number(ymd.slice(5, 7)) - 1] + ' de ' + ymd.slice(0, 4);
+  }
+  /** Período de um ciclo: mês(es) inteiro(s) = "Outubro de 2026" (vários: "Outubro de 2026 a dezembro de 2026");
+   *  senão "01/10 a 31/10" (ou só "05/11" num ciclo de 1 dia). */
   function budgetCyclePeriodText_(fromYmd, toYmd) {
+    if (fromYmd.slice(8, 10) === '01' && toYmd === lastDayOfYm_(toYmd.slice(0, 7))) {
+      var first = monthYearLongOfYmd_(fromYmd);
+      first = first.charAt(0).toUpperCase() + first.slice(1);
+      return fromYmd.slice(0, 7) === toYmd.slice(0, 7) ? first : first + ' a ' + monthYearLongOfYmd_(toYmd);
+    }
     return fromYmd === toYmd ? fmtDateShort_(fromYmd) : fmtDateShort_(fromYmd) + ' a ' + fmtDateShort_(toYmd);
   }
   /** Linhas do tooltip de um círculo (mesmo formato e classes do tooltip do gráfico de barras do
@@ -8314,14 +8372,20 @@
       ' data-tooltip="' + escapeHtml(budgetCircleTooltipPlain_(c)) + '"' +
       ' data-tooltip-html="' + escapeHtml(budgetCircleTooltipHtml_(c)) + '"></button>';
   }
+  /** Faixa de BUDGET_CIRCLES_SHOWN_ slots de largura fixa (o x de cada slot é o mesmo em todas as linhas):
+   *  os círculos reais ficam à direita (o último é o ciclo atual) e os slots antes do 1º ciclo são só um
+   *  contorno discreto (sem preenchimento, não clicável). series null = faixa vazia, só reserva o espaço. */
   function budgetCirclesTrackHtml_(series) {
-    return '<span class="budget-circles-track">' + series.circles.map(budgetCircleHtml_).join('') + '</span>';
+    if (!series) return '<span class="budget-circles-track"></span>';
+    var blanks = '';
+    for (var i = series.circles.length; i < BUDGET_CIRCLES_SHOWN_; i++) blanks += '<span class="budget-circle budget-circle-blank" aria-hidden="true"></span>';
+    return '<span class="budget-circles-track">' + blanks + series.circles.map(budgetCircleHtml_).join('') + '</span>';
   }
   /** Clique/toque num círculo: tooltip por 15 s (showTooltipForTap_) ou até clicar fora. O clique
    *  nunca sobe pra linha (que abriria o Extrato/o modal de editar). Chamada de novo a cada
    *  render (os elementos são recriados). */
   function wireBudgetCircles_(root) {
-    root.querySelectorAll('.budget-circle').forEach(function (el) {
+    root.querySelectorAll('button.budget-circle').forEach(function (el) {
       el.addEventListener('click', function (e) {
         e.stopPropagation();
         if (stopTooltipOutsideClick_) { stopTooltipOutsideClick_(); stopTooltipOutsideClick_ = null; }
@@ -8698,7 +8762,7 @@
     var title = b.periodMode === 'auto' ? 'Automático' : 'Manual';
     if (!progress) return buildBudgetMenuSummaryCard_(title, [{ text: 'Histórico insuficiente' }]);
     var spec = budgetCycleSpecOf_(budgetWithEffectiveCategories_(b));
-    var where = 'neste ciclo (' + fmtDateShort_(progress.cycle.fromYmd) + ' a ' + fmtDateShort_(progress.cycle.toYmd) + ')';
+    var where = 'neste ciclo (' + budgetCyclePeriodText_(progress.cycle.fromYmd, progress.cycle.toYmd) + ')';
     var recovery = progress.recovery && progress.recovery.active ? progress.recovery : null;
     var rows = [
       { text: fmtMoneyNoCents_(progress.spent) + ' gastos ' + where, onClick: function () { closeMenu(); viewBudgetTransactions_(b); } },
@@ -8815,9 +8879,7 @@
       btn.onclick = function () {
         var s = newSuggestions.find(function (x) { return x.categoryId === categoryId; });
         if (!s) return;
-        openBudgetModal(null, {
-          suggestion: { type: 'new', categoryId: s.categoryId, categoryIds: [s.categoryId], suggestedCycleUnit: 'month', suggestedCycleCount: 1, suggestedAmount: s.suggestedAmount }
-        });
+        openBudgetModal(null, { suggestion: budgetNewSuggestionForModal_(s) });
       };
     });
   }
@@ -8933,16 +8995,20 @@
     if (!activeBudgets.length && !newBudgetSuggestions.length && !geralProgress) return '';
 
     // Cada orçamento é uma linha de círculos (ver budgetCircleSeries_): um por ciclo fechado e o
-    // último é o ciclo em andamento; o texto de aviso fica À DIREITA do último círculo (como em
-    // Lançamentos recorrentes) e, em tela estreita, quebra pra baixo -- os 12 círculos sempre cabem.
+    // último é o ciclo em andamento. Colunas fixas e iguais em todas as linhas: nome à esquerda | 8 slots de
+    // círculo | texto de aviso à direita (largura fixa, até 2 linhas). Em tela estreita o nome ocupa a linha
+    // de cima e círculos + texto ficam embaixo (ver .budget-circles-head, Stylesheet.html).
     var barsHtml = (geralBudget ? [geralBudget] : []).concat(activeBudgets).map(function (b) {
       var progress = b === geralBudget ? geralProgress : progressOf_(b);
       var series = progress ? budgetCircleSeries_(b, {}) : null;
       var name = b.isUnbudgetedCatchAll ? BUDGET_GERAL_NAME_ : b.categoryName;
       if (!progress || !series) {
         return '<div class="budget-circles-row budget-circles-row-empty" data-budget-bar="' + b.id + '">' +
-          '<span class="budget-timebar-name" style="flex:1">' + budgetIconHtml_(b) + escapeHtml(name) + '</span>' +
-          '<span class="muted" style="font-size:12px">Histórico insuficiente</span>' +
+          '<div class="budget-circles-head">' +
+            '<span class="budget-timebar-name">' + budgetIconHtml_(b) + escapeHtml(name) + '</span>' +
+            budgetCirclesTrackHtml_(null) +
+            '<div class="budget-circles-advice">Histórico insuficiente</div>' +
+          '</div>' +
         '</div>';
       }
       return '<div class="budget-circles-row" data-budget-bar="' + b.id + '">' +
@@ -8961,7 +9027,7 @@
       newBudgetSuggestions.map(function (s) {
         return '<div class="budget-suggest-row">' +
           '<span class="budget-suggest-text">' + categoryIconHtml_(s.categoryId) + escapeHtml(s.categoryName) + ' ' +
-            '<span class="muted">· ' + escapeHtml(fmtMoneyNoCents_(s.suggestedAmount)) + ' por mês</span></span>' +
+            '<span class="muted">· ' + escapeHtml(fmtMoneyNoCents_(s.suggestedAmount)) + ' ' + escapeHtml(budgetSuggestionCycleText_(s.suggestedCycleUnit, s.suggestedCycleCount)) + '</span></span>' +
           '<button type="button" class="secondary budget-suggest-btn" data-budget-suggest="' + escapeHtml(s.categoryId) + '">Criar</button>' +
         '</div>';
       }).join('');
@@ -11219,7 +11285,7 @@
     if (rowRecovery && rowRecovery.active) subtitle += '<br>' + escapeHtml(budgetRecoveryNote_(rowRecovery));
     var series = base !== null ? budgetCircleSeries_(g, { amount: base }) : null;
     return '<div class="row budget-plan-row" data-row-budget="' + escapeHtml(g.id) + '"><span class="budget-plan-info">' + budgetIconHtml_(g) + escapeHtml(BUDGET_GERAL_NAME_) + '<br><span class="muted">' + subtitle + '</span></span>' +
-      '<span class="forecast-row-right">' + (series ? budgetCirclesTrackHtml_(series) : '') +
+      '<span class="forecast-row-right">' + budgetCirclesTrackHtml_(series) +
         '<span class="row-actions" style="visibility:hidden">' + rowRemoveButtonHtml_('data-remove-geral', g.id, 'Remover') + '</span></span></div>';
   }
 
@@ -11281,7 +11347,7 @@
         : '';
       var rowSeries = rowBase !== null ? budgetCircleSeries_(b, { amount: rowBase }) : null;
       return '<div class="row budget-plan-row" data-row-budget="' + escapeHtml(b.id) + '"><span class="budget-plan-info">' + budgetIconHtml_(b) + escapeHtml(b.categoryName) + '<br><span class="muted">' + subtitle + '</span>' + modeSwitchHtml + '</span>' +
-        '<span class="forecast-row-right">' + (rowSeries ? budgetCirclesTrackHtml_(rowSeries) : '') +
+        '<span class="forecast-row-right">' + budgetCirclesTrackHtml_(rowSeries) +
           '<span class="row-actions">' + rowRemoveButtonHtml_('data-remove', b.id, 'Remover') + '</span></span></div>';
     }).join('');
 
@@ -11292,7 +11358,7 @@
     var suggestionsHtml = suggestions.map(function (s) {
       return '<div class="row" style="background:var(--bg);border-radius:8px;padding:8px">' +
           '<span><span class="badge">Sugestão</span> ' + categoryIconHtml_(s.categoryId) + escapeHtml(s.categoryName) +
-            '<br><span class="muted">' + fmtMoneyNoCents_(s.suggestedAmount) + ' · por mês · ' + s.count +
+            '<br><span class="muted">' + fmtMoneyNoCents_(s.suggestedAmount) + ' · ' + budgetSuggestionCycleText_(s.suggestedCycleUnit, s.suggestedCycleCount) + ' · ' + s.count +
             (s.count === 1 ? ' lançamento recente' : ' lançamentos recentes') + '</span></span>' +
           '<span class="row-actions">' +
             '<button data-confirm-suggestion="' + s.categoryId + '">Confirmar</button>' +
@@ -11431,9 +11497,7 @@
         var categoryId = btn.dataset.confirmSuggestion;
         var s = suggestions.find(function (x) { return x.categoryId === categoryId; });
         if (!s) return;
-        openBudgetModal(null, {
-          suggestion: { type: 'new', categoryId: s.categoryId, categoryIds: [s.categoryId], suggestedCycleUnit: 'month', suggestedCycleCount: 1, suggestedAmount: s.suggestedAmount }
-        });
+        openBudgetModal(null, { suggestion: budgetNewSuggestionForModal_(s) });
       };
     });
     root.querySelectorAll('[data-discard-suggestion]').forEach(function (btn) {
@@ -11587,12 +11651,7 @@
    *  da semana; ciclo de 1 dia só mostra a data). spec = { unit, count }. */
   function budgetFirstCycleLabel_(spec, startYmd) {
     var cycle = budgetCycleAtIndex_({ cycleUnit: spec.unit, cycleCount: spec.count, cycleStart: startYmd }, 0);
-    function monthYear_(ymd) { return MONTH_NAMES_PT[Number(ymd.slice(5, 7)) - 1] + ' de ' + ymd.slice(0, 4); }
-    if (spec.unit === 'month') {
-      var first = monthYear_(cycle.fromYmd);
-      first = first.charAt(0).toUpperCase() + first.slice(1);
-      return spec.count > 1 ? first + ' a ' + monthYear_(cycle.toYmd) : first;
-    }
+    if (spec.unit === 'month') return budgetCyclePeriodText_(cycle.fromYmd, cycle.toYmd);
     return cycle.fromYmd === cycle.toYmd ? fmtLongDateWeekday_(cycle.fromYmd) : fmtLongDateWeekday_(cycle.fromYmd) + ', a ' + fmtLongDateWeekday_(cycle.toYmd);
   }
 
