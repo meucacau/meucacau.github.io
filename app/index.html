@@ -364,7 +364,8 @@
 
   input, select, textarea {
     width: 100%;
-    padding: 10px 12px;
+    /* 1,5px mais embaixo que em cima: a fonte (Utendo) tem mais espaço embaixo da linha de base, e o texto parecia alto no campo. */
+    padding: 11.5px 12px 8.5px;
     border-radius: 8px;
     border: 1px solid var(--border);
     background: var(--surface);
@@ -374,7 +375,7 @@
   /* Campo de escolha do app (no lugar do <select> nativo; ver appSelectHtml_): parece um campo, abre o menu do app. */
   button.app-select {
     display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
-    margin-bottom: 12px; padding: 10px 12px; border-radius: 8px; text-align: left;
+    margin-bottom: 12px; padding: 11.5px 12px 8.5px; border-radius: 8px; text-align: left;
     background: var(--surface); color: var(--text); border: 1px solid var(--border);
   }
   button.app-select .app-select-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -736,14 +737,14 @@
     -webkit-mask-position: center; mask-position: center; }
   #boot-splash .boot-base { position: absolute; inset: 0; background: var(--primary); opacity: .13; }
   #boot-splash .boot-fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--primary); }
-  #boot-splash .boot-fill.boot-finish { transition: height .55s ease-out; }
+  #boot-splash .boot-fill.boot-finish { transition: height .4s ease-out; }
   /* Mensagem do Início: direto no fundo do app, acima do 1º card; branco no escuro e preto no claro (var(--text)). */
   .home-msg { font-size: 26px; line-height: 1.25; font-weight: 700; color: var(--text); text-align: left; margin: 6px 2px 18px; }
   /* Ícone monocromático (traço da cor do texto) antes da frase; a parte iluminada da lua é preenchida. */
   svg.home-msg-ico { width: 0.9em; height: 0.9em; vertical-align: -0.1em; margin-right: 8px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
   svg.home-msg-ico .moon-lit { fill: currentColor; }
   /* Entra com atraso (0,6 s): o card/aba aparece primeiro e a mensagem chega depois, com mais destaque. */
-  .home-msg-in { animation: home-msg-fade 1s cubic-bezier(.2,.8,.2,1) 0.25s both; }
+  .home-msg-in { animation: home-msg-fade .65s cubic-bezier(.2,.8,.2,1) 0.08s both; }
   @keyframes home-msg-fade { from { opacity: 0; transform: translateY(14px) scale(.97); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
   @media (prefers-reduced-motion: reduce) { .home-msg-in { animation: none; } }
   /* Card "Saldo do ciclo": faixa larga (esquerda = o que sobrou, direita = o que já saiu, por nome). */
@@ -773,9 +774,9 @@
   .cycle-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; }
   /* Entrada: o cheio cresce da esquerda, o vermelho da direita e os gradientes aparecem por último (só ao entrar na aba ou trocar de ciclo). */
   @media (prefers-reduced-motion: no-preference) {
-    .view-enter .cycle-bar-left, .cycle-anim .cycle-bar-left { animation: cycle-grow-l .8s cubic-bezier(.2,.8,.2,1) .3s backwards; }
-    .view-enter .cycle-bar-over, .cycle-anim .cycle-bar-over { animation: cycle-grow-r .8s cubic-bezier(.2,.8,.2,1) .3s backwards; }
-    .view-enter .cycle-mark, .cycle-anim .cycle-mark { animation: cycle-mark-in .5s ease .75s backwards; }
+    .view-enter .cycle-bar-left, .cycle-anim .cycle-bar-left { animation: cycle-grow-l .55s cubic-bezier(.2,.8,.2,1) .1s backwards; }
+    .view-enter .cycle-bar-over, .cycle-anim .cycle-bar-over { animation: cycle-grow-r .55s cubic-bezier(.2,.8,.2,1) .1s backwards; }
+    .view-enter .cycle-mark, .cycle-anim .cycle-mark { animation: cycle-mark-in .35s ease .5s backwards; }
     @keyframes cycle-grow-l { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
     @keyframes cycle-grow-r { from { clip-path: inset(0 0 0 100%); } to { clip-path: inset(0 0 0 0); } }
     @keyframes cycle-mark-in { from { opacity: 0; } }
@@ -861,13 +862,13 @@
   /* Janela do cacaueiro: as barras (progresso do estágio e trilho da linha do tempo) se desenham da esquerda pra direita
      e as figuras da linha do tempo aparecem com um pop, logo depois da janela subir. */
   @media (prefers-reduced-motion: no-preference) {
-    .tree-bar > span { animation: bar-reveal .8s cubic-bezier(.2,.8,.2,1) .3s backwards; }
-    .tree-tl-line > span { animation: bar-reveal .9s cubic-bezier(.2,.8,.2,1) .35s backwards; }
-    .tree-tl-item { animation: tl-pop .45s cubic-bezier(.34,1.4,.64,1) .3s backwards; }
+    .tree-bar > span { animation: bar-reveal .55s cubic-bezier(.2,.8,.2,1) .1s backwards; }
+    .tree-tl-line > span { animation: bar-reveal .6s cubic-bezier(.2,.8,.2,1) .12s backwards; }
+    .tree-tl-item { animation: tl-pop .35s cubic-bezier(.34,1.4,.64,1) .1s backwards; }
     .tree-tl-item:nth-child(n+4) { animation-delay: .38s; }
     .tree-tl-item:nth-child(n+7) { animation-delay: .46s; }
     /* "Faltam x pontos para y" entra junto com a barra (mesmo atraso e duração). */
-    .tree-need { animation: tree-need-in .8s cubic-bezier(.2,.8,.2,1) .3s backwards; }
+    .tree-need { animation: tree-need-in .55s cubic-bezier(.2,.8,.2,1) .1s backwards; }
     @keyframes tree-need-in { from { opacity: 0; transform: translateY(6px); } }
     /* Redesenho da janela (resposta do servidor depois de abrir): nada de entrar de novo. */
     .tree-modal.tree-rerender .tree-bar > span, .tree-modal.tree-rerender .tree-tl-line > span,
@@ -990,13 +991,22 @@
     .sheet-actions > button:only-child { width: 100%; padding: 13px 16px; }
     .sheet-actions button, .sheet-actions .btn-pair button { min-height: 48px; }
 
-    /* Lançamento: mesma ordem do PC. Valor grande; Parcelas só aparece (animada) quando a conta é cartão de crédito. */
-    .tx-f-amount { gap: 0 !important; align-items: flex-end; }
-    .tx-f-amount > div:first-child { flex: 1 1 0 !important; }
-    /* Valor e Parcelas: mesma fonte e mesmo padding do PC, então a mesma altura (as larguras é que diferem). */
-    .tx-f-amount input { font-size: 24px; font-weight: 600; box-sizing: border-box; margin-bottom: 0; }
-    .tx-f-amount > .tx-inst-col { flex: 0 0 0 !important; margin-left: 0; opacity: 0; overflow: hidden; visibility: hidden; }
-    .tx-f-amount.has-inst > .tx-inst-col { flex: 0 0 96px !important; margin-left: 10px; opacity: 1; overflow: visible; visibility: visible; }
+    /* Data/horário: o ícone (calendário/relógio) fica SEMPRE no canto direito do campo, em qualquer navegador do celular --
+       o nativo vira uma área de toque invisível por cima do campo todo e o desenho é o fundo. */
+    input[type="date"], input[type="time"] {
+      -webkit-appearance: none; appearance: none; position: relative; box-sizing: border-box;
+      text-align: left; padding-right: 42px;
+      background-repeat: no-repeat; background-position: right 12px center; background-size: 18px 18px;
+    }
+    input[type="date"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8f98' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E"); }
+    input[type="time"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8f98' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 6v6l4 2'/%3E%3C/svg%3E"); }
+    input[type="date"]::-webkit-calendar-picker-indicator, input[type="time"]::-webkit-calendar-picker-indicator {
+      position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; opacity: 0; cursor: pointer;
+    }
+    input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-date-and-time-value { text-align: left; }
+
+    /* Lançamento: Valor grande (fonte maior no celular). */
+    .tx-f-amount input { font-size: 24px; font-weight: 600; }
     .tx-f-amount .field-action-group { flex-wrap: wrap; gap: 0 10px; min-width: 0; max-width: 100%; }
     /* Cápsulas: do tamanho do PC (sem sobrescrever padding/fonte/altura no celular). */
     /* Título do campo bem mais forte que as perguntas de ação ("Lembrar categoria?", "Reembolso?"). */
@@ -1005,7 +1015,13 @@
     /* Campos de texto: mesmo padding interno do PC (só a fonte de 16px muda, pra evitar o zoom automático do iOS ao focar). */
     .modal input, .modal select, .modal textarea { font-size: 16px; }
   }
-  @media (max-width: 640px) and (prefers-reduced-motion: no-preference) {
+  /* Valor e Parcelas (PC e celular): Parcelas só existe -- animada, ao lado do Valor -- quando a conta é cartão de crédito. */
+  .tx-f-amount { gap: 0 !important; align-items: flex-end; }
+  .tx-f-amount > div:first-child { flex: 1 1 0 !important; }
+  .tx-f-amount input { box-sizing: border-box; margin-bottom: 0; }
+  .tx-f-amount > .tx-inst-col { flex: 0 0 0 !important; margin-left: 0; opacity: 0; overflow: hidden; visibility: hidden; }
+  .tx-f-amount.has-inst > .tx-inst-col { flex: 0 0 96px !important; margin-left: 10px; opacity: 1; overflow: visible; visibility: visible; }
+  @media (prefers-reduced-motion: no-preference) {
     .tx-f-amount > div:first-child, .tx-f-amount > .tx-inst-col {
       transition: flex-basis .28s cubic-bezier(.2,.8,.2,1), margin-left .28s cubic-bezier(.2,.8,.2,1), opacity .22s ease, visibility 0s linear .28s;
     }
@@ -1181,8 +1197,8 @@
   .sup-month-lbl { font-size: 10px; text-transform: uppercase; }
   @media (prefers-reduced-motion: no-preference) {
     .sup-row { animation: view-rise .36s cubic-bezier(.2,.8,.2,1) backwards; animation-delay: calc(var(--i, 0) * 28ms); }
-    .sup-bar > span { animation: sup-grow .6s cubic-bezier(.2,.8,.2,1) backwards; animation-delay: calc(var(--i, 0) * 28ms + 120ms); }
-    .sup-month-bar { animation: sup-rise .5s cubic-bezier(.2,.8,.2,1) backwards; animation-delay: calc(var(--i, 0) * 30ms); }
+    .sup-bar > span { animation: sup-grow .42s cubic-bezier(.2,.8,.2,1) backwards; animation-delay: calc(var(--i, 0) * 18ms + 40ms); }
+    .sup-month-bar { animation: sup-rise .38s cubic-bezier(.2,.8,.2,1) backwards; animation-delay: calc(var(--i, 0) * 20ms); }
     @keyframes sup-grow { from { transform: scaleX(0); } }
     @keyframes sup-rise { from { transform: scaleY(0); } }
   }
@@ -1529,7 +1545,8 @@
   /* Dica que some sozinha (ver openFeedbackModal_): o fade dura o último meio segundo dos 3 s. */
   .shared-tooltip-fading { opacity: 0; transition: opacity .5s ease; }
   /* Tooltip com linhas (ver buildDayBarsHtml_): data em negrito, texto à esquerda e números à direita. */
-  .shared-tooltip-rich { white-space: nowrap; max-width: none; }
+  .shared-tooltip-rich { white-space: nowrap; max-width: calc(100vw - 16px); box-sizing: border-box; }
+  .shared-tooltip-rich .tt-hint { white-space: normal; }
   .shared-tooltip-rich .tt-date { font-weight: 700; margin-bottom: 3px; text-align: center; }
   .shared-tooltip-rich .tt-row { display: flex; justify-content: space-between; gap: 16px; }
   .shared-tooltip-rich .tt-val { text-align: right; white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -1598,12 +1615,15 @@
      nunca encolhem; o texto fica à direita (alinhado à direita, largura fixa, no máximo 2 linhas). Em tela
      estreita (até 520px) o nome ocupa a linha de cima e círculos + texto ficam embaixo, nas mesmas 2 colunas
      em todas as linhas -- cabe nos ~310px de um celular sem rolagem lateral. */
-  .budget-circles-row { --budget-track-w: 149px; --budget-advice-w: 200px; }
+  .budget-circles-row { --budget-circle: 20px; --budget-track-w: 181px; --budget-advice-w: 200px; } /* 8 slots x 20px + 7 x 3px */
   .budget-circles-head { display: grid; grid-template-columns: minmax(0, 1fr) var(--budget-track-w) var(--budget-advice-w); align-items: center; column-gap: 10px; }
   /* O título quebra em várias linhas se precisar (centralizado na vertical com o resto da linha, pelo align-items do grid) e nunca
      invade a coluna do lado: o ícone fica fixo e o texto se ajusta dentro da coluna. */
-  .budget-circles-head .budget-timebar-name { min-width: 0; display: flex; align-items: center; gap: 6px; overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
+  .budget-circles-head .budget-timebar-name { min-width: 0; display: flex; align-items: center; gap: 8px; overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
   .budget-circles-head .budget-timebar-name > svg, .budget-circles-head .budget-timebar-name > .cat-icon { flex: none; }
+  /* O ícone fica centrado na linha, mas a fonte tem mais espaço embaixo da linha de base e o texto parecia mais alto que o ícone: desce o texto um tiquinho. */
+  .budget-circles-head .budget-timebar-name > svg { margin-right: 0 !important; vertical-align: middle !important; }
+  .budget-name-text { min-width: 0; padding-top: .14em; }
   .budget-circles-advice {
     min-width: 0; font-size: 12px; line-height: 1.3; color: var(--text-muted); text-align: right;
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden;
@@ -1614,14 +1634,17 @@
     .budget-circles-head .budget-circles-track { grid-area: track; }
     .budget-circles-head .budget-circles-advice { grid-area: advice; }
   }
-  .budget-circles-track { display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px; flex: none; width: 149px; }
+  .budget-circles-track { display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px; flex: none; width: var(--budget-track-w, 181px); }
   .budget-circle {
     -webkit-appearance: none;
     appearance: none;
     display: block;
+    position: relative;
     box-sizing: border-box;
-    width: 16px;
-    height: 16px;
+    width: var(--budget-circle, 20px);
+    height: var(--budget-circle, 20px);
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
     padding: 0;
     margin: 0;
     border: none;
@@ -1636,7 +1659,9 @@
   /* Ciclo em andamento: anel em SVG (ver budgetRingSvgHtml_) -- trilha, arco do gasto na cor do ritmo e um corte
      arredondado na posição de hoje. */
   .budget-circle-partial { background: transparent; }
-  .budget-ring { display: block; pointer-events: none; }
+  .budget-ring { display: block; pointer-events: none; width: 100%; height: 100%; }
+  /* Área de toque maior que o desenho: estende 8px pra cima e pra baixo (a folga de 3px entre círculos limita os lados). */
+  .budget-circle:not(.budget-circle-blank)::after { content: ''; position: absolute; left: -1px; right: -1px; top: -8px; bottom: -8px; }
   .budget-ring path, .budget-ring circle { fill: none; stroke-width: 3; stroke-linecap: round; }
   .budget-ring .bc-track { stroke: color-mix(in srgb, var(--text-muted) 28%, var(--bg)); }
   .budget-ring .bc-fill { stroke: var(--c); }
@@ -1918,8 +1943,8 @@
   /* Gráfico de colunas das próximas faturas (card "Próximas faturas" do Início): coluna empilhada por cartão. */
   .bills-chart-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
   .bills-chart-head h2 { margin-bottom: 0; }
-  .bills-chart { display: flex; align-items: stretch; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
-  .bills-col { flex: 1 0 44px; min-width: 44px; display: flex; flex-direction: column; align-items: stretch; cursor: default; -webkit-user-select: none; user-select: none; }
+  .bills-chart { display: flex; align-items: stretch; gap: 4px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+  .bills-col { flex: 0 0 34px; min-width: 34px; border-radius: 6px; display: flex; flex-direction: column; align-items: stretch; cursor: default; -webkit-user-select: none; user-select: none; }
   .bills-col-val { height: 16px; font-size: 11px; font-weight: 600; text-align: center; white-space: nowrap; color: var(--text-muted); }
   .bills-col-plot { height: 140px; display: flex; align-items: flex-end; justify-content: center; border-bottom: 1px solid var(--border); }
   .bills-stack { width: 70%; max-width: 38px; display: flex; flex-direction: column; border-radius: 6px 6px 0 0; overflow: hidden; }
@@ -1931,7 +1956,12 @@
   .bills-seg + .bills-seg { border-top: 1px solid var(--card); }
   .bills-col-label { font-size: 11px; text-align: center; color: var(--text-muted); padding-top: 4px; text-transform: lowercase; }
   .bills-col:hover .bills-stack { filter: brightness(1.08); }
-  .bills-col-before .bills-stack { opacity: .75; }
+  .bills-seg-paid { opacity: .45; }
+  .bills-col-current { background: var(--surface-2, rgba(127,127,127,.10)); }
+  .bills-col-current .bills-col-label { color: var(--text); font-weight: 700; }
+  .bills-col-clickable { cursor: pointer; }
+  .bills-col-val { font-size: 10px; }
+  .bills-stack { width: 64%; max-width: 24px; }
 
   /* Grade de ícones do seletor de categoria (ver openCategoryIconPicker_, JavaScript.html) --
      cada botão é só o ícone, centralizado, sem o visual de botão padrão do app. */
@@ -1960,7 +1990,7 @@
   /* ---------- animações (escolhidas em 19/11/2026; tudo some com "reduzir movimento") ---------- */
   @media (prefers-reduced-motion: no-preference) {
     /* Botões A · afundar: a propriedade `scale` compõe com o transform que vários botões já usam. */
-    button { transition: scale .12s ease; }
+    button { transition: scale .09s ease; }
     button:not(:disabled):active { scale: .86; }
     /* Botões de dropdown não afundam: a setinha gira e o menu abre com animação (abaixo). */
     button.dd-btn:not(:disabled):active { scale: 1; }
@@ -1971,39 +2001,39 @@
     @keyframes dd-pop-below { from { opacity: 0; transform: translateY(-8px) scale(.94); } }
     @keyframes dd-pop-above { from { opacity: 0; transform: translateY(8px) scale(.94); } }
     /* Troca de aba D · cascata: cada bloco da tela sobe, um depois do outro. */
-    .view-enter > * { animation: view-rise .42s cubic-bezier(.2,.8,.2,1) backwards; }
-    .view-enter > *:nth-child(2) { animation-delay: .06s; }
-    .view-enter > *:nth-child(3) { animation-delay: .12s; }
-    .view-enter > *:nth-child(4) { animation-delay: .18s; }
-    .view-enter > *:nth-child(5) { animation-delay: .24s; }
-    .view-enter > *:nth-child(6) { animation-delay: .30s; }
-    .view-enter > *:nth-child(n+7) { animation-delay: .36s; }
+    .view-enter > * { animation: view-rise .3s cubic-bezier(.2,.8,.2,1) backwards; }
+    .view-enter > *:nth-child(2) { animation-delay: .04s; }
+    .view-enter > *:nth-child(3) { animation-delay: .08s; }
+    .view-enter > *:nth-child(4) { animation-delay: .12s; }
+    .view-enter > *:nth-child(5) { animation-delay: .16s; }
+    .view-enter > *:nth-child(6) { animation-delay: .20s; }
+    .view-enter > *:nth-child(n+7) { animation-delay: .24s; }
     @keyframes view-rise { from { opacity: 0; transform: translateY(16px); } }
     /* A mensagem do Início tem animação própria (com atraso): sem esta regra a cascata acima a sobrescrevia, a mensagem
        aparecia na hora, e quando a classe view-enter saía (1,1 s) a própria animação recomeçava -- sumia e reaparecia. */
-    .view-enter > .home-msg.home-msg-in { animation: home-msg-fade 1s cubic-bezier(.2,.8,.2,1) 0.25s both; }
+    .view-enter > .home-msg.home-msg-in { animation: home-msg-fade .65s cubic-bezier(.2,.8,.2,1) 0.08s both; }
     /* Abrir janelas · sobe da base da tela (a janela já nasce encostada embaixo; nas centralizadas, sobe um pouco). */
-    .modal.modal-pop { animation: modal-rise .38s cubic-bezier(.2,.8,.2,1) backwards; }
-    .modal-backdrop.modal-pop-bd { animation: modal-fade .25s ease backwards; }
+    .modal.modal-pop { animation: modal-rise .3s cubic-bezier(.2,.8,.2,1) backwards; }
+    .modal-backdrop.modal-pop-bd { animation: modal-fade .2s ease backwards; }
     @keyframes modal-rise { from { transform: translateY(100%); opacity: .6; } }
     .modal-backdrop.modal-center .modal.modal-pop { animation-name: modal-rise-short; }
     @keyframes modal-rise-short { from { transform: translateY(56px); opacity: 0; } }
     @keyframes modal-fade { from { opacity: 0; } }
     /* Fechar janelas (voltar, Esc, tocar fora, Salvar) · a inversa de abrir: desce e some, o fundo some junto. */
-    .modal.modal-out { animation: modal-sink .22s cubic-bezier(.4,0,1,1) forwards; }
-    .modal-backdrop.modal-out-bd { animation: modal-fade-out .22s ease forwards; }
+    .modal.modal-out { animation: modal-sink .18s cubic-bezier(.4,0,1,1) forwards; }
+    .modal-backdrop.modal-out-bd { animation: modal-fade-out .18s ease forwards; }
     .modal-backdrop.modal-center .modal.modal-out { animation-name: modal-sink-short; }
     @keyframes modal-sink-short { to { transform: translateY(56px); opacity: 0; } }
     /* Tooltips · surgem com um leve zoom/subida (a origem fica do lado da seta). */
     .shared-tooltip { animation: tip-in .16s ease-out backwards; }
     @keyframes tip-in { from { opacity: 0; transform: translateY(4px) scale(.92); } }
     /* Avisos A · descem do topo e saem para cima. */
-    .toast { animation: toast-drop .4s cubic-bezier(.2,.8,.2,1) backwards; transition: opacity .3s ease, transform .3s ease; }
+    .toast { animation: toast-drop .3s cubic-bezier(.2,.8,.2,1) backwards; transition: opacity .3s ease, transform .3s ease; }
     .toast.toast-fade-out { transform: translateY(-26px); }
     @keyframes toast-drop { from { transform: translateY(-70px); opacity: 0; } }
     /* Números e barras C · os anéis do orçamento se desenham ao entrar na aba. */
-    .view-enter .budget-ring .bc-recov { stroke-dasharray: 1 1; animation: ring-draw 1.1s cubic-bezier(.4,0,.2,1) .25s backwards; }
-    .view-enter .budget-ring .bc-fill { stroke-dasharray: 1 1; animation: ring-draw .9s cubic-bezier(.34,1.3,.64,1) backwards; }
+    .view-enter .budget-ring .bc-recov { stroke-dasharray: 1 1; animation: ring-draw .7s cubic-bezier(.4,0,.2,1) .1s backwards; }
+    .view-enter .budget-ring .bc-fill { stroke-dasharray: 1 1; animation: ring-draw .6s cubic-bezier(.34,1.3,.64,1) backwards; }
     @keyframes ring-draw { from { stroke-dashoffset: 1; } }
   }
   /* Hover (só com mouse): lançamentos -- o ícone da categoria balança; demais linhas clicáveis -- deslizam pra direita
@@ -2576,7 +2606,7 @@
       (function (el, text, value) {
         var t0 = performance.now();
         (function step(now) {
-          var k = Math.min(1, (now - t0) / 700);
+          var k = Math.min(1, (now - t0) / 450);
           el.textContent = k < 1 ? replaceMoneyDigits_(text, value * (1 - Math.pow(1 - k, 3))) : text;
           if (k < 1 && el.isConnected) requestAnimationFrame(step);
           else el.textContent = text;
@@ -2592,7 +2622,7 @@
     if (!sameView) {
       root.classList.add('view-enter');
       clearTimeout(viewEnterTimer_);
-      viewEnterTimer_ = setTimeout(function () { root.classList.remove('view-enter'); }, 1100);
+      viewEnterTimer_ = setTimeout(function () { root.classList.remove('view-enter'); }, 950);
     }
     // Extrato: mesma contagem nos valores das linhas, só ao ENTRAR na aba (não ao filtrar/buscar) e só nas que
     // aparecem na tela -- contar centenas de linhas de uma vez pesaria à toa.
@@ -2607,7 +2637,7 @@
           // A · contagem: corre de zero até o valor
           var t0 = performance.now();
           (function step(now) {
-            var k = Math.min(1, (now - t0) / 800);
+            var k = Math.min(1, (now - t0) / 500);
             el.textContent = k < 1 ? fmtMoney(value * (1 - Math.pow(1 - k, 3))) : text;
             if (k < 1 && el.isConnected) requestAnimationFrame(step);
             else el.textContent = text;
@@ -2616,7 +2646,7 @@
           // D · flash: verde se subiu, vermelho se desceu
           var up = value > prev.value, c = up ? 'rgba(99,153,34,.35)' : 'rgba(226,75,74,.3)';
           el.style.borderRadius = '4px';
-          el.animate([{ backgroundColor: c }, { backgroundColor: 'rgba(0,0,0,0)' }], { duration: 900, easing: 'ease-out' });
+          el.animate([{ backgroundColor: c }, { backgroundColor: 'rgba(0,0,0,0)' }], { duration: 650, easing: 'ease-out' });
         }
       })(els[i], STATE.currentView + ':' + i);
     }
@@ -2747,8 +2777,12 @@
    * pra dentro da tela, e nunca chega nos cantos arredondados (14 px de folga).
    */
   function setPopupTip_(box, originCenterX, above) {
-    var r = box.getBoundingClientRect();
-    var x = Math.min(Math.max(originCenterX - r.left, 14), Math.max(14, r.width - 14));
+    // Largura/posição SEM transformação: a animação de entrada (escala .92) encolhia o getBoundingClientRect e
+    // a ponta saía do centro. left vem do style (position:fixed, coordenadas da tela); offsetWidth ignora transform.
+    var left = parseFloat(box.style.left);
+    var w = box.offsetWidth;
+    if (isNaN(left)) { var r = box.getBoundingClientRect(); left = r.left; w = r.width; }
+    var x = Math.min(Math.max(originCenterX - left, 14), Math.max(14, w - 14));
     box.style.setProperty('--tip-x', x + 'px');
     box.classList.add('has-tip');
     box.classList.toggle('tip-below', !above);
@@ -2766,7 +2800,7 @@
       pop.appendChild(scroll);
     }
     var rect = anchorEl.getBoundingClientRect();
-    var popRect = pop.getBoundingClientRect();
+    var popRect = { width: pop.offsetWidth, height: pop.offsetHeight }; // sem transform da animação de entrada
     var vh = visibleBounds_().bottom;
     var above = false;
     var top = rect.bottom + 10;
@@ -2827,13 +2861,17 @@
   function showTooltip_(anchorEl, text, opts) {
     opts = opts || {};
     hideTooltip_();
+    tooltipShownAt_ = Date.now();
     var tip = document.createElement('div');
     tip.id = 'shared-tooltip';
     tip.className = 'shared-tooltip' + (opts.italic ? ' shared-tooltip-italic' : '') + (opts.html ? ' shared-tooltip-rich' : '');
     if (opts.html) tip.innerHTML = opts.html; else tip.textContent = text;
+    tip.style.left = '0px'; tip.style.top = '0px'; // mede com a largura máxima disponível, não espremido pela posição estática
     document.body.appendChild(tip);
-    var rect = anchorEl.getBoundingClientRect();
-    var tipRect = tip.getBoundingClientRect();
+    // Alvo visual: o elemento marcado com data-tip-target (a barra de um gráfico, não a coluna inteira), senão o próprio.
+    var targetEl = (anchorEl.querySelector && anchorEl.querySelector('[data-tip-target]')) || anchorEl;
+    var rect = targetEl.getBoundingClientRect();
+    var tipRect = { width: tip.offsetWidth, height: tip.offsetHeight }; // offset*: ignora a escala da animação de entrada
     var centerX = opts.pointer && opts.pointer.x !== null && opts.pointer.x !== undefined
       ? opts.pointer.x
       : rect.left + rect.width / 2;
@@ -2870,7 +2908,14 @@
   // cabeçalho "Hoje" de um card do Extrato) sair de baixo do tooltip enquanto ele mesmo
   // fica plantado ali, parecendo "grudado" no conteúdo rolando por trás. Mais simples
   // esconder no primeiro scroll do que ficar reposicionando a cada pixel rolado.
-  window.addEventListener('scroll', hideTooltip_, true);
+  // Rolagem logo depois de abrir (ajuste de layout, fim de inércia, barra de endereço do celular) não fecha o tooltip
+  // que é um atalho (círculos de orçamento): senão o toque nele chegava tarde, com ele já sumido.
+  var tooltipShownAt_ = 0;
+  window.addEventListener('scroll', function () {
+    var tip = document.getElementById('shared-tooltip');
+    if (tip && tip.classList.contains('shared-tooltip-action') && Date.now() - tooltipShownAt_ < 700) return;
+    hideTooltip_();
+  }, true);
   /** Depois que um menu/popover fecha por um toque/clique FORA dele, o clique que vem em seguida não faz o que
    *  faria (abrir um card, marcar uma opção...): esse gesto serve só pra fechar o menu. Come o próximo "click"
    *  (fase de captura, antes de qualquer handler do alvo); desarma sozinho se começar outro gesto (mousedown/
@@ -5402,9 +5447,10 @@
     return html;
   }
 
-  // ---------- gráfico de colunas das próximas faturas dos cartões (card do Início) ----------
+  // ---------- gráfico de colunas das faturas dos cartões (card do Início) ----------
   var BILLS_CHART_CARDS_KEY_ = 'financas-bills-chart-cards'; // por aparelho, como o tema e os cards do Início
-  var BILLS_CHART_MAX_MONTHS_ = 12;
+  var BILLS_CHART_PAST_MONTHS_ = 24;   // quanto do passado entra no eixo (a rolagem leva até lá)
+  var BILLS_CHART_FUTURE_MONTHS_ = 24; // e do futuro (parcelas que ainda vão cair)
   /** Cartões marcados no gráfico (ids). Sem escolha guardada -- ou se nenhum dos guardados existe mais -- são todos. */
   function billsChartSelectedIds_(summaries) {
     var all = summaries.map(function (c) { return c.accountId; });
@@ -5420,43 +5466,55 @@
     STATE.billsChartCards = ids;
     try { localStorage.setItem(BILLS_CHART_CARDS_KEY_, JSON.stringify(ids)); } catch (e) { /* sem armazenamento: vale só até recarregar */ }
   }
-  /** Colunas do gráfico: uma por mês de fatura ainda NÃO paga (valor = o que falta pagar), do mês da fatura aberta em diante
-   *  (meses sem fatura no meio viram coluna vazia, pro eixo ser contínuo); faturas fechadas/atrasadas de antes somem numa
-   *  primeira coluna "anteriores". Cada coluna leva as partes por cartão (parts), pro empilhado e o tooltip. */
-  function upcomingBillsSeries_(summaries, selectedIds) {
-    var byMonth = {}, before = { billMonth: 'before', total: 0, parts: [] };
+  /** Colunas do gráfico: UMA por mês de fatura, contínuas do passado (até BILLS_CHART_PAST_MONTHS_ antes da fatura aberta) ao futuro
+   *  (parcelas que ainda vão cair, até BILLS_CHART_FUTURE_MONTHS_ depois), com o valor TOTAL da fatura (pagas incluídas, em tom
+   *  esmaecido); meses sem fatura no meio viram coluna vazia pro eixo ser contínuo. Cada coluna leva as partes por cartão (parts),
+   *  pro empilhado, o tooltip e o filtro do Extrato. current = a coluna da fatura aberta (ou do mês de hoje, sem fatura aberta). */
+  function billsChartSeries_(summaries, selectedIds) {
+    var byMonth = {}, openMonth = null;
     summaries.forEach(function (cc) {
       if (selectedIds.indexOf(cc.accountId) === -1) return;
-      var beforeOfCard = 0;
       (cc.bills || []).forEach(function (b) {
-        if (b.status === 'paga' || !(b.remaining > 0)) return;
-        if (b.status === 'fechada' || b.status === 'atrasada') { beforeOfCard += b.remaining; return; }
-        var m = byMonth[b.billMonth] || (byMonth[b.billMonth] = { billMonth: b.billMonth, total: 0, parts: [] });
-        m.total += b.remaining;
-        m.parts.push({ accountId: cc.accountId, amount: b.remaining, status: b.status, dueDate: b.dueDate });
+        if (b.status === 'aberta' && (!openMonth || b.billMonth < openMonth)) openMonth = b.billMonth;
+        if (!(b.spent > 0)) return;
+        var m = byMonth[b.billMonth] || (byMonth[b.billMonth] = { billMonth: b.billMonth, total: 0, remaining: 0, parts: [] });
+        m.total += b.spent;
+        m.remaining += b.remaining || 0;
+        m.parts.push({ accountId: cc.accountId, amount: b.spent, remaining: b.remaining || 0, status: b.status, dueDate: b.dueDate });
       });
-      if (beforeOfCard > 0) { before.total += beforeOfCard; before.parts.push({ accountId: cc.accountId, amount: beforeOfCard, status: 'atrasada' }); }
     });
-    var keys = Object.keys(byMonth).sort(), out = [];
-    if (before.total > 0) out.push(before);
-    if (keys.length) {
-      var cur = keys[0], last = keys[keys.length - 1], n = 0;
-      while (cur <= last && n < BILLS_CHART_MAX_MONTHS_) {
-        out.push(byMonth[cur] || { billMonth: cur, total: 0, parts: [] });
-        cur = shiftYm_(cur, 1); n++;
-      }
+    var keys = Object.keys(byMonth).sort();
+    if (!keys.length) return [];
+    var current = openMonth || todayYmd().slice(0, 7);
+    var first = keys[0] < shiftYm_(current, -BILLS_CHART_PAST_MONTHS_) ? shiftYm_(current, -BILLS_CHART_PAST_MONTHS_) : keys[0];
+    var lastKey = keys[keys.length - 1];
+    var last = lastKey > shiftYm_(current, BILLS_CHART_FUTURE_MONTHS_) ? shiftYm_(current, BILLS_CHART_FUTURE_MONTHS_) : lastKey;
+    if (current < first) first = current;
+    if (current > last) last = current;
+    var out = [], cur = first, guard = 0;
+    while (cur <= last && guard++ < 120) {
+      var m = byMonth[cur] || { billMonth: cur, total: 0, remaining: 0, parts: [] };
+      m.current = cur === current;
+      out.push(m);
+      cur = shiftYm_(cur, 1);
     }
     out.forEach(function (m) {
       m.total = roundCents_(m.total);
-      m.parts.forEach(function (p) { p.amount = roundCents_(p.amount); });
+      m.remaining = roundCents_(m.remaining);
+      m.parts.forEach(function (p) { p.amount = roundCents_(p.amount); p.remaining = roundCents_(p.remaining); });
     });
     return out;
   }
   /** Rótulo curto da coluna: "nov", ou "jan/27" quando o ano muda (ou já é outro ano que o atual). */
   function billsChartMonthLabel_(ym, thisYear) {
-    if (ym === 'before') return 'antes';
     var p = ym.split('-'), name = MONTH_NAMES_PT[Number(p[1]) - 1].slice(0, 3);
     return (Number(p[0]) !== thisYear || p[1] === '01') ? name + '/' + p[0].slice(2) : name;
+  }
+  /** Valor curto pro topo da coluna estreita: "850", "1,2k", "12k". */
+  function billsChartShortValue_(n) {
+    if (n < 1000) return String(Math.round(n));
+    var k = n / 1000;
+    return (k >= 10 ? String(Math.round(k)) : k.toFixed(1).replace('.', ',').replace(/,0$/, '')) + 'k';
   }
   function billsChartAccountStyle_(accountId) {
     var a = STATE.accounts.find(function (x) { return x.id === accountId; });
@@ -5468,44 +5526,76 @@
     return a ? a.name : 'Cartão';
   }
   function billsChartColumnTip_(m) {
-    var title = m.billMonth === 'before' ? 'Faturas anteriores em aberto' : fmtMonthYear(m.billMonth);
+    var title = fmtMonthYear(m.billMonth);
     var plain = [title].concat(m.parts.map(function (p) { return billsChartAccountName_(p.accountId) + ' ' + fmtMoney(p.amount); }));
     if (m.parts.length > 1) plain.push('Total ' + fmtMoney(m.total));
     var rich = '<div class="tt-date">' + escapeHtml(title) + '</div>' + (m.parts.length ? m.parts.map(function (p) {
-      var st = (m.billMonth !== 'before' && STATUS_LABELS[p.status]) ? ' <span class="muted">· ' + escapeHtml(STATUS_LABELS[p.status]) + '</span>' : '';
+      var st = STATUS_LABELS[p.status] ? ' <span class="muted">· ' + escapeHtml(STATUS_LABELS[p.status]) + '</span>' : '';
       return '<div class="tt-row"><span>' + accountNameHtml(p.accountId) + st + '</span><span class="tt-val">' + escapeHtml(fmtMoney(p.amount)) + '</span></div>';
     }).join('') : '<div class="tt-row"><span>Sem fatura</span></div>') +
-      (m.parts.length > 1 ? '<div class="tt-gap"></div><div class="tt-row"><span>Total</span><span class="tt-val">' + escapeHtml(fmtMoney(m.total)) + '</span></div>' : '');
+      (m.parts.length > 1 ? '<div class="tt-gap"></div><div class="tt-row"><span>Total</span><span class="tt-val">' + escapeHtml(fmtMoney(m.total)) + '</span></div>' : '') +
+      (m.parts.length ? '<div class="tt-hint">' + budgetCircleHintText_() + '</div>' : '');
     return { plain: plain.join('\n'), rich: rich };
   }
   function billsChartPlotHtml_(series) {
     var max = series.reduce(function (m, c) { return Math.max(m, c.total); }, 0);
     var thisYear = new Date().getFullYear();
-    return '<div class="bills-chart" role="img" aria-label="Próximas faturas dos cartões">' + series.map(function (m) {
+    return '<div class="bills-chart" id="bills-chart-scroll" role="img" aria-label="Faturas dos cartões">' + series.map(function (m) {
       var tip = billsChartColumnTip_(m);
       var segs = m.parts.slice().sort(function (a, b) { return b.amount - a.amount; }).map(function (p) {
-        return '<div class="bills-seg" style="height:' + (m.total > 0 ? (p.amount / m.total * 100).toFixed(2) : 0) + '%;' + billsChartAccountStyle_(p.accountId) + '"></div>';
+        return '<div class="bills-seg' + (p.status === 'paga' ? ' bills-seg-paid' : '') + '" style="height:' + (m.total > 0 ? (p.amount / m.total * 100).toFixed(2) : 0) + '%;' + billsChartAccountStyle_(p.accountId) + '"></div>';
       }).join('');
       var h = max > 0 ? Math.max(m.total > 0 ? 3 : 0, m.total / max * 100) : 0;
-      return '<div class="bills-col' + (m.billMonth === 'before' ? ' bills-col-before' : '') + '" data-tooltip="' + escapeHtml(tip.plain) + '" data-tooltip-html="' + escapeHtml(tip.rich) + '">' +
-        '<div class="bills-col-val">' + (m.total > 0 ? escapeHtml(fmtMoneyNoCents_(m.total)) : '') + '</div>' +
-        '<div class="bills-col-plot"><div class="bills-stack" style="height:' + h.toFixed(1) + '%">' + segs + '</div></div>' +
+      return '<div class="bills-col' + (m.current ? ' bills-col-current' : '') + (m.parts.length ? ' bills-col-clickable' : '') + '" data-bill-month="' + m.billMonth + '"' +
+        ' data-tooltip="' + escapeHtml(tip.plain) + '" data-tooltip-html="' + escapeHtml(tip.rich) + '">' +
+        '<div class="bills-col-val">' + (m.total > 0 ? escapeHtml(billsChartShortValue_(m.total)) : '') + '</div>' +
+        '<div class="bills-col-plot"><div class="bills-stack"' + (m.total > 0 ? ' data-tip-target' : '') + ' style="height:' + h.toFixed(1) + '%">' + segs + '</div></div>' +
         '<div class="bills-col-label">' + escapeHtml(billsChartMonthLabel_(m.billMonth, thisYear)) + '</div></div>';
     }).join('') + '</div>';
   }
   function billsChartCardHtml_(summaries) {
     if (!summaries || !summaries.length) return '';
     var selected = billsChartSelectedIds_(summaries);
-    var series = upcomingBillsSeries_(summaries, selected);
+    var series = billsChartSeries_(summaries, selected);
     var label = selected.length === summaries.length ? 'Todos os cartões'
       : (selected.length === 1 ? billsChartAccountName_(selected[0]) : selected.length + ' cartões');
     var btn = summaries.length > 1
       ? '<button type="button" class="capsule dd-btn" id="bills-chart-cards" aria-haspopup="listbox">' + escapeHtml(label) + ' <span class="dd-chev">▾</span></button>' : '';
-    return '<div class="card"><div class="bills-chart-head"><h2>Próximas faturas</h2>' + btn + '</div>' +
-      (series.length ? billsChartPlotHtml_(series) : '<div class="empty-state">Nenhuma fatura em aberto.</div>') + '</div>';
+    return '<div class="card"><div class="bills-chart-head"><h2>Faturas por mês</h2>' + btn + '</div>' +
+      (series.length ? billsChartPlotHtml_(series) : '<div class="empty-state">Nenhuma fatura ainda.</div>') + '</div>';
+  }
+  /** Toque/clique numa coluna: Extrato filtrado pelos cartões e pelo mês da fatura daquela coluna. */
+  function viewBillTransactions_(m, accountIds) {
+    STATE.txFilters = { accountIds: accountIds.slice(), billMonth: m.billMonth };
+    STATE.txFiltersExpanded = false; // colapsado, o card mostra o que está filtrando (chips dos cartões e da fatura)
+    STATE.txVisibleCount = TX_PAGE_SIZE;
+    STATE.txCalendarScrollLeft = null;
+    STATE.currentView = 'transactions';
+    delete scrollPositions_.transactions; // chega com filtro novo
+    render();
   }
   function wireBillsChart_(root) {
-    root.querySelectorAll('.bills-col[data-tooltip]').forEach(function (el) { wireTooltipTrigger_(el); });
+    var scrollEl = root.querySelector('#bills-chart-scroll');
+    if (scrollEl) {
+      var summaries0 = (STATE.dashboard && STATE.dashboard.creditCardSummaries) || [];
+      var series = billsChartSeries_(summaries0, billsChartSelectedIds_(summaries0));
+      var byMonth = {};
+      series.forEach(function (m) { byMonth[m.billMonth] = m; });
+      scrollEl.querySelectorAll('.bills-col[data-bill-month]').forEach(function (el) {
+        var m = byMonth[el.getAttribute('data-bill-month')];
+        if (!m || !m.parts.length) { wireTooltipTrigger_(el); return; }
+        var ids = m.parts.map(function (p) { return p.accountId; });
+        wireDayCell_(el, function () { hideTooltip_(); viewBillTransactions_(m, ids); });
+      });
+      // Posição de rolagem: a que a pessoa deixou (sobrevive a re-render); na 1ª vez, a fatura atual perto da esquerda,
+      // com alguns meses do passado antes dela (o resto do passado e o futuro ficam a um arrasto).
+      if (typeof STATE.billsChartScrollLeft === 'number') scrollEl.scrollLeft = STATE.billsChartScrollLeft;
+      else {
+        var cur = scrollEl.querySelector('.bills-col-current');
+        if (cur) scrollEl.scrollLeft = Math.max(0, cur.offsetLeft - scrollEl.offsetLeft - cur.offsetWidth * 2);
+      }
+      scrollEl.addEventListener('scroll', function () { STATE.billsChartScrollLeft = scrollEl.scrollLeft; }, { passive: true });
+    }
     var btn = document.getElementById('bills-chart-cards');
     if (!btn) return;
     btn.onclick = function () {
@@ -5514,7 +5604,7 @@
       var options = summaries.map(function (c) {
         return { value: c.accountId, label: billsChartAccountName_(c.accountId), selected: selected.indexOf(c.accountId) !== -1 };
       });
-      openDropdownMenu_(btn, options, function (ids) { billsChartSelectionSave_(ids); render(); }, true);
+      openDropdownMenu_(btn, options, function (ids) { billsChartSelectionSave_(ids); STATE.billsChartScrollLeft = undefined; render(); }, true);
     };
   }
 
@@ -5526,7 +5616,7 @@
     { id: 'summary', label: 'Resumo' },
     { id: 'accounts', label: 'Contas' },
     { id: 'bills', label: 'Faturas de cartão' },
-    { id: 'billsChart', label: 'Próximas faturas' },
+    { id: 'billsChart', label: 'Faturas por mês' },
     { id: 'categories', label: 'Gastos por categoria' },
     { id: 'recent', label: 'Últimos lançamentos' }
   ];
@@ -7281,6 +7371,13 @@
       var acc = STATE.accounts.find(function (a) { return a.id === f.accountId; });
       if (acc) chips.push({ text: acc.name });
     }
+    if (f.accountIds && f.accountIds.length) {
+      f.accountIds.forEach(function (id) {
+        var a = STATE.accounts.find(function (x) { return x.id === id; });
+        if (a) chips.push({ text: a.name });
+      });
+    }
+    if (f.billMonth) chips.push({ text: 'Fatura de ' + fmtMonthYear(f.billMonth) });
     var chipCatIds = f.categoryIds || [];
     var everyCategory = STATE.categories.length > 0 && STATE.categories.every(function (c) { return chipCatIds.indexOf(c.id) !== -1; });
     if (everyCategory) {
@@ -7319,6 +7416,9 @@
 
   function txMatchesFilters(t, f) {
     if (f.accountId && t.accountId !== f.accountId) return false;
+    // Vindo do gráfico "Faturas por mês": os cartões da coluna e o mês da fatura (compras, parcelas e pagamentos daquela fatura).
+    if (f.accountIds && f.accountIds.length && f.accountIds.indexOf(t.accountId) === -1) return false;
+    if (f.billMonth && t.billMonth !== f.billMonth) return false;
     if (f.categoryIds && f.categoryIds.length && f.categoryIds.indexOf(t.categoryId) === -1) return false;
     // Filtro "Outras receitas" do card Saldo do ciclo (viewCycleExtraIncome_): só um tipo, sem o salário e sem o que está fora das análises.
     if (f.kind && t.kind !== f.kind) return false;
@@ -7359,7 +7459,7 @@
    *  (STATE.showFutureInstallments, botão no Extrato) ou o filtro já fale de datas (De/Até) ou de um recorte do ciclo -- aí a
    *  lista precisa bater com o que foi pedido. Os orçamentos, o ciclo e a Projeção seguem contando as parcelas futuras. */
   function hidesFutureInstallments_(filters) {
-    return !STATE.showFutureInstallments && !filters.dateFrom && !filters.dateTo && !filters.cycleLabels && !filters.useEffectiveDate;
+    return !STATE.showFutureInstallments && !filters.dateFrom && !filters.dateTo && !filters.cycleLabels && !filters.useEffectiveDate && !filters.billMonth;
   }
   /** keepFuture = true devolve também as parcelas futuras (pra contar quantas estão ocultas). */
   function currentFilteredTransactionsCombined_(keepFuture) {
@@ -7396,7 +7496,7 @@
   }
 
   function txFiltersActive_(f) {
-    return !!(f.accountId || (f.categoryIds && f.categoryIds.length) || f.text || f.dateFrom || f.dateTo || f.kind || f.excludeForecastId);
+    return !!(f.accountId || (f.accountIds && f.accountIds.length) || f.billMonth || (f.categoryIds && f.categoryIds.length) || f.text || f.dateFrom || f.dateTo || f.kind || f.excludeForecastId);
   }
 
   /**
@@ -11156,7 +11256,13 @@
         var tip = document.getElementById('shared-tooltip');
         if (!tip) return null;
         tip.classList.add('shared-tooltip-action');
-        tip.onclick = function (e) { e.stopPropagation(); go_(); };
+        // Toque: vale já no fim do toque (touchend), sem esperar o clique sintetizado (que no celular podia
+        // não chegar, ou chegar depois de algo fechar o tooltip); clique de mouse continua valendo. Uma vez só.
+        var went = false;
+        function goOnce_(e) { if (e) { e.stopPropagation(); if (e.cancelable) e.preventDefault(); } if (went) return; went = true; go_(); }
+        tip.onclick = goOnce_;
+        tip.addEventListener('touchend', goOnce_);
+        tip.addEventListener('touchstart', function (e) { e.stopPropagation(); }, { passive: true });
         tip.onmouseenter = cancelHide_;
         tip.onmouseleave = scheduleHide_;
         return tip;
@@ -11461,15 +11567,17 @@
    *  o texto passou a ficar sempre visível (não mais escondido atrás de hover num
    *  tooltip). "Sem lançamentos ainda" (só na versão rolante) não bate com nenhum dos
    *  dois, então sai sem negrito nenhum. */
-  var BUDGET_ADVISORY_LEAD_INS_ = ['Gastar até', 'Evitar gastos'];
+  var BUDGET_ADVISORY_LEAD_INS_ = ['Evitar gastos'];
+  /** Negrito do aviso: o "Gastar" fica normal; em NEGRITO ficam o "até" e os valores em reais ("R$ 17",
+   *  "R$ 8/dia"), pra enfatizar que é um MÁXIMO. "Evitar gastos" segue em negrito no início. */
   function budgetAdvisoryHtml_(text) {
+    var emphasisRe = new RegExp('(R\\$[\\s\\u00a0]*[\\d.,]+(?:/dia)?|(?<![A-Za-z\\u00c0-\\u00ff])até(?![A-Za-z\\u00c0-\\u00ff]))', 'g');
+    var head = '', rest = text;
     for (var i = 0; i < BUDGET_ADVISORY_LEAD_INS_.length; i++) {
       var leadIn = BUDGET_ADVISORY_LEAD_INS_[i];
-      if (text.indexOf(leadIn) === 0) {
-        return '<strong>' + escapeHtml(leadIn) + '</strong>' + escapeHtml(text.slice(leadIn.length));
-      }
+      if (text.indexOf(leadIn) === 0) { head = '<strong>' + escapeHtml(leadIn) + '</strong>'; rest = text.slice(leadIn.length); break; }
     }
-    return escapeHtml(text);
+    return head + escapeHtml(rest).replace(emphasisRe, '<strong>$1</strong>');
   }
   /**
    * Mesmo intervalo de datas que o último círculo do orçamento em Início está mostrando: o CICLO
@@ -11678,7 +11786,7 @@
       if (!progress || !series) {
         return '<div class="budget-circles-row budget-circles-row-empty" data-budget-bar="' + b.id + '">' +
           '<div class="budget-circles-head">' +
-            '<span class="budget-timebar-name">' + budgetIconHtml_(b) + escapeHtml(name) + '</span>' +
+            '<span class="budget-timebar-name">' + budgetIconHtml_(b) + '<span class="budget-name-text">' + escapeHtml(name) + '</span></span>' +
             budgetCirclesTrackHtml_(null) +
             '<div class="budget-circles-advice">Histórico insuficiente</div>' +
           '</div>' +
@@ -11686,7 +11794,7 @@
       }
       return '<div class="budget-circles-row" data-budget-bar="' + b.id + '">' +
         '<div class="budget-circles-head">' +
-          '<span class="budget-timebar-name">' + budgetIconHtml_(b) + escapeHtml(name) + '</span>' +
+          '<span class="budget-timebar-name">' + budgetIconHtml_(b) + '<span class="budget-name-text">' + escapeHtml(name) + '</span></span>' +
           budgetCirclesTrackHtml_(series) +
           '<div class="budget-circles-advice">' + adviceHtmlOf_(b, progress) + '</div>' +
         '</div>' +
@@ -16524,7 +16632,7 @@
   // Um "empurrão" rápido também troca de aba, mesmo curto: velocidade (px/ms) e distância mínima.
   var SWIPE_FLICK_VELOCITY_ = 0.45;
   var SWIPE_FLICK_MIN_PX_ = 24;
-  var SWIPE_ANIMATION_MS_ = 220;
+  var SWIPE_ANIMATION_MS_ = 180;
   // Áreas que já têm rolagem/arrasto horizontal próprio: o gesto que começa nelas NÃO troca de aba.
   var SWIPE_NO_START_SELECTOR_ = '#tx-calendar-weeks-wrap, .tree-tl-scroll, .budget-cycle-wheel, input, textarea, select, [contenteditable="true"], [data-no-tab-swipe]';
   // Sem nenhum wheel novo por esse tempo = gesto de trackpad "solto" (wheel não tem um
@@ -16665,6 +16773,7 @@
     if (e.touches.length !== 1 || isSwipeBlocked_()) return;
     if (e.target && e.target.closest && e.target.closest('nav.tabbar, .tabbar-more')) return; // a barra de abas tem os próprios gestos
     if (swipeInHorizontalScroller_(e.target)) return; // área com rolagem horizontal própria (ex: gráfico do Resumo)
+    if (e.target && e.target.closest && e.target.closest('.shared-tooltip-action')) return; // toque num tooltip-atalho nunca vira troca de aba
     var t = e.touches[0];
     swipe_ = { source: 'touch', phase: 'undecided', startX: t.clientX, startY: t.clientY, dx: 0, lastX: t.clientX, lastT: Date.now(), vx: 0 };
   }
@@ -17454,7 +17563,7 @@
    * Fecha a janela com a animação inversa da de abrir (desce e some); instant = true quando o arrasto da alça já a levou
    * embora. Enquanto anima, a janela já não conta como aberta (id solto) — Enter/Esc/atalhos não a enxergam mais.
    */
-  var MODAL_OUT_MS_ = 220;
+  var MODAL_OUT_MS_ = 180;
   function closeModal(instant) {
     var root = document.getElementById('modal-root');
     var bd = root.querySelector ? root.querySelector('.modal-backdrop') : null;
@@ -17915,7 +18024,7 @@
     img.onerror = function () { img.style.visibility = 'hidden'; };
     // Em cima do botão, centrada nele (a caixa é empurrada pra dentro da tela; a ponta continua no centro do botão).
     var vh = document.documentElement.clientHeight, vw = document.documentElement.clientWidth;
-    var popW = pop.getBoundingClientRect().width;
+    var popW = pop.offsetWidth;
     var centerX = rect.left + rect.width / 2;
     pop.style.left = Math.max(8, Math.min(vw - popW - 8, centerX - popW / 2)) + 'px';
     pop.style.bottom = (vh - rect.top + 12) + 'px';
