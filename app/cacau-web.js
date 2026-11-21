@@ -3414,7 +3414,7 @@ function invoiceNameKey_(text) {
 
 /**
  * Aceita itens: cria UM lançamento por item (despesa, ou receita pra estorno/crédito) na conta do documento.
- * input: { items: [{ itemId, categoryId }] }. Item que não está mais 'pending' é pulado.
+ * input: { items: [{ itemId, categoryId, date?, amount?, counterparty?, description?, installmentSeq?, installmentTotal? }] }. Item que não está mais 'pending' é pulado.
  * Parcela (seq/total): vira UMA linha só, na parcela certa — reaproveita o grupo de parcelas da mesma compra se já existir
  * (mesma conta, mesmo total, mesmo estabelecimento) e não repete uma parcela que já exista. A fatura (BillMonth) é a do documento.
  * Retorna { created: [lançamentos mapeados], accepted: [itemIds] }.
@@ -3454,6 +3454,15 @@ function acceptInvoiceItems(input) {
     if (typeof w.counterparty === 'string' && w.counterparty.trim()) row.Counterparty = w.counterparty.trim().slice(0, 200);
     if (typeof w.description === 'string' && w.description.trim()) row.Description = w.description.trim().slice(0, 200);
     if (w.rememberCategoryForCounterparty && categoryId && row.Counterparty) saveCounterpartyMapping_(row.Counterparty, categoryId);
+    // Parcela editada na janela (installmentSeq/installmentTotal presentes): vale no lugar da que veio do documento; vazio nos dois = à vista.
+    if (w.installmentSeq !== undefined || w.installmentTotal !== undefined) {
+      var editSeq = Number(w.installmentSeq) || 0, editTotal = Number(w.installmentTotal) || 0;
+      if (editSeq || editTotal) {
+        if (editTotal < 2 || editSeq < 1 || editSeq > editTotal) throw new Error('Parcela inválida: informe a parcela (1 até o total) e o total (2 ou mais).');
+        if (!isCard || kind !== 'expense') throw new Error('Parcelas só valem para despesa de cartão de crédito.');
+      }
+      seq = editSeq; total = editTotal;
+    }
     if (isCard && kind === 'expense' && total >= 2 && seq >= 1) {
       var key = inv.AccountID + '|' + total + '|' + invoiceNameKey_(item.Description);
       var groupId = newGroups[key] || '';

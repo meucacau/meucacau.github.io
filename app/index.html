@@ -2278,7 +2278,7 @@
 
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=045846a14b"></script>
+  <script src="cacau-web.js?v=790c39676d"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -17329,6 +17329,16 @@
     var sortLabel = invoiceReviewSort_ === 'desc' ? 'Mais recentes primeiro' : 'Mais antigas primeiro';
     var matchWarning = match ? invoiceMatchCompareHtml_(match, p) : '';
     var counterpartyLabel = kind === 'income' ? 'Recebido de' : 'Pago a';
+    // Parcela editável (só despesa de cartão): o leitor do documento pode errar ou deixar de ver "2/6"; vazio nos dois = compra à vista.
+    var acctOfInv = (STATE.accounts || []).filter(function (a) { return a.id === inv.accountId; })[0];
+    var showInstallment = !!acctOfInv && acctOfInv.type === 'credit_card' && kind === 'expense';
+    var installmentFieldsHtml = showInstallment
+      ? '<div class="field" style="display:flex;gap:8px;align-items:flex-end">' +
+          '<div style="flex:1;min-width:0"><label>Parcela</label><input id="i-inst-seq" type="text" inputmode="numeric" maxlength="3" placeholder="À vista" value="' + escapeHtml(p.installmentSeq ? String(p.installmentSeq) : '') + '"></div>' +
+          '<div style="padding-bottom:10px">de</div>' +
+          '<div style="flex:1;min-width:0"><label>Total de parcelas</label><input id="i-inst-total" type="text" inputmode="numeric" maxlength="3" placeholder="À vista" value="' + escapeHtml(p.installmentTotal ? String(p.installmentTotal) : '') + '"></div>' +
+        '</div>'
+      : '';
 
     openModal(
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap">' +
@@ -17352,6 +17362,7 @@
           '<input id="i-amount" type="text">' +
         '</div>' +
       '</div>' +
+      installmentFieldsHtml +
       '<div class="field" style="display:flex;gap:8px">' +
         '<div style="flex:1;min-width:0"><label>' + counterpartyLabel + '</label><input id="i-counterparty" value="' + escapeHtml(p.description) + '"></div>' +
         '<div style="flex:1;min-width:0"><label>Referente a</label><input id="i-desc" value=""></div>' +
@@ -17425,12 +17436,23 @@
       if (!amount || amount <= 0) { errorPopover(submitBtn, 'O valor precisa ser maior que zero.'); return; }
       var date = document.getElementById('i-date').value;
       if (!date) { errorPopover(submitBtn, 'Escolha a data.'); return; }
+      var instSeq = '', instTotal = '';
+      if (showInstallment) {
+        var seqRaw = document.getElementById('i-inst-seq').value.replace(/[^0-9]/g, ''), totalRaw = document.getElementById('i-inst-total').value.replace(/[^0-9]/g, '');
+        if (seqRaw || totalRaw) {
+          if (!seqRaw || !totalRaw || Number(totalRaw) < 2 || Number(seqRaw) < 1 || Number(seqRaw) > Number(totalRaw)) {
+            errorPopover(submitBtn, 'Parcela: informe a parcela e o total (2 ou mais, com a parcela de 1 até o total) — ou deixe os dois vazios para compra à vista.'); return;
+          }
+          instSeq = Number(seqRaw); instTotal = Number(totalRaw);
+        }
+      }
       var payload = {
         itemId: p.id, categoryId: categoryField.getValue() || '', date: date, amount: amount,
         counterparty: capitalizeFirst_(document.getElementById('i-counterparty').value),
         description: capitalizeFirst_(document.getElementById('i-desc').value),
         rememberCategoryForCounterparty: rememberCategory, excludeFromAnalysis: outlierFlagged
       };
+      if (showInstallment) { payload.installmentSeq = instSeq; payload.installmentTotal = instTotal; }
       invoiceAcceptEdited_(p, payload);
       openInvoiceReviewModal_(invId, index + 1, queue);
     };
