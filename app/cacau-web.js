@@ -3437,8 +3437,14 @@ function acceptInvoiceItems(input) {
       Date: item.Date, Time: '', AccountID: inv.AccountID, CategoryID: categoryId, Kind: kind, Amount: Number(item.Amount),
       Description: '', Counterparty: item.Description, BillMonth: isCard ? (inv.BillMonth || billMonthForDate_(item.Date, Number(account.ClosingDay))) : '',
       InstallmentGroupID: '', InstallmentSeq: '', InstallmentTotal: '', TransferGroupID: '', ForecastID: '', ForecastCycleMonth: '',
-      ExcludeFromAnalysis: false
+      ExcludeFromAnalysis: !!w.excludeFromAnalysis
     };
+    // Edições feitas na janela da fila do documento (todas opcionais; sem elas o item entra como veio do documento).
+    if (/^\d{4}-\d{2}-\d{2}$/.test(w.date || '')) row.Date = w.date;
+    if (Number(w.amount) > 0) row.Amount = Math.round(Number(w.amount) * 100) / 100;
+    if (typeof w.counterparty === 'string' && w.counterparty.trim()) row.Counterparty = w.counterparty.trim().slice(0, 200);
+    if (typeof w.description === 'string' && w.description.trim()) row.Description = w.description.trim().slice(0, 200);
+    if (w.rememberCategoryForCounterparty && categoryId && row.Counterparty) saveCounterpartyMapping_(row.Counterparty, categoryId);
     if (isCard && kind === 'expense' && total >= 2 && seq >= 1) {
       var key = inv.AccountID + '|' + total + '|' + invoiceNameKey_(item.Description);
       var groupId = newGroups[key] || '';

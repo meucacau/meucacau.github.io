@@ -2271,7 +2271,7 @@
 
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=20c394769b"></script>
+  <script src="cacau-web.js?v=91828bc990"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -6810,7 +6810,7 @@
     return '<div class="row" data-refund-row="' + escapeHtml(rowId) + '">' +
       '<span>' + escapeHtml(personLabel) + (progressLabel ? '<br><span class="muted" style="font-size:12px">' + progressLabel + '</span>' : '') + '</span>' +
       '<span class="row-actions">' +
-        '<input type="text" class="input-money" data-refund-amount="' + escapeHtml(rowId) + '" style="width:90px;margin-bottom:0">' +
+        '<input type="text" class="input-money" data-refund-amount="' + escapeHtml(rowId) + '" style="width:130px;flex:none;margin-bottom:0">' +
         '<button type="button" class="row-x" data-refund-remove="' + escapeHtml(rowId) + '" aria-label="Remover" data-tooltip="Remover">×</button>' +
       '</span></div>';
   }
@@ -6900,6 +6900,7 @@
       staged.forEach(function (s, i) {
         var input = document.querySelector('[data-refund-amount="row-' + i + '"]');
         setupMoneyInput(input, s.expectedAmount);
+        fitInputToText_(input, 'R$ 99.999,99'); // cabe o maior valor com o padding do campo (antes: 90px fixos cortavam "R$ 1.666,67")
         // 'blur', não 'change': setupMoneyInput intercepta TODO keydown com
         // preventDefault() e só troca o valor via script (render_) — o navegador nunca
         // considera isso uma edição "de verdade" (a que dispararia 'change' nativo ao
@@ -17025,8 +17026,9 @@
   // ---------- Subir fatura: tela ----------
   var invoiceUi_ = { loaded: false, invoices: [], items: [], view: 'list', openId: null, draft: null, cat: {}, busy: '', error: '' };
 
-  function openInvoiceModal() {
-    invoiceUi_.view = 'list'; invoiceUi_.openId = null; invoiceUi_.draft = null; invoiceUi_.busy = ''; invoiceUi_.error = '';
+  /** openDocId (opcional): abre direto no resumo daquele documento (botão "Documento" da janela da fila). */
+  function openInvoiceModal(openDocId) {
+    invoiceUi_.view = openDocId ? 'doc' : 'list'; invoiceUi_.openId = openDocId || null; invoiceUi_.draft = null; invoiceUi_.busy = ''; invoiceUi_.error = '';
     openModal('<div id="inv-body" class="inv"><h2>Subir fatura</h2><p class="inv-hint">Carregando…</p></div>');
     wireInvoiceBody_();
     run('listInvoices').then(function (data) {
@@ -17174,7 +17176,9 @@
         invoiceUi_.invoices.unshift(created.invoice);
         invoiceUi_.items = invoiceUi_.items.concat(created.items);
         invoiceUi_.draft = null; invoiceUi_.view = 'doc'; invoiceUi_.openId = created.invoice.id;
-        renderInvoiceBody_();
+        // fila criada: já abre a janela de revisão do documento (um item por vez)
+        if (invoiceReviewQueue_(created.invoice.id).length) openInvoiceReviewModal_(created.invoice.id, 0);
+        else renderInvoiceBody_();
       }).catch(function (err) { invoiceUi_.error = err.message; renderInvoiceBody_(); });
     };
   }
@@ -17233,6 +17237,156 @@
       group('Aceitos', accepted, 'accepted', false) +
       group('Ignorados', ignored, 'ignored', false) +
       '<div class="inv-footer"><button type="button" class="inv-act inv-del" data-inv-delete="' + escapeHtml(inv.id) + '">Apagar documento</button><span>Os lançamentos já aceitos continuam no Extrato.</span></div>';
+  }
+
+  // ----- janela da fila do documento (mesmo molde de "Lançamentos a confirmar": um item por vez, Fila para confirmar, Confirmar/Ignorar) -----
+  var invoiceReviewSort_ = 'asc'; // asc = compras mais antigas primeiro
+
+  function invoiceReviewQueue_(invId) {
+    var sign = invoiceReviewSort_ === 'desc' ? -1 : 1;
+    return invoiceUi_.items.filter(function (i) { return i.invoiceId === invId && i.status === 'pending'; })
+      .sort(function (a, b) { return sign * (a.date < b.date ? -1 : (a.date > b.date ? 1 : a.sortOrder - b.sortOrder)); })
+      .map(function (i) { return i.id; });
+  }
+
+  function openInvoiceReviewModal_(invId, index, queue) {
+    var inv = invoiceById_(invId);
+    if (!inv) { openInvoiceModal(); return; }
+    if (!queue) queue = invoiceReviewQueue_(invId);
+    index = resolvePendingReviewIndex_(queue, index, function (id) { var it = invoiceItemById_(id); return !!it && it.status === 'pending'; });
+    if (index === -1) { openInvoiceModal(); return; } // fila do documento esvaziou: volta pra lista de documentos
+    var p = invoiceItemById_(queue[index]);
+    var kind = p.kind;
+    var match = invoiceDocStats_(inv).matches[p.id] || null;
+    var rememberCategory = !!invoiceSuggestedCategory_(p);
+    var outlierFlagged = false;
+    var categoryField = null;
+    var categoryTouchedByUser = false;
+    var inst = p.installmentSeq ? ' · parcela ' + p.installmentSeq + '/' + p.installmentTotal : '';
+    var sortLabel = invoiceReviewSort_ === 'desc' ? 'Mais recentes primeiro' : 'Mais antigas primeiro';
+    var matchWarning = '';
+    if (match) {
+      var t = match.tx;
+      matchWarning = '<div style="background:var(--expense);color:#fff;padding:8px;border-radius:8px;margin-bottom:12px;font-size:13px">' + UI_ICON_WARN_ + ' ' +
+        (match.level === 'exact' ? 'Parece já lançado: ' : 'Possível duplicata de: ') + escapeHtml(fmtDate(t.date)) + ' · ' + escapeHtml(t.counterparty || t.description || 'sem nome') + ' · ' + escapeHtml(fmtMoney(t.amount)) +
+        ' — confira antes de confirmar' + (match.level === 'exact' ? ' (se for o mesmo, ignore).' : '.') + '</div>';
+    }
+    var counterpartyLabel = kind === 'income' ? 'Recebido de' : 'Pago a';
+
+    openModal(
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap">' +
+        '<h2 style="margin:0">Fatura a confirmar (' + (index + 1) + '/' + queue.length + ')</h2>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+          '<button type="button" class="secondary" id="i-queue-toggle" style="padding:4px 10px;font-size:12px">Fila para confirmar</button>' +
+          '<button type="button" class="secondary" id="i-sort-toggle" style="padding:4px 10px;font-size:12px">' + sortLabel + '</button>' +
+          '<button type="button" class="secondary" id="i-doc" style="padding:4px 10px;font-size:12px">Documento</button>' +
+        '</div>' +
+      '</div>' +
+      matchWarning +
+      '<div class="muted" style="margin-bottom:12px">' + escapeHtml((inv.issuer ? inv.issuer + ' · ' : '') + 'fatura ' + invoiceMonthText_(inv.billMonth)) + ' · ' +
+        escapeHtml(invoiceAccountName_(inv.accountId)) + escapeHtml(inst) + '<br>' + escapeHtml(inv.fileName) + ' — ' + escapeHtml(p.description) + '</div>' +
+      '<div class="field tx-f-date" style="display:flex;gap:8px">' +
+        '<div style="flex:1"><label>Data</label><input type="date" id="i-date" value="' + escapeHtml(p.date) + '"></div>' +
+        '<div style="flex:1">' +
+          '<div class="tx-f-head" style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:2px 8px">' +
+            '<label style="margin-bottom:0">Valor</label>' +
+            '<span class="field-action-group"><span id="i-outlier-field"></span></span>' +
+          '</div>' +
+          '<input id="i-amount" type="text">' +
+        '</div>' +
+      '</div>' +
+      '<div class="field" style="display:flex;gap:8px">' +
+        '<div style="flex:1;min-width:0"><label>' + counterpartyLabel + '</label><input id="i-counterparty" value="' + escapeHtml(p.description) + '"></div>' +
+        '<div style="flex:1;min-width:0"><label>Referente a</label><input id="i-desc" value=""></div>' +
+      '</div>' +
+      '<div class="field tx-f-category">' +
+        '<div class="tx-f-head" style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:2px 8px">' +
+          '<label style="margin-bottom:0">Categoria</label><span id="i-remember-cat-field"></span>' +
+        '</div>' +
+        '<div id="i-category-field" class="capsule-field"></div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px">' +
+        '<button class="secondary" id="i-ignore" style="flex:1">' + (match ? 'É a mesma — ignorar' : 'Ignorar') + '</button>' +
+        '<button id="m-submit" style="flex:1">Confirmar</button>' +
+      '</div>'
+    );
+    setTimeout(function () { // sem foco automático (celular abriria o teclado); o PC também começa limpo
+      if (document.activeElement && document.activeElement !== document.body && document.activeElement.blur) document.activeElement.blur();
+    }, 0);
+
+    var amountEl = document.getElementById('i-amount');
+    setupMoneyInput(amountEl, p.amount);
+    function currentAmount_() { return amountEl.getValue ? amountEl.getValue() : 0; }
+    function updateRemember_() {
+      renderRememberCategoryButton_({ fieldId: 'i-remember-cat-field', getKind: function () { return kind; }, getRemember: function () { return rememberCategory; }, setRemember: function (v) { rememberCategory = v; } });
+    }
+    function updateOutlier_() {
+      renderOutlierToggleButton_({ fieldId: 'i-outlier-field', getKind: function () { return kind; }, getFlag: function () { return outlierFlagged; }, setFlag: function (v) { outlierFlagged = v; } });
+    }
+    function maybeSuggestOutlier_() {
+      if (outlierFlagged) return;
+      if (isLikelyOutlier_(currentAmount_(), categoryField ? categoryField.getValue() : null, kind)) { outlierFlagged = true; updateOutlier_(); }
+    }
+    categoryField = createCapsuleField(document.getElementById('i-category-field'), {
+      allowDeselect: true, collapseUnused: true, items: rankedCategoryItems(kind),
+      selectedValue: invoiceSuggestedCategory_(p) || null,
+      onChange: function (v) { categoryTouchedByUser = true; invoiceUi_.cat[p.id] = v || ''; maybeSuggestOutlier_(); }
+    });
+    updateRemember_();
+    updateOutlier_();
+    setupCounterpartySuggestions_(document.getElementById('i-counterparty'));
+    amountEl.addEventListener('input', maybeSuggestOutlier_);
+    document.getElementById('i-counterparty').addEventListener('input', function () {
+      if (categoryTouchedByUser) return;
+      var matchId = findCategoryIdForCounterpartyClient_(this.value) || findCategoryIdByKeywordClient_(this.value, kind);
+      if (matchId && matchId !== categoryField.getValue()) categoryField.setValue(matchId);
+    });
+
+    document.getElementById('i-sort-toggle').onclick = function () {
+      invoiceReviewSort_ = invoiceReviewSort_ === 'desc' ? 'asc' : 'desc';
+      openInvoiceReviewModal_(invId, 0);
+    };
+    document.getElementById('i-doc').onclick = function () { openInvoiceModal(invId); };
+    document.getElementById('i-queue-toggle').onclick = function (e) {
+      var options = [];
+      queue.forEach(function (id, i) {
+        var qItem = invoiceItemById_(id);
+        if (!qItem || qItem.status !== 'pending') return; // já confirmado/ignorado nesta sessão
+        options.push({ value: String(i), label: (i + 1) + '. ' + fmtMoney(qItem.amount) + ' ' + qItem.description, selected: i === index });
+      });
+      openDropdownMenu_(e.currentTarget, options, function (value) { openInvoiceReviewModal_(invId, Number(value), queue); });
+    };
+
+    document.getElementById('i-ignore').onclick = function () {
+      invoiceSetStatus_([p.id], 'ignored');
+      openInvoiceReviewModal_(invId, index + 1, queue);
+    };
+
+    document.getElementById('m-submit').onclick = function () {
+      var submitBtn = document.getElementById('m-submit');
+      var amount = currentAmount_();
+      if (!amount || amount <= 0) { errorPopover(submitBtn, 'O valor precisa ser maior que zero.'); return; }
+      var date = document.getElementById('i-date').value;
+      if (!date) { errorPopover(submitBtn, 'Escolha a data.'); return; }
+      var payload = {
+        itemId: p.id, categoryId: categoryField.getValue() || '', date: date, amount: amount,
+        counterparty: capitalizeFirst_(document.getElementById('i-counterparty').value),
+        description: capitalizeFirst_(document.getElementById('i-desc').value),
+        rememberCategoryForCounterparty: rememberCategory, excludeFromAnalysis: outlierFlagged
+      };
+      invoiceAcceptEdited_(p, payload);
+      openInvoiceReviewModal_(invId, index + 1, queue);
+    };
+  }
+
+  /** Aceita UM item com as edições da janela da fila: marca na hora, manda ao servidor e desfaz se der erro. */
+  function invoiceAcceptEdited_(item, payload) {
+    var prevStatus = item.status;
+    item.status = 'accepted';
+    afterMutation_(run('acceptInvoiceItems', { items: [payload] })).catch(function (err) {
+      item.status = prevStatus;
+      showToast(err.message, true);
+    });
   }
 
   // ----- ações -----
@@ -17301,7 +17455,11 @@
     body.addEventListener('click', function (e) {
       var t = e.target.closest('[data-inv-open],[data-inv-back],[data-inv-accept],[data-inv-ignore],[data-inv-restore],[data-inv-cat],[data-inv-delete],#inv-accept-all,#inv-pass-go');
       if (!t) return;
-      if (t.dataset.invOpen) { invoiceUi_.view = 'doc'; invoiceUi_.openId = t.dataset.invOpen; renderInvoiceBody_(); }
+      if (t.dataset.invOpen) {
+        // com itens por revisar, abre a janela da fila do documento; sem nenhum, o resumo (aceitos/ignorados/apagar)
+        if (invoiceReviewQueue_(t.dataset.invOpen).length) openInvoiceReviewModal_(t.dataset.invOpen, 0);
+        else { invoiceUi_.view = 'doc'; invoiceUi_.openId = t.dataset.invOpen; renderInvoiceBody_(); }
+      }
       else if (t.dataset.invBack) { invoiceUi_.view = 'list'; invoiceUi_.openId = null; renderInvoiceBody_(); }
       else if (t.dataset.invAccept) invoiceAccept_([t.dataset.invAccept]);
       else if (t.dataset.invIgnore) invoiceSetStatus_([t.dataset.invIgnore], 'ignored');
