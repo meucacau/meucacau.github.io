@@ -8493,9 +8493,9 @@
     // Novo lançamento e Revisar pendência) -- aqui já nasce com o vínculo/estado atuais
     // do próprio lançamento em vez de vazio. Em troca de tipo o rascunho nasce sem vínculo.
     var selectedForecastId = converting ? '' : forecastSelectionForTx_(t);
-    var rememberCategoryForCounterparty = false;
+    var rememberCategoryForCounterparty = true; // sempre ligado por padrão (pedido do usuário); clicar desliga
     // Nasce com o estado ATUAL do próprio lançamento (diferente de Novo lançamento/
-    // Revisar pendência, que sempre começam desligados) -- editar é o único jeito de
+    // Revisar pendência, que sempre começam ligados) -- editar é o único jeito de
     // marcar/desmarcar isso num lançamento que já existe. Sem checagem reativa aqui
     // (só o toggle manual, ver grilling) -- editar não deveria ficar sugerindo sozinho
     // toda vez que o usuário mexe no valor de algo que ele só está corrigindo.
@@ -15731,7 +15731,7 @@
     // ligado quando a categoria já veio sugerida por uma associação existente (mesma
     // regra do antigo checkbox) -- ver reset ao trocar de tipo mais abaixo.
     var selectedForecastId = '';
-    var rememberCategoryForCounterparty = !!p.suggestedCategoryId;
+    var rememberCategoryForCounterparty = true; // sempre ligado por padrão (pedido do usuário)
     // "Não considerar em análises?" -- ver renderOutlierToggleButton_/isLikelyOutlier_.
     // Sempre começa desligado (é um lançamento NOVO sendo confirmado) -- a checagem
     // reativa liga sozinho quando o valor parecer fora da curva pra essa categoria.
@@ -16134,7 +16134,7 @@
         // de novo (ver createCapsuleField em renderFields), então o vínculo/lembrete
         // amarrados a ela também deveriam.
         selectedForecastId = '';
-        rememberCategoryForCounterparty = !!p.suggestedCategoryId;
+        rememberCategoryForCounterparty = true;
         rememberEstablishment = !!p.establishmentName;
         kind = b.dataset.k;
         document.querySelectorAll('#p-kind-toggle button').forEach(function (x) { x.classList.toggle('active', x === b); });
@@ -17437,7 +17437,7 @@
     var p = invoiceItemById_(queue[index]);
     var kind = p.kind;
     var match = invoiceDocStats_(inv).matches[p.id] || null;
-    var rememberCategory = !!invoiceSuggestedCategory_(p);
+    var rememberCategory = true; // sempre ligado por padrão (pedido do usuário)
     var outlierFlagged = false;
     var categoryField = null;
     var categoryTouchedByUser = false;
@@ -17965,7 +17965,7 @@
     // de uma bolinha vermelha (ver opts acima).
     var selectedForecastId = opts.forecastId ? forecastSelectionForDate_(opts.forecastId, opts.date) : '';
     // Substitui o antigo checkbox "Lembrar essa categoria..." -- ver renderRememberCategoryButton_.
-    var rememberCategoryForCounterparty = false;
+    var rememberCategoryForCounterparty = true; // sempre ligado por padrão (pedido do usuário); clicar desliga
     // "Não considerar em análises?" -- ver renderOutlierToggleButton_/isLikelyOutlier_.
     // Começa desligado; a checagem reativa liga sozinho quando o valor digitado parecer
     // fora da curva (só aqui e em "Revisar pendência" -- Editar lançamento não tem
@@ -18000,7 +18000,7 @@
       // reseta, ver createCapsuleField com selectedValue:null em renderFields) -- link de
       // Previsão e "lembrar categoria" não fariam sentido sobreviver a uma troca de tipo.
       selectedForecastId = '';
-      rememberCategoryForCounterparty = false;
+      rememberCategoryForCounterparty = true;
       outlierFlagged = false;
       kind = k;
       document.querySelectorAll('.kind-toggle button').forEach(function (b) { b.classList.toggle('active', b.dataset.k === k); });
@@ -18460,7 +18460,7 @@
       if (keepOpen) {
         // Menu continua aberto: zera tudo menos tipo, data e conta (ver clearForNext_) e volta o foco no valor.
         stagedRefundShares = []; stagedRefundLinks = [];
-        selectedForecastId = ''; rememberCategoryForCounterparty = false; outlierFlagged = false;
+        selectedForecastId = ''; rememberCategoryForCounterparty = true; outlierFlagged = false;
         clearForNext_ = true;
         renderFields();
         var modalEl = document.querySelector('#modal-root .modal');
