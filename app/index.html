@@ -205,6 +205,20 @@
     font-size: 13px;
   }
   .warning-banner strong { color: var(--warning); }
+  /* Lembrete de consolidação de saldo (Início): faixa tocável com o X de dispensar na ponta. */
+  .home-reminder {
+    display: flex; align-items: flex-start; gap: 10px;
+    background: var(--surface); border-radius: 12px; border-left: 4px solid var(--warning);
+    padding: 12px 6px 12px 14px; margin-bottom: 16px; box-shadow: var(--shadow);
+    font-size: 13px; line-height: 1.4; cursor: pointer;
+  }
+  .home-reminder-ico { flex: 0 0 auto; color: var(--warning); font-size: 16px; line-height: 1; margin-top: 1px; }
+  .home-reminder-txt { flex: 1 1 auto; min-width: 0; }
+  .home-reminder-x {
+    flex: 0 0 auto; width: 28px; height: 28px; padding: 0; margin: -4px 0 0 0; border: 0; border-radius: 50%;
+    background: transparent; color: var(--text-muted); font-size: 20px; line-height: 1; cursor: pointer;
+  }
+  .home-reminder-x:hover { background: color-mix(in srgb, var(--text-muted) 15%, transparent); color: var(--text); }
 
   .balance-total {
     font-size: 32px;
@@ -1541,9 +1555,9 @@
   /* Cápsula ativa já garante contraste com --primary-contrast sobre o fundo --primary — a
      cor customizada da conta brigaria com isso, então volta a herdar só nesse caso. */
   .capsule.active .acc-color-name { color: inherit; }
-  /* Cápsulas não têm largura fixa (o texto define), mas negrito ainda deixa o rótulo mais
-     largo que o normal — encolhe um pouco a fonte só aqui pra manter as pastilhas compactas. */
-  .capsule .acc-color-name { font-size: 11px; }
+  /* Cápsula de conta com a MESMA fonte da de categoria (12px, a do .capsule) -- ficava em 11px por causa do negrito (pedido de
+     21/11/2026: iguais). */
+  .capsule .acc-color-name { font-size: inherit; }
   /* Mesma técnica de --acc-color-light/--acc-color-dark acima, só que pra FUNDO em vez de
      texto — usado no botão redondo de cor da conta e nas pastilhas do seletor, que devem
      mostrar exatamente a cor que o nome da conta vai ter no tema atual. */
@@ -1654,19 +1668,18 @@
   .budget-circles-head .budget-circles-advice { grid-area: advice; }
   /* O título quebra em várias linhas se precisar (centralizado na vertical com o resto da linha, pelo align-items do grid) e nunca
      invade a coluna do lado: o ícone fica fixo e o texto se ajusta dentro da coluna. */
-  .budget-circles-head .budget-timebar-name { min-width: 0; display: flex; align-items: center; gap: 8px; overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
+  .budget-circles-head .budget-timebar-name { min-width: 0; display: flex; align-items: baseline; gap: 8px; overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
   .budget-circles-head .budget-timebar-name > svg, .budget-circles-head .budget-timebar-name > .cat-icon { flex: none; }
   /* O ícone fica centrado na linha, mas a fonte tem mais espaço embaixo da linha de base e o texto parecia mais alto que o ícone: desce o texto um tiquinho. */
   .budget-circles-head .budget-timebar-name > svg { margin-right: 0 !important; vertical-align: middle !important; }
   /* Regra geral: ícone ao lado de texto centraliza com as LETRAS escritas (altura das maiúsculas), não com a caixa da linha.
-     Aqui o texto tem a caixa aparada na altura das maiúsculas (text-box) e o flex centraliza ícone e letras de verdade; onde o
-     navegador não conhece text-box, o recuo de cima compensa o espaço que a fonte reserva embaixo da linha de base. */
-  .budget-name-text { min-width: 0; padding-top: .38em; }
-  @supports (text-box: trim-both cap alphabetic) {
-    .budget-name-text { padding-top: 0; text-box: trim-both cap alphabetic; }
-  }
+     Aqui o ícone e o texto se alinham pela LINHA DE BASE (align-items: baseline), como o ícone das linhas do Extrato (0,9em, 0,07em
+     abaixo da base): o centro do ícone cai a ~0,03em do centro das maiúsculas em qualquer fonte, sem depender de text-box
+     (o WebView do celular não conhecia) nem de recuos calibrados pra uma fonte só (21/11/2026: bicicleta/carrinho/carro desalinhados). */
+  .budget-name-text { min-width: 0; }
+  .budget-circles-head .budget-timebar-name > svg { position: relative; top: 0.07em; }
   /* Valor e ciclo do orçamento ("R$ 2.500 a cada 2 semanas") no canto direito da linha do título: cor do texto de aviso, tamanho
-     entre o do título e o do aviso (12px), em itálico; centralizado com as letras do título como o resto da linha (text-box acima). */
+     entre o do título e o do aviso (12px), em itálico; na mesma linha de base do título. */
   .budget-circles-head .budget-timebar-name > .budget-name-meta { flex: none; margin-left: auto; white-space: nowrap; font-size: 13px; font-style: italic; font-weight: 400; color: var(--text-muted); text-align: right; }
   .budget-circles-advice {
     min-width: 0; font-size: 12px; line-height: 1.3; color: var(--text-muted); text-align: right;
@@ -4668,7 +4681,9 @@
     inputEl.addEventListener('input', function (e) { if (e.isTrusted) renderList(); });
     inputEl.addEventListener('keydown', function (e) {
       // Esc fecha só a lista de sugestões; sem lista aberta, passa pro modal (uma camada por Esc).
-      if (e.key === 'Escape') { if (pop) { close(); e.preventDefault(); e.stopPropagation(); } return; }
+      // Exceção: o Esc sintético do botão voltar do celular (não confiável) fecha a lista E segue pra camada de baixo -- a lista
+      // abre sozinha ao focar (ex.: "Referente a" da janela "a confirmar") e o primeiro voltar parecia não fazer nada (21/11/2026).
+      if (e.key === 'Escape') { if (pop) { close(); if (e.isTrusted) { e.preventDefault(); e.stopPropagation(); } } return; }
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
         if (!pop) renderList();
@@ -5614,6 +5629,102 @@
     return html;
   }
 
+  // ---------- lembrete de consolidação de saldo (Início, 21/11/2026) ----------
+  // Conta cujo saldo foi consolidado (ponto fixo: saldo inicial ou ajuste manual do "Saldo atual") há mais de um mês ganha um
+  // aviso no Início: atualizar o saldo atual de tempos em tempos revela o que ficou sem lançar ou foi lançado errado. Tocar no
+  // aviso abre "Editar conta"; o X dispensa a conta até o mês seguinte; Configurações desliga tudo. Por aparelho, como o tema.
+  // Cartão fica de fora (o saldo dele é o limite que sobra e a fatura já se confere em "Subir fatura").
+  var CONSOL_REMINDERS_OFF_KEY_ = 'financas-consolidation-reminders-off';
+  var CONSOL_DISMISSED_KEY_ = 'financas-consolidation-dismissed'; // { idDaConta: 'AAAA-MM' do mês em que foi dispensado }
+  var CONSOL_CONFIRMED_KEY_ = 'financas-consolidation-confirmed'; // { idDaConta: 'AAAA-MM-DD' em que o saldo foi conferido sem diferença }
+  function lsJsonObject_(key) {
+    try { var v = JSON.parse(localStorage.getItem(key)); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch (e) { return {}; }
+  }
+  function lsJsonSet_(key, obj) {
+    try { localStorage.setItem(key, JSON.stringify(obj)); } catch (e) { /* sem armazenamento: vale só até recarregar */ }
+  }
+  function consolidationRemindersOn_() {
+    try { return localStorage.getItem(CONSOL_REMINDERS_OFF_KEY_) !== '1'; } catch (e) { return true; }
+  }
+  function consolidationRemindersSetOn_(on) {
+    try { if (on) localStorage.removeItem(CONSOL_REMINDERS_OFF_KEY_); else localStorage.setItem(CONSOL_REMINDERS_OFF_KEY_, '1'); } catch (e) { /* sem armazenamento */ }
+  }
+  /** Data (AAAA-MM-DD) da última vez que o saldo da conta foi consolidado: o ponto fixo/saldo inicial mais recente, ou a
+   *  conferência sem diferença feita pelo aviso (que não cria lançamento). '' se a conta nunca teve nenhum. */
+  function lastConsolidationYmd_(accountId, today) {
+    var best = (lsJsonObject_(CONSOL_CONFIRMED_KEY_)[accountId] || '');
+    var lists = [STATE.allTransactions || [], STATE.pendingTransactions || []];
+    lists.forEach(function (list) {
+      list.forEach(function (t) {
+        if (t.accountId === accountId && isAccountBalanceEntry_(t) && t.date && t.date <= today && t.date > best) best = t.date;
+      });
+    });
+    return best;
+  }
+  /** Contas com lembrete a mostrar agora: [{ account, since, months }]. */
+  function consolidationRemindersDue_() {
+    if (!consolidationRemindersOn_()) return [];
+    var today = todayYmd(), thisMonth = today.slice(0, 7);
+    var limit = new Date(); limit.setMonth(limit.getMonth() - 1);
+    var limitYmd = limit.getFullYear() + '-' + String(limit.getMonth() + 1).padStart(2, '0') + '-' + String(limit.getDate()).padStart(2, '0');
+    var dismissed = lsJsonObject_(CONSOL_DISMISSED_KEY_);
+    var out = [];
+    (STATE.accounts || []).forEach(function (a) {
+      if (a.archived || a.type === 'credit_card' || String(a.id).indexOf('tmp-') === 0) return;
+      if (dismissed[a.id] === thisMonth) return;
+      var since = lastConsolidationYmd_(a.id, today);
+      if (!since || since > limitYmd) return;
+      var p = since.split('-'), t = today.split('-');
+      var months = (Number(t[0]) - Number(p[0])) * 12 + (Number(t[1]) - Number(p[1])) - (Number(t[2]) < Number(p[2]) ? 1 : 0);
+      out.push({ account: a, since: since, months: Math.max(1, months) });
+    });
+    out.sort(function (x, y) { return x.since < y.since ? -1 : (x.since > y.since ? 1 : 0); });
+    return out;
+  }
+  var CONSOL_REMINDER_ICON_ = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>';
+  function consolidationReminderHtml_() {
+    return consolidationRemindersDue_().map(function (r) {
+      var ago = r.months === 1 ? 'há mais de um mês' : 'há ' + r.months + ' meses';
+      return '<div class="home-reminder" role="button" tabindex="0" data-consol-acc="' + escapeHtml(r.account.id) + '">' +
+        '<span class="home-reminder-ico">' + CONSOL_REMINDER_ICON_ + '</span>' +
+        '<span class="home-reminder-txt">O saldo da conta <b>' + escapeHtml(r.account.name) + '</b> foi consolidado ' + ago + ' (em ' + fmtDate(r.since) + '). ' +
+        'Vale atualizar o saldo atual dela de tempos em tempos pra confirmar se algo não foi lançado, ou foi lançado errado.</span>' +
+        '<button type="button" class="home-reminder-x" data-consol-dismiss="' + escapeHtml(r.account.id) + '" aria-label="Dispensar até o mês que vem" data-tooltip="Dispensar até o mês que vem">×</button>' +
+      '</div>';
+    }).join('');
+  }
+  function wireConsolidationReminders_(root) {
+    root.querySelectorAll('.home-reminder').forEach(function (el) {
+      var id = el.getAttribute('data-consol-acc');
+      function open() {
+        var acc = (STATE.accounts || []).filter(function (a) { return a.id === id; })[0];
+        if (acc) openAccountModal(acc, { fromReminder: true });
+      }
+      el.onclick = function (e) {
+        if (e.target.closest && e.target.closest('.home-reminder-x')) return;
+        open();
+      };
+      el.onkeydown = function (e) { if ((e.key === 'Enter' || e.key === ' ') && e.target === el) { e.preventDefault(); open(); } };
+    });
+    root.querySelectorAll('.home-reminder-x').forEach(function (btn) {
+      wireTooltipTrigger_(btn);
+      btn.onclick = function (e) {
+        e.stopPropagation();
+        var dismissed = lsJsonObject_(CONSOL_DISMISSED_KEY_);
+        dismissed[btn.getAttribute('data-consol-dismiss')] = todayYmd().slice(0, 7);
+        lsJsonSet_(CONSOL_DISMISSED_KEY_, dismissed);
+        hideTooltip_();
+        render();
+      };
+    });
+  }
+  /** Saldo conferido pelo aviso e igual ao do app: não cria lançamento, então guarda a data pra o lembrete voltar a contar de hoje. */
+  function consolidationConfirmedToday_(accountId) {
+    var m = lsJsonObject_(CONSOL_CONFIRMED_KEY_);
+    m[accountId] = todayYmd();
+    lsJsonSet_(CONSOL_CONFIRMED_KEY_, m);
+  }
+
   // ---------- gráfico de colunas das faturas dos cartões (card do Início) ----------
   var BILLS_CHART_CARDS_KEY_ = 'financas-bills-chart-cards'; // por aparelho, como o tema e os cards do Início
   var BILLS_CHART_PAST_MONTHS_ = 24;   // quanto do passado entra no eixo (a rolagem leva até lá)
@@ -5984,10 +6095,11 @@
       recent: function () { return '<div class="card"><h2>Últimos lançamentos</h2>' + recentHtml + '</div>'; }
     };
 
-    root.innerHTML = homeMessageHtml_() +
+    root.innerHTML = homeMessageHtml_() + consolidationReminderHtml_() +
       shown.map(function (id) { return cardHtml[id](); }).join('') +
       (shown.length ? '' : '<div class="card"><div class="empty-state">Nenhum card ativo. Use o botão de editar (lápis, ao lado) pra escolher o que aparece aqui.</div></div>');
     if (shown.indexOf('summary') !== -1) wireTxCalendarCard_('home');
+    wireConsolidationReminders_(root);
 
     // wireTooltipTrigger_ também dá suporte a toque, que esse pino não tinha antes
     // (só mouseenter — no celular, tocar um pino não mostrava nada).
@@ -6901,6 +7013,24 @@
   /** checked: já vem marcada (essa Share já está selecionada/vinculada por quem abriu
    *  o popup — ver openRefundLinkPopup_/alreadySelected) — nasce com o checkbox
    *  marcado e o campo de valor habilitado, em vez de vazio/desabilitado. */
+  /** Largura do campo = exatamente o `sample` (ex.: "R$ 99.999,99") + o padding e a borda dele, medida com a fonte de verdade do
+   *  campo (a largura fixa em px sobrava ou cortava conforme a fonte do aparelho). O campo cresce pra esquerda (fica na ponta direita da linha). */
+  function fitInputToText_(input, sample) {
+    if (!input) return;
+    try {
+      var cs = getComputedStyle(input);
+      // Mede com um span de verdade (e não canvas): leva junto os algarismos tabulares e o espaçamento do campo.
+      var probe = document.createElement('span');
+      probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;left:-9999px;top:0;font:' + cs.font + ';font-variant-numeric:' + cs.fontVariantNumeric + ';letter-spacing:' + cs.letterSpacing;
+      probe.textContent = sample;
+      document.body.appendChild(probe);
+      var textW = probe.getBoundingClientRect().width;
+      document.body.removeChild(probe);
+      var w = textW + parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) +
+        parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
+      if (w > 0 && isFinite(w)) input.style.width = Math.ceil(w) + 'px';
+    } catch (e) { /* mantém a largura do estilo */ }
+  }
   function refundLinkRowHtml_(share, checked) {
     var passiveTx = passiveTransactionOf_(share);
     // categoryLabelHtml já vem escapado (e com ícone) -- só a descrição livre e o nome
@@ -7012,6 +7142,7 @@
       // dígito digitado. disabled sozinho já impede interação enquanto desmarcado;
       // marcar só precisa reabilitar o campo.
       setupMoneyInput(amountInput, selected !== null ? selected : Math.min(remainingForShare_(s), getTotalAmount()));
+      fitInputToText_(amountInput, 'R$ 99.999,99');
       check.addEventListener('change', function () {
         if (check.checked) {
           // Preenche com o que a receita ainda cobre: o que falta da parte, ou só a
@@ -9874,8 +10005,9 @@
     return editing ? 'Saldo atual' : 'Saldo inicial';
   }
 
-  function openAccountModal(existing) {
+  function openAccountModal(existing, opts) {
     var isEdit = !!existing;
+    var fromReminder_ = !!(opts && opts.fromReminder); // veio do lembrete de consolidação (Início)
     // Editar o saldo SEMPRE significa "saldo atual", e a diferença sempre vira um
     // lançamento de ajuste (ver payload.currentBalance abaixo) — mesmo numa conta sem
     // nenhum lançamento ainda. Antes, nesse caso, o app mexia direto em InitialBalance:
@@ -10026,6 +10158,7 @@
         var consolidationTempId = diffCents !== 0
           ? applyBalanceTxPreview_(existing.id, diffCents > 0 ? 'income' : 'expense', Math.abs(diffCents) / 100, ACCOUNT_CONSOLIDATION_DESCRIPTION_)
           : null;
+        if (fromReminder_ && diffCents === 0) consolidationConfirmedToday_(existing.id); // conferiu e bate: o lembrete volta a contar de hoje
         render();
         // resolveRealId_: existing.id pode ainda ser temporário numa corrida bem estreita
         // (editar uma conta na fração de segundo entre criá-la e o servidor confirmar).
@@ -14764,8 +14897,9 @@
     openModal(
       '<h2>' + (isGeral ? 'Editar orçamento geral' : (isEdit ? 'Editar orçamento' : 'Novo orçamento')) + '</h2>' +
       (isGeral
-        ? '<div class="muted budget-geral-info">Aqui entram todas as suas despesas, de qualquer categoria: é o teto do mês inteiro. ' +
-          'Por isso ele não pode ser apagado nem ter categorias removidas, senão deixaria de mostrar o mês todo.</div>'
+        ? '<div class="muted budget-geral-info">Aqui entram todas as suas despesas, de qualquer categoria, dentro do ciclo deste orçamento (o período do Valor abaixo, que não precisa ser mensal). ' +
+          'Compra parcelada entra pela parcela que cai no ciclo, não pelo valor inteiro. Despesa vinculada a um lançamento recorrente fica de fora: o próprio recorrente já a acompanha. ' +
+          'Por isso este orçamento não pode ser apagado nem ter categorias removidas, senão deixaria de mostrar o ciclo todo.</div>'
         : '<div class="field"><label>Categorias</label><div id="b-category-field" class="capsule-field"></div></div>') +
       '<div class="field budget-value-field">' +
         '<div class="budget-first-head"><label>Valor</label>' +
@@ -16267,7 +16401,8 @@
 
   /** "Casa do Carpinteiro - 9/10" / "Loja (3/8)" / "Loja Parcela 2 de 5" -> { name, seq, total }. Sem parcela: seq/total null. */
   function splitInvoiceInstallment_(text) {
-    var s = String(text || '').trim(), m;
+    // final do cartão que o PDF do Nubank põe antes do estabelecimento ("•••• 0867  Padaria"): ruído, o CSV não tem
+    var s = String(text || '').replace(/^[•·*●]{2,}\s*\d{4}\s+/, '').trim(), m;
     var patterns = [
       /\s*\((\d{1,2})\s*\/\s*(\d{1,2})\)\s*$/,
       /\s*-\s*(?:parcela\s*)?(\d{1,2})\s*\/\s*(\d{1,2})\s*$/i,
@@ -16475,7 +16610,7 @@
       while (!tail && body && extra < 2 && i + 1 < lines.length && !invoiceLeadingDate_(lines[i + 1]) && !SOFT_STOP_RE.test(invoiceNorm_(lines[i + 1])) && !HARD_STOP_RE.test(invoiceNorm_(lines[i + 1])) && !SECTION_RE.test(invoiceNorm_(lines[i + 1]))) {
         i++; extra++; body = body + ' ' + lines[i].trim(); tail = invoiceTailAmount_(body);
       }
-      if (!tail || !tail.head) continue;
+      if (!tail || !tail.head || !tail.amount) continue; // sem valor ou R$ 0,00 ("Pagamentos R$ 0,00" do Nubank): não é lançamento
       if (/^(total|saldo (anterior|desta|total|restante|da fatura|em aberto|devedor)|limite|pagamento minimo|subtotal)\b/.test(invoiceNorm_(tail.head))) continue;
       raw.push({ lead: date, head: tail.head.replace(/^R\$\s*/, ''), amount: tail.amount, sign: tail.sign });
     }
@@ -16706,7 +16841,8 @@
     var fm = String(fileName || '').match(/(\d{4})[-_](\d{2})/);
     var billMonth = fm && +fm[2] >= 1 && +fm[2] <= 12 ? fm[1] + '-' + fm[2] : '';
     if (!billMonth) billMonth = items.map(function (it) { return it.date; }).sort().pop().slice(0, 7);
-    var result = { parser: 'table', issuer: detectInvoiceIssuer_(String(fileName || '')) , billMonth: billMonth, periodStart: null, periodEnd: null, dueDate: null, total: null, items: items };
+    // o mês do nome do arquivo costuma ser o do VENCIMENTO (Nubank_2026-12-01.csv = fecha em nov); a tela refaz pelo dia de fechamento da conta
+    var result = { parser: 'table', billMonthGuess: true, issuer: detectInvoiceIssuer_(String(fileName || '')) , billMonth: billMonth, periodStart: null, periodEnd: null, dueDate: null, total: null, items: items };
     var cp = invoiceCancelPairs_(items);
     result.items = cp.items; result.cancelledPairs = cp.cancelled;
     return result;
@@ -16964,6 +17100,20 @@
     return '';
   }
 
+  /** CSV/XLSX não dizem o fechamento: com o dia de fechamento da conta, o mês da fatura é o da compra mais recente (a mesma regra dos lançamentos no cartão). true se mudou. */
+  function invoiceApplyClosingMonth_(d) {
+    var r = d.result, acc = d.accountId && STATE.accounts.filter(function (a) { return a.id === d.accountId; })[0];
+    if (!r.billMonthGuess || !acc || acc.type !== 'credit_card' || !Number(acc.closingDay)) return false;
+    var dates = r.items.filter(function (i) { return i.kind !== 'payment'; }).map(function (i) { return i.date; }).sort();
+    if (!dates.length) return false;
+    var last = dates[dates.length - 1], y = +last.slice(0, 4), m = +last.slice(5, 7), day = +last.slice(8, 10);
+    if (day > Number(acc.closingDay)) { m++; if (m === 13) { m = 1; y++; } }
+    var ym = y + '-' + String(m).padStart(2, '0');
+    if (ym === d.billMonth) return false;
+    d.billMonth = ym;
+    return true;
+  }
+
   function invoicePreviewHtml_() {
     var d = invoiceUi_.draft, r = d.result;
     var charges = r.items.filter(function (i) { return i.kind === 'expense'; }), credits = r.items.filter(function (i) { return i.kind === 'income'; });
@@ -17002,7 +17152,10 @@
 
   function wireInvoicePreview_() {
     var d = invoiceUi_.draft;
-    document.getElementById('inv-acc').addEventListener('change', function (e) { d.accountId = e.target.value; });
+    document.getElementById('inv-acc').addEventListener('change', function (e) {
+      d.accountId = e.target.value;
+      if (invoiceApplyClosingMonth_(d)) renderInvoiceBody_();
+    });
     document.getElementById('inv-month').addEventListener('change', function (e) { d.billMonth = e.target.value; });
     document.getElementById('inv-cancel').onclick = function () { invoiceUi_.view = 'list'; invoiceUi_.draft = null; invoiceUi_.error = ''; renderInvoiceBody_(); };
     document.getElementById('inv-create').onclick = function () {
@@ -17132,6 +17285,7 @@
         result: res, fileName: file.name, sourceType: r.sourceType, accountId: invoiceGuessAccount_(res.issuer || file.name),
         billMonth: res.billMonth || ''
       };
+      invoiceApplyClosingMonth_(invoiceUi_.draft);
       invoiceUi_.view = 'preview';
       renderInvoiceBody_();
     }).catch(function (err) {
@@ -19858,6 +20012,8 @@
         '<button id="st-goal-save">Salvar meta</button></div>' +
       '<label class="settings-switch" style="margin-top:10px"><input type="checkbox" id="st-auto-entries" role="switch"' + (STATE.autoEntriesEnabled ? ' checked' : '') + '><div class="grow"><div>Lançar sozinho o que já é conhecido</div>' +
       '<div class="muted">Quando fornecedor, categoria e conta já vêm do seu histórico, o lançamento entra no Extrato com o selo "a confirmar" e continua na fila até você confirmar ou descartar. Desligar não desfaz os que já entraram.</div></div></label>' +
+      '<label class="settings-switch" style="margin-top:10px"><input type="checkbox" id="st-consol-reminders" role="switch"' + (consolidationRemindersOn_() ? ' checked' : '') + '><div class="grow"><div>Lembrar de conferir o saldo das contas</div>' +
+      '<div class="muted">No Início, avisa quando o saldo de uma conta foi consolidado há mais de um mês. Fica só neste aparelho.</div></div></label>' +
       (analytics_().enabled() ?
         '<label class="settings-switch" style="margin-top:10px"><input type="checkbox" id="st-analytics" role="switch"' + (analytics_().optedOut() ? '' : ' checked') + '><div class="grow"><div>Ajudar a melhorar o Meu Cacau</div>' +
         '<div class="muted">Envia, de forma anônima, quais telas você usa e por quanto tempo. Nunca envia valores, nomes ou descrições dos seus lançamentos.</div></div></label>' : '') +
@@ -19954,6 +20110,10 @@
     };
 
     // Lançamentos automáticos (ver AutoEntries.js): vale a partir da próxima atualização do app.
+    document.getElementById('st-consol-reminders').onchange = function (e) {
+      consolidationRemindersSetOn_(e.target.checked);
+      render();
+    };
     document.getElementById('st-auto-entries').onchange = function (e) {
       var box = e.target, wanted = box.checked;
       STATE.autoEntriesEnabled = wanted;
@@ -20170,8 +20330,20 @@
         history.pushState({ cacauGuard: true }, '');
       }
       ARM_EVENTS.forEach(function (t) { document.addEventListener(t, arm_, true); });
+      // Voltar pra uma entrada do histórico faz o navegador RESTAURAR a rolagem salva dela (o topo, pra guarda): o voltar que só
+      // fechava um tooltip também mandava a página pro topo (21/11/2026). Rolagem manual + a posição de antes é reposta.
+      try { history.scrollRestoration = 'manual'; } catch (e) { /* navegador sem a opção */ }
+      var lastScrollY_ = window.pageYOffset || 0, restoringScroll_ = false;
+      window.addEventListener('scroll', function () { if (!restoringScroll_) lastScrollY_ = window.pageYOffset || 0; }, { passive: true });
       window.addEventListener('popstate', function () {
         if (!armed) return;
+        var nowY = window.pageYOffset || 0;
+        var keepY = nowY > 0 ? nowY : lastScrollY_; // a restauração do navegador pode já ter zerado, ou ainda não ter acontecido
+        restoringScroll_ = true;
+        var restoreY_ = function () { if (Math.abs((window.pageYOffset || 0) - keepY) > 1) window.scrollTo(0, keepY); };
+        requestAnimationFrame(restoreY_);
+        setTimeout(restoreY_, 120);
+        setTimeout(function () { restoringScroll_ = false; lastScrollY_ = window.pageYOffset || 0; }, 400);
         history.pushState({ cacauGuard: true }, '');
         var ev;
         try { ev = new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true }); }
