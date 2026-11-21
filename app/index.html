@@ -1035,6 +1035,8 @@
   .modal .field label { font-size: 14px; font-weight: 600; color: var(--text); padding-left: 4px; margin-bottom: 0; }
   /* Espaçamento uniforme (referência: Valor): o título encosta no campo e cada campo fica 22px abaixo do de cima. */
   .modal .field { margin-bottom: 22px; }
+  /* Orçamento: os campos já trazem o próprio respiro (cabeçalho de 34px + linha de dica de altura reservada), então só 4px entre eles. */
+  .modal .field:has(.budget-first-head) { margin-bottom: 4px; }
   .modal .field input, .modal .field select, .modal .field textarea, .modal .field button.app-select { margin-bottom: 0; }
   .modal .field-action-link { font-size: 12px; line-height: 17px; }
   /* Valor e Parcelas (PC e celular): Parcelas só existe -- animada, ao lado do Valor -- quando a conta é cartão de crédito. */
@@ -1781,7 +1783,7 @@
   .budget-from-start { flex: 0 0 auto; padding: 4px 12px; font-size: 12px; white-space: nowrap; }
   .budget-start-date { position: relative; flex: 1 1 auto; display: flex; align-items: center; justify-content: center; height: 48px; padding: 0 12px; box-sizing: border-box; border: 1px solid var(--border); border-radius: 24px; font-size: 13px; line-height: 1.25; text-align: center; color: var(--text); }
   .budget-start-date input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; opacity: 0; cursor: pointer; }
-  .budget-preview-title { display: block; margin: 4px 0 6px; }
+  .budget-preview-title { display: block; margin: 22px 0 6px; }
   .budget-preview-slot { min-height: 56px; }
   #b-preview { min-height: 22px; display: flex; align-items: center; }
   .budget-preview-note { font-size: 12px; margin-top: 6px; min-height: 32px; }
@@ -9766,8 +9768,8 @@
         (isEdit && existing.hasTransactions ? '<div class="muted">Essa conta já tem lançamentos, por isso o tipo não pode mais ser alterado.</div>' : '') +
       '</div>' +
       '<div class="field"><label id="m-balance-label">' + (editingCurrentBalance ? 'Saldo atual' : 'Saldo inicial') + '</label><input id="m-balance" type="text"></div>' +
-      (editingCurrentBalance ? '<div class="muted" id="m-balance-note" style="font-size:12px;margin-top:-8px;margin-bottom:12px">Mudar esse valor cria um lançamento de ajuste na data de hoje, cobrindo a diferença.</div>' : '') +
-      '<div class="muted" id="m-limit-note" style="display:none;font-size:12px;margin-top:-8px;margin-bottom:12px">O saldo do cartão é o limite que ainda sobra: cada compra reduz e cada pagamento de fatura devolve.</div>' +
+      (editingCurrentBalance ? '<div class="muted" id="m-balance-note" style="font-size:12px;margin-top:-18px;margin-bottom:22px">Mudar esse valor cria um lançamento de ajuste na data de hoje, cobrindo a diferença.</div>' : '') +
+      '<div class="muted" id="m-limit-note" style="display:none;font-size:12px;margin-top:-18px;margin-bottom:22px">O saldo do cartão é o limite que ainda sobra: cada compra reduz e cada pagamento de fatura devolve.</div>' +
       '<div id="m-cc-fields" style="display:none">' +
         '<div class="field"><label>Dia de fechamento</label><input id="m-closing" type="number" min="1" max="31" value="' + (isEdit && existing.closingDay ? existing.closingDay : '') + '"></div>' +
         '<div class="field"><label>Dia de vencimento</label><input id="m-due" type="number" min="1" max="31" value="' + (isEdit && existing.dueDay ? existing.dueDay : '') + '"></div>' +
@@ -10298,13 +10300,13 @@
         '</div></div>' +
         '<div class="field"><label>Categoria pai (opcional)</label><div id="m-parent-field" class="capsule-field"></div></div>') +
       '<div class="field"><label>Palavras-chave (opcional)</label><input id="m-keywords" value="' + (isEdit ? escapeHtml(existing.keywords || '') : '') + '" placeholder="ex: airbnb, booking.com">' +
-        '<div class="muted" style="font-size:12px;margin-top:-8px;margin-bottom:12px">Separadas por vírgula. Se o texto de um lançamento (ou de um "para confirmar") contiver uma delas, essa categoria já vem selecionada.</div>' +
+        '<div class="muted" style="font-size:12px;margin-top:4px;margin-bottom:0">Separadas por vírgula. Se o texto de um lançamento (ou de um "para confirmar") contiver uma delas, essa categoria já vem selecionada.</div>' +
       '</div>' +
       '<div class="field"><label>Descrição (opcional)</label>' +
         '<textarea id="m-description" rows="2" placeholder="Quais tipos de lançamento devem ser feitos nessa categoria?">' +
           (isEdit ? escapeHtml(existing.description || '') : '') +
         '</textarea>' +
-        '<div class="muted" style="font-size:12px;margin-top:-8px;margin-bottom:12px">Aparece como dica ao passar o mouse na categoria.</div>' +
+        '<div class="muted" style="font-size:12px;margin-top:4px;margin-bottom:0">Aparece como dica ao passar o mouse na categoria.</div>' +
       '</div>' +
       '<button id="m-submit">Salvar</button>'
     );
