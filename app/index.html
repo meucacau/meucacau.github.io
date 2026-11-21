@@ -372,6 +372,17 @@
     color: var(--text);
     margin-bottom: 12px;
   }
+  /* Foco: borda fina (a mesma de sempre) que vai se preenchendo de marrom ao receber o foco e se esvaziando ao perdê-lo (a transição
+     vale nos dois sentidos, por isso fica na regra base, não só no :focus). Sem o contorno grosso preto do navegador. */
+  input:not([type="checkbox"]):not([type="radio"]), select, textarea, button.app-select {
+    transition: border-color .28s ease;
+  }
+  input:not([type="checkbox"]):not([type="radio"]):focus, select:focus, textarea:focus, button.app-select:focus-visible {
+    outline: none; border-color: var(--primary);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    input:not([type="checkbox"]):not([type="radio"]), select, textarea, button.app-select { transition: none; }
+  }
   /* Campo de escolha do app (no lugar do <select> nativo; ver appSelectHtml_): parece um campo, abre o menu do app. */
   button.app-select {
     display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
@@ -960,7 +971,7 @@
   }
   /* Cabeçalho de campo que pode ou não ter links de ação (Despesa recorrente?, Reembolso?...): a mesma altura com ou sem eles, pra a
      janela não mudar de altura quando um link some/aparece. */
-  .tx-f-head { min-height: 18px; }
+  .tx-f-head { min-height: 17px; align-items: center !important; }
 
   /* ---------- Celular (<= 640px): janelas viram "bottom sheets" que acompanham o teclado. O PC não muda. ----------
      --vvh/--vvt (JavaScript.html, setupViewportVars_) = altura/topo da área visível já descontado o teclado. */
@@ -1021,8 +1032,11 @@
     .modal input, .modal select, .modal textarea { font-size: 16px; }
   }
   /* Título do campo bem mais forte que as perguntas de ação ("Lembrar categoria?", "Reembolso?") -- PC e celular. */
-  .modal .field label { font-size: 14px; font-weight: 600; color: var(--text); }
-  .modal .field-action-link { font-size: 12px; }
+  .modal .field label { font-size: 14px; font-weight: 600; color: var(--text); padding-left: 4px; margin-bottom: 0; }
+  /* Espaçamento uniforme (referência: Valor): o título encosta no campo e cada campo fica 22px abaixo do de cima. */
+  .modal .field { margin-bottom: 22px; }
+  .modal .field input, .modal .field select, .modal .field textarea, .modal .field button.app-select { margin-bottom: 0; }
+  .modal .field-action-link { font-size: 12px; line-height: 17px; }
   /* Valor e Parcelas (PC e celular): Parcelas só existe -- animada, ao lado do Valor -- quando a conta é cartão de crédito. */
   .tx-f-amount { gap: 0 !important; align-items: flex-end; }
   .tx-f-amount > div:first-child { flex: 1 1 0 !important; }
