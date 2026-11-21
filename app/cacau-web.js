@@ -2367,7 +2367,11 @@ var IGNORED_PENDING_PHRASES = [
   'mais fôlego pra fazer pix',
   'você tem um novo boleto',
   'lembrete de transferência futura',
-  'parcele seu boleto'
+  'parcele seu boleto',
+  // Promoções do 99 vistas no log (20/11/2026): têm "R$" no título mas não são transação.
+  'desconto mobilidade',
+  'use seu cupom',
+  'a partir de r$'
 ];
 
 // Corrida 99 cancelada: o 99Pay debita a corrida e, se cancelada, reembolsa em seguida
