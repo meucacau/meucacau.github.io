@@ -3294,6 +3294,200 @@ function removeJunkPendingEntries() {
   SpreadsheetApp.getUi().alert(removedCount + ' pendência(s) removida(s) (frase ignorada, sem valor real, ou par de corrida cancelada/reembolso).');
 }
 
+// ===== Invoices.js =====
+/**
+ * "Subir fatura" (documentos de fatura de cartão: PDF, CSV ou XLSX).
+ *
+ * O arquivo é lido NO CLIENTE (ver "Subir fatura", JavaScript.html): o servidor só guarda o resultado. Cada documento vira uma linha
+ * em Invoices e cada compra/crédito dele uma linha em InvoiceItems — uma fila PRÓPRIA do documento, separada da fila "a confirmar"
+ * (PendingEntries). Nada aqui vira lançamento sozinho: o usuário aceita item a item (acceptInvoiceItems) ou ignora. A comparação com
+ * os lançamentos já existentes (deduplicação) é feita ao vivo no cliente, sempre contra o que existe na hora.
+ *
+ * Pagamentos da fatura anterior não são guardados (o usuário os registra como transferência).
+ */
+
+var INVOICE_ITEM_STATUSES_ = ['pending', 'accepted', 'ignored'];
+
+function mapInvoiceRow_(r) {
+  return {
+    id: r.ID, fileName: r.FileName || '', issuer: r.Issuer || '', accountId: r.AccountID || null, billMonth: r.BillMonth || '',
+    dueDate: r.DueDate || '', total: r.Total === '' || r.Total === null ? null : Number(r.Total),
+    sourceType: r.SourceType || '', itemCount: Number(r.ItemCount) || 0, createdAt: r.CreatedAt || ''
+  };
+}
+
+function mapInvoiceItemRow_(r) {
+  return {
+    id: r.ID, invoiceId: r.InvoiceID, date: r.Date, description: r.Description || '', amount: Number(r.Amount),
+    kind: r.Kind === 'income' ? 'income' : 'expense', status: INVOICE_ITEM_STATUSES_.indexOf(r.Status) === -1 ? 'pending' : r.Status,
+    installmentSeq: r.InstallmentSeq === '' || r.InstallmentSeq === null ? null : Number(r.InstallmentSeq),
+    installmentTotal: r.InstallmentTotal === '' || r.InstallmentTotal === null ? null : Number(r.InstallmentTotal),
+    transactionId: r.TransactionID || null, sortOrder: Number(r.SortOrder) || 0
+  };
+}
+
+/** Todos os documentos (mais recente primeiro) e todos os itens deles. */
+function listInvoices() {
+  var invoices = readAll_('Invoices').map(mapInvoiceRow_).sort(function (a, b) { return a.createdAt < b.createdAt ? 1 : (a.createdAt > b.createdAt ? -1 : 0); });
+  var items = readAll_('InvoiceItems').map(mapInvoiceItemRow_).sort(function (a, b) { return a.sortOrder - b.sortOrder; });
+  return { invoices: invoices, items: items };
+}
+
+/**
+ * input: { fileName, issuer, accountId, billMonth 'YYYY-MM', dueDate, total, sourceType, items: [{ date, description, amount,
+ * kind 'expense'|'income', installmentSeq, installmentTotal }] }.
+ */
+function createInvoice(input) {
+  if (!input || !Array.isArray(input.items) || !input.items.length) throw new Error('Nenhum lançamento encontrado no documento.');
+  if (!input.accountId) throw new Error('Escolha a conta do cartão.');
+  var account = findById_('Accounts', input.accountId);
+  if (!account) throw new Error('Conta não encontrada.');
+  if (account.Type === 'investment') throw new Error('Conta de investimento não recebe fatura.');
+  var items = input.items.filter(function (it) {
+    return it && /^\d{4}-\d{2}-\d{2}$/.test(it.date) && Number(it.amount) > 0 && String(it.description || '').trim();
+  });
+  if (!items.length) throw new Error('Nenhum lançamento válido no documento.');
+  var invoice = appendRow_('Invoices', {
+    FileName: String(input.fileName || '').slice(0, 200), Issuer: input.issuer || '', AccountID: input.accountId,
+    BillMonth: /^\d{4}-\d{2}$/.test(input.billMonth || '') ? input.billMonth : '', DueDate: input.dueDate || '',
+    Total: input.total === null || input.total === undefined ? '' : Number(input.total),
+    SourceType: input.sourceType || '', ItemCount: items.length
+  });
+  var rows = items.map(function (it, i) {
+    return {
+      InvoiceID: invoice.ID, Date: it.date, Description: String(it.description).trim().slice(0, 200), Amount: Math.round(Number(it.amount) * 100) / 100,
+      Kind: it.kind === 'income' ? 'income' : 'expense', Status: 'pending',
+      InstallmentSeq: it.installmentSeq || '', InstallmentTotal: it.installmentTotal || '', TransactionID: '', SortOrder: i
+    };
+  });
+  var saved = appendRowsBatch_('InvoiceItems', rows);
+  return { invoice: mapInvoiceRow_(invoice), items: saved.map(mapInvoiceItemRow_) };
+}
+
+/** Atualiza Status (e TransactionID) de vários itens com UMA escrita só. updatesById: { itemId: { Status, TransactionID? } }. */
+function updateInvoiceItemsBulk_(updatesById) {
+  return withSheetLock_(function () {
+    var sheet = getOrCreateSheet_('InvoiceItems');
+    var headers = SCHEMA.InvoiceItems;
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return 0;
+    var range = sheet.getRange(2, 1, lastRow - 1, headers.length);
+    var values = range.getValues();
+    var idCol = headers.indexOf('ID'), statusCol = headers.indexOf('Status'), txCol = headers.indexOf('TransactionID'), changed = 0;
+    values.forEach(function (row) {
+      var u = updatesById[row[idCol]];
+      if (!u) return;
+      if (u.Status !== undefined) row[statusCol] = u.Status;
+      if (u.TransactionID !== undefined) row[txCol] = u.TransactionID;
+      changed++;
+    });
+    if (changed) range.setValues(values);
+    return changed;
+  });
+}
+
+/** Marca itens como 'ignored' ou volta pra 'pending'. input: { ids: [...], status }. Itens já aceitos não mudam. */
+function setInvoiceItemsStatus(input) {
+  var status = input && input.status;
+  if (status !== 'ignored' && status !== 'pending') throw new Error('Status inválido.');
+  var ids = (input.ids || []).slice();
+  var current = {};
+  readAll_('InvoiceItems').forEach(function (r) { current[r.ID] = r; });
+  var updates = {};
+  ids.forEach(function (id) { if (current[id] && current[id].Status !== 'accepted') updates[id] = { Status: status }; });
+  updateInvoiceItemsBulk_(updates);
+  return { updated: Object.keys(updates).length };
+}
+
+function invoiceNameKey_(text) {
+  return String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Aceita itens: cria UM lançamento por item (despesa, ou receita pra estorno/crédito) na conta do documento.
+ * input: { items: [{ itemId, categoryId }] }. Item que não está mais 'pending' é pulado.
+ * Parcela (seq/total): vira UMA linha só, na parcela certa — reaproveita o grupo de parcelas da mesma compra se já existir
+ * (mesma conta, mesmo total, mesmo estabelecimento) e não repete uma parcela que já exista. A fatura (BillMonth) é a do documento.
+ * Retorna { created: [lançamentos mapeados], accepted: [itemIds] }.
+ */
+function acceptInvoiceItems(input) {
+  var wanted = (input && input.items) || [];
+  if (!wanted.length) return { created: [], accepted: [] };
+  var itemById = {}, invoiceById = {};
+  readAll_('InvoiceItems').forEach(function (r) { itemById[r.ID] = r; });
+  readAll_('Invoices').forEach(function (r) { invoiceById[r.ID] = r; });
+  var transactions = readAll_('Transactions');
+  var accounts = {};
+  readAll_('Accounts').forEach(function (a) { accounts[a.ID] = a; });
+  var categories = {};
+  readAll_('Categories').forEach(function (c) { categories[c.ID] = c; });
+
+  var newGroups = {}, rows = [], rowItemIds = [], updates = {}, accepted = [];
+  wanted.forEach(function (w) {
+    var item = itemById[w.itemId];
+    if (!item || item.Status !== 'pending') return;
+    var inv = invoiceById[item.InvoiceID];
+    var account = inv && accounts[inv.AccountID];
+    if (!inv || !account) throw new Error('A conta deste documento não existe mais.');
+    var kind = item.Kind === 'income' ? 'income' : 'expense';
+    var categoryId = w.categoryId && categories[w.categoryId] && categories[w.categoryId].Kind === kind ? w.categoryId : '';
+    var isCard = account.Type === 'credit_card';
+    var seq = Number(item.InstallmentSeq) || 0, total = Number(item.InstallmentTotal) || 0;
+    var row = {
+      Date: item.Date, Time: '', AccountID: inv.AccountID, CategoryID: categoryId, Kind: kind, Amount: Number(item.Amount),
+      Description: '', Counterparty: item.Description, BillMonth: isCard ? (inv.BillMonth || billMonthForDate_(item.Date, Number(account.ClosingDay))) : '',
+      InstallmentGroupID: '', InstallmentSeq: '', InstallmentTotal: '', TransferGroupID: '', ForecastID: '', ForecastCycleMonth: '',
+      ExcludeFromAnalysis: false
+    };
+    if (isCard && kind === 'expense' && total >= 2 && seq >= 1) {
+      var key = inv.AccountID + '|' + total + '|' + invoiceNameKey_(item.Description);
+      var groupId = newGroups[key] || '';
+      var sameGroup = transactions.filter(function (t) {
+        return t.AccountID === inv.AccountID && t.InstallmentGroupID && Number(t.InstallmentTotal) === total &&
+          (invoiceNameKey_(t.Counterparty) === invoiceNameKey_(item.Description) || invoiceNameKey_(stripInstallmentSuffix_(t.Description)) === invoiceNameKey_(item.Description));
+      });
+      if (!groupId && sameGroup.length) groupId = sameGroup[0].InstallmentGroupID;
+      var existing = sameGroup.filter(function (t) { return Number(t.InstallmentSeq) === seq; })[0];
+      if (existing) {
+        // essa parcela já existe (mesmo se o grupo acabou de nascer neste lote): só marca o item como aceito, apontando pro lançamento que já está lá
+        updates[item.ID] = { Status: 'accepted', TransactionID: existing.ID };
+        accepted.push(item.ID);
+        return;
+      }
+      if (!groupId) groupId = generateId_();
+      newGroups[key] = groupId;
+      row.InstallmentGroupID = groupId; row.InstallmentSeq = seq; row.InstallmentTotal = total;
+      row.Description = '(' + seq + '/' + total + ')';
+    }
+    rows.push(row);
+    rowItemIds.push(item.ID);
+  });
+  var saved = appendRowsBatch_('Transactions', rows);
+  saved.forEach(function (t, i) { updates[rowItemIds[i]] = { Status: 'accepted', TransactionID: t.ID }; accepted.push(rowItemIds[i]); });
+  updateInvoiceItemsBulk_(updates);
+  return { created: saved.map(mapTransactionRow_), accepted: accepted };
+}
+
+/** Apaga o documento e a fila dele. Os lançamentos já aceitos continuam (são lançamentos de verdade). */
+function deleteInvoice(id) {
+  if (!id) throw new Error('ID do documento é obrigatório.');
+  // itens: reescreve a aba sem as linhas do documento (uma escrita só, em vez de uma por linha)
+  withSheetLock_(function () {
+    var sheet = getOrCreateSheet_('InvoiceItems');
+    var headers = SCHEMA.InvoiceItems;
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return;
+    var range = sheet.getRange(2, 1, lastRow - 1, headers.length);
+    var values = range.getValues(), col = headers.indexOf('InvoiceID');
+    var kept = values.filter(function (row) { return row[col] !== id; });
+    if (kept.length === values.length) return;
+    range.clearContent();
+    if (kept.length) sheet.getRange(2, 1, kept.length, headers.length).setValues(kept);
+  });
+  deleteRowById_('Invoices', id);
+  return { ok: true };
+}
+
 // ===== Migrations.js =====
 /**
  * Migração pontual (17/11/2026): lançamentos que foram feitos na conta Nubank mas eram do
@@ -4449,7 +4643,12 @@ var SCHEMA = {
   TreeState: ['ID', 'State', 'UpdatedAt'],
   // Preferências simples do app que vivem na planilha (uma linha por chave). Hoje só 'autoEntries'
   // ('off' desliga os lançamentos automáticos; ausente = ligado, ver AutoEntries.js).
-  AppSettings: ['ID', 'Key', 'Value', 'UpdatedAt']
+  AppSettings: ['ID', 'Key', 'Value', 'UpdatedAt'],
+  // "Subir fatura" (ver Invoices.js): um documento (PDF/CSV/XLSX) por linha em Invoices e as compras/créditos dele em InvoiceItems
+  // (fila própria do documento, separada de PendingEntries). Status do item: pending | accepted | ignored; TransactionID = lançamento
+  // criado ao aceitar. BillMonth = fatura do documento ('YYYY-MM'), usada nos lançamentos aceitos.
+  Invoices: ['ID', 'FileName', 'Issuer', 'AccountID', 'BillMonth', 'DueDate', 'Total', 'SourceType', 'ItemCount', 'CreatedAt'],
+  InvoiceItems: ['ID', 'InvoiceID', 'Date', 'Description', 'Amount', 'Kind', 'Status', 'InstallmentSeq', 'InstallmentTotal', 'TransactionID', 'SortOrder']
 };
 
 // Colunas que guardam datas como texto (ex: '2026-08-15', '2026-08') para
@@ -4475,7 +4674,9 @@ var TEXT_COLUMNS = {
   PendingEntries: ['CreatedAt'],
   Plans: ['Month'],
   Budgets: ['RecoveryDismissedFrom', 'CycleStart'],
-  ForecastCycleIgnores: ['CycleStart']
+  ForecastCycleIgnores: ['CycleStart'],
+  Invoices: ['BillMonth', 'DueDate'],
+  InvoiceItems: ['Date']
 };
 
 // Padrão de formatação usado para normalizar de volta a texto caso o Sheets
@@ -4490,6 +4691,7 @@ var TEXT_COLUMN_DATE_PATTERNS = {
   CreatedAt: "yyyy-MM-dd'T'HH:mm:ss",
   Month: 'yyyy-MM',
   CycleStart: 'yyyy-MM-dd',
+  DueDate: 'yyyy-MM-dd',
   RecoveryDismissedFrom: 'yyyy-MM-dd'
 };
 
@@ -5418,6 +5620,7 @@ function touchTree(input) {
 }
 
 return {
+  acceptInvoiceItems: (typeof acceptInvoiceItems === 'function' ? acceptInvoiceItems : function () { throw new Error('"acceptInvoiceItems" não existe na versão web.'); }),
   archiveAccount: (typeof archiveAccount === 'function' ? archiveAccount : function () { throw new Error('"archiveAccount" não existe na versão web.'); }),
   archiveCategory: (typeof archiveCategory === 'function' ? archiveCategory : function () { throw new Error('"archiveCategory" não existe na versão web.'); }),
   confirmDocumentImportBatch: (typeof confirmDocumentImportBatch === 'function' ? confirmDocumentImportBatch : function () { throw new Error('"confirmDocumentImportBatch" não existe na versão web.'); }),
@@ -5426,11 +5629,13 @@ return {
   createBudget: (typeof createBudget === 'function' ? createBudget : function () { throw new Error('"createBudget" não existe na versão web.'); }),
   createCategory: (typeof createCategory === 'function' ? createCategory : function () { throw new Error('"createCategory" não existe na versão web.'); }),
   createForecast: (typeof createForecast === 'function' ? createForecast : function () { throw new Error('"createForecast" não existe na versão web.'); }),
+  createInvoice: (typeof createInvoice === 'function' ? createInvoice : function () { throw new Error('"createInvoice" não existe na versão web.'); }),
   createPerson: (typeof createPerson === 'function' ? createPerson : function () { throw new Error('"createPerson" não existe na versão web.'); }),
   createPlan: (typeof createPlan === 'function' ? createPlan : function () { throw new Error('"createPlan" não existe na versão web.'); }),
   createTransaction: (typeof createTransaction === 'function' ? createTransaction : function () { throw new Error('"createTransaction" não existe na versão web.'); }),
   createTransfer: (typeof createTransfer === 'function' ? createTransfer : function () { throw new Error('"createTransfer" não existe na versão web.'); }),
   deleteInstallmentGroup: (typeof deleteInstallmentGroup === 'function' ? deleteInstallmentGroup : function () { throw new Error('"deleteInstallmentGroup" não existe na versão web.'); }),
+  deleteInvoice: (typeof deleteInvoice === 'function' ? deleteInvoice : function () { throw new Error('"deleteInvoice" não existe na versão web.'); }),
   deleteTransaction: (typeof deleteTransaction === 'function' ? deleteTransaction : function () { throw new Error('"deleteTransaction" não existe na versão web.'); }),
   discardPendingEntry: (typeof discardPendingEntry === 'function' ? discardPendingEntry : function () { throw new Error('"discardPendingEntry" não existe na versão web.'); }),
   dismissBudgetModeSwitchSuggestion: (typeof dismissBudgetModeSwitchSuggestion === 'function' ? dismissBudgetModeSwitchSuggestion : function () { throw new Error('"dismissBudgetModeSwitchSuggestion" não existe na versão web.'); }),
@@ -5441,6 +5646,7 @@ return {
   getBootstrapData: (typeof getBootstrapData === 'function' ? getBootstrapData : function () { throw new Error('"getBootstrapData" não existe na versão web.'); }),
   getPhoneConnectionInfo: (typeof getPhoneConnectionInfo === 'function' ? getPhoneConnectionInfo : function () { throw new Error('"getPhoneConnectionInfo" não existe na versão web.'); }),
   ignoreForecastCycle: (typeof ignoreForecastCycle === 'function' ? ignoreForecastCycle : function () { throw new Error('"ignoreForecastCycle" não existe na versão web.'); }),
+  listInvoices: (typeof listInvoices === 'function' ? listInvoices : function () { throw new Error('"listInvoices" não existe na versão web.'); }),
   previewDocumentImport: (typeof previewDocumentImport === 'function' ? previewDocumentImport : function () { throw new Error('"previewDocumentImport" não existe na versão web.'); }),
   reconnectUserSpreadsheet: (typeof reconnectUserSpreadsheet === 'function' ? reconnectUserSpreadsheet : function () { throw new Error('"reconnectUserSpreadsheet" não existe na versão web.'); }),
   recreateUserSpreadsheet: (typeof recreateUserSpreadsheet === 'function' ? recreateUserSpreadsheet : function () { throw new Error('"recreateUserSpreadsheet" não existe na versão web.'); }),
@@ -5450,6 +5656,7 @@ return {
   removePlan: (typeof removePlan === 'function' ? removePlan : function () { throw new Error('"removePlan" não existe na versão web.'); }),
   setAutoEntriesEnabled: (typeof setAutoEntriesEnabled === 'function' ? setAutoEntriesEnabled : function () { throw new Error('"setAutoEntriesEnabled" não existe na versão web.'); }),
   setBalanceGoal: (typeof setBalanceGoal === 'function' ? setBalanceGoal : function () { throw new Error('"setBalanceGoal" não existe na versão web.'); }),
+  setInvoiceItemsStatus: (typeof setInvoiceItemsStatus === 'function' ? setInvoiceItemsStatus : function () { throw new Error('"setInvoiceItemsStatus" não existe na versão web.'); }),
   setRefundLinksForActiveTransaction: (typeof setRefundLinksForActiveTransaction === 'function' ? setRefundLinksForActiveTransaction : function () { throw new Error('"setRefundLinksForActiveTransaction" não existe na versão web.'); }),
   setRefundSharesForPassiveTransaction: (typeof setRefundSharesForPassiveTransaction === 'function' ? setRefundSharesForPassiveTransaction : function () { throw new Error('"setRefundSharesForPassiveTransaction" não existe na versão web.'); }),
   touchTree: (typeof touchTree === 'function' ? touchTree : function () { throw new Error('"touchTree" não existe na versão web.'); }),

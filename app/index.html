@@ -1665,6 +1665,9 @@
   @supports (text-box: trim-both cap alphabetic) {
     .budget-name-text { padding-top: 0; text-box: trim-both cap alphabetic; }
   }
+  /* Valor e ciclo do orçamento ("R$ 2.500 a cada 2 semanas") no canto direito da linha do título: cor do texto de aviso, tamanho
+     entre o do título e o do aviso (12px), em itálico; centralizado com as letras do título como o resto da linha (text-box acima). */
+  .budget-circles-head .budget-timebar-name > .budget-name-meta { flex: none; margin-left: auto; white-space: nowrap; font-size: 13px; font-style: italic; font-weight: 400; color: var(--text-muted); text-align: right; }
   .budget-circles-advice {
     min-width: 0; font-size: 12px; line-height: 1.3; color: var(--text-muted); text-align: right;
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden;
@@ -2110,6 +2113,46 @@
     .row-clickable:not([data-tx])::before { content: ''; position: absolute; left: -9px; top: 0; bottom: 0; width: 3px; border-radius: 2px; background: var(--primary); transform: scaleY(0); transition: transform .2s ease; pointer-events: none; }
     .row-clickable:not([data-tx]):hover::before { transform: scaleY(1); }
   }
+  /* ---- Subir fatura (openInvoiceModal): lista de documentos, conferência e fila de cada documento ---- */
+  .inv-hint { color: var(--text-muted); font-size: 13px; margin: 0 0 12px; }
+  .inv-drop { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 18px 12px; border: 1.5px dashed var(--border); border-radius: 12px; cursor: pointer; text-align: center; transition: background .15s ease, border-color .15s ease; }
+  .inv-drop:hover { background: var(--surface); border-color: var(--primary); }
+  .inv-drop b { color: var(--primary); }
+  .inv-drop span { color: var(--text-muted); font-size: 12px; }
+  .inv-note { margin: 10px 0; padding: 8px 10px; border-radius: 8px; background: var(--surface); font-size: 13px; }
+  .inv-note.warn { color: var(--warning); }
+  .inv-note.ok { color: var(--income); }
+  .inv-section-title { margin: 18px 0 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
+  .inv-doc { display: block; width: 100%; text-align: left; margin: 0 0 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: inherit; font: inherit; cursor: pointer; }
+  .inv-doc-title { font-weight: 600; }
+  .inv-doc-sub { color: var(--text-muted); font-size: 12px; margin-top: 2px; overflow-wrap: anywhere; }
+  .inv-bar { height: 4px; border-radius: 2px; background: var(--border); margin-top: 8px; overflow: hidden; }
+  .inv-bar i { display: block; height: 100%; background: var(--income); }
+  .inv-summary { color: var(--text-muted); font-size: 13px; margin: 0 0 10px; overflow-wrap: anywhere; }
+  .inv-back { display: inline-block; margin: 0 0 8px; padding: 0; border: 0; background: none; color: var(--primary); font: inherit; font-size: 13px; cursor: pointer; }
+  .inv-counts { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--text-muted); }
+  .inv-counts b { color: var(--text); }
+  .inv-group { margin-top: 12px; border-top: 1px solid var(--border); }
+  .inv-group > summary { padding: 10px 0 6px; cursor: pointer; font-weight: 600; list-style: none; }
+  .inv-group > summary::-webkit-details-marker { display: none; }
+  .inv-group > summary span { margin-left: 6px; font-weight: 400; color: var(--text-muted); }
+  .inv-row { padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .inv-main { display: flex; align-items: baseline; gap: 8px; }
+  .inv-date { flex: none; width: 40px; color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .inv-desc { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+  .inv-inst { color: var(--text-muted); font-size: 12px; font-style: normal; }
+  .inv-amt { flex: none; font-variant-numeric: tabular-nums; color: var(--expense); }
+  .inv-amt.inc { color: var(--income); }
+  .inv-match { margin: 2px 0 0 48px; color: var(--text-muted); font-size: 12px; }
+  .inv-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 6px 0 0 48px; }
+  .inv-act { padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: none; color: inherit; font: inherit; font-size: 12px; cursor: pointer; }
+  .inv-act.primary { border-color: var(--primary); color: var(--primary); }
+  .inv-act.inv-del { color: var(--expense); }
+  .inv-footer { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 18px; color: var(--text-muted); font-size: 12px; }
+  @media (max-width: 600px) {
+    .inv-match, .inv-sub { margin-left: 0; }
+    .inv-act { min-height: 34px; }
+  }
   /* ---- animação de troca de tema (docs/HANDOFF-theme-animation.md; ver changeTheme_) ---- */
   /* O tema novo é pintado por cima do antigo; as duas "fotos" são camadas lisas, sem fade nem blend. */
   ::view-transition-old(root),
@@ -2215,7 +2258,7 @@
 
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=3e706cd287"></script>
+  <script src="cacau-web.js?v=20c394769b"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -11942,6 +11985,20 @@
     }
   }
 
+  /** "R$ 2.500 a cada 2 semanas" / "R$ 600 por mês": o valor-base e o ciclo do orçamento, pro canto direito do título no Início. '' sem valor (Automático sem histórico). */
+  function budgetAmountCycleText_(b) {
+    var base = budgetBaseAmount_(b);
+    if (base === null || base === undefined) return '';
+    var spec = budgetCycleSpecOf_(b);
+    var names = { day: ['dia', 'dias'], week: ['semana', 'semanas'], month: ['mês', 'meses'] }[spec.unit];
+    var cycle = spec.count === 1 ? 'por ' + names[0] : 'a cada ' + spec.count + ' ' + names[1];
+    return fmtMoneyNoCents_(base) + ' ' + cycle;
+  }
+  function budgetNameMetaHtml_(b) {
+    var text = budgetAmountCycleText_(b);
+    return text ? '<span class="budget-name-text budget-name-meta">' + escapeHtml(text) + '</span>' : '';
+  }
+
   /**
    * Card de orçamento do Dashboard: sem barras e sem seletor de período -- cada orçamento é uma linha de
    * círculos do PRÓPRIO ciclo (ver budgetCircleSeries_), com o texto de aviso (ver
@@ -11977,7 +12034,7 @@
       if (!progress || !series) {
         return '<div class="budget-circles-row budget-circles-row-empty" data-budget-bar="' + b.id + '">' +
           '<div class="budget-circles-head">' +
-            '<span class="budget-timebar-name">' + budgetIconHtml_(b) + '<span class="budget-name-text">' + escapeHtml(name) + '</span></span>' +
+            '<span class="budget-timebar-name">' + budgetIconHtml_(b) + '<span class="budget-name-text">' + escapeHtml(name) + '</span>' + budgetNameMetaHtml_(b) + '</span>' +
             budgetCirclesTrackHtml_(null) +
             '<div class="budget-circles-advice">Histórico insuficiente</div>' +
           '</div>' +
@@ -11985,7 +12042,7 @@
       }
       return '<div class="budget-circles-row" data-budget-bar="' + b.id + '">' +
         '<div class="budget-circles-head">' +
-          '<span class="budget-timebar-name">' + budgetIconHtml_(b) + '<span class="budget-name-text">' + escapeHtml(name) + '</span></span>' +
+          '<span class="budget-timebar-name">' + budgetIconHtml_(b) + '<span class="budget-name-text">' + escapeHtml(name) + '</span>' + budgetNameMetaHtml_(b) + '</span>' +
           budgetCirclesTrackHtml_(series) +
           '<div class="budget-circles-advice">' + adviceHtmlOf_(b, progress) + '</div>' +
         '</div>' +
@@ -16161,6 +16218,982 @@
     return handle_;
   }
 
+  // <invoice-parsers>
+  // ---------- Subir fatura: leitura de PDF/CSV (funções puras, testadas em tests/invoice_parsers_test.js) ----------
+  // Pipeline: PDF -> itens de texto com posição (pdf.js) -> linhas (invoiceLinesFromPdfItems_) -> leitor do emissor
+  // (Nubank, ver parseNubankInvoice_) ou o leitor universal (parseGenericInvoice_) -> { meta, items }.
+  // Cada item: { date 'YYYY-MM-DD', description, amount (>0 = cobrança), installmentSeq, installmentTotal, kind:
+  // 'expense' | 'income' (estorno/crédito) | 'payment' (pagamento da fatura anterior: nunca vira lançamento) }.
+  var INVOICE_MONTHS_ABBR_ = { jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6, jul: 7, ago: 8, set: 9, out: 10, nov: 11, dez: 12 };
+  var INVOICE_AMOUNT_TAIL_RE_ = /([+\-−–]?)\s*(R\$)?\s*([+\-−–]?)\s*(\d{1,3}(?:\.\d{3})*,\d{2})\s*(CR|C|D)?\s*$/i;
+
+  function invoicePad2_(n) { return (n < 10 ? '0' : '') + n; }
+  function invoiceYmd_(y, m, d) { return y + '-' + invoicePad2_(m) + '-' + invoicePad2_(d); }
+  function invoiceDaysIn_(y, m) { return new Date(y, m, 0).getDate(); }
+  function invoiceNum_(text) { return Number(String(text).replace(/\./g, '').replace(',', '.')); }
+  function invoiceNorm_(text) {
+    return String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  }
+
+  /**
+   * Itens de texto do pdf.js (cada um com str, x, y, w) -> linhas de texto. Itens com o mesmo y (tolerância de 2,5)
+   * são a mesma linha; dentro dela, ordenados por x. Fragmentos colados (sem vão) se juntam sem espaço; colunas
+   * afastadas ficam separadas por dois espaços.
+   */
+  function invoiceLinesFromPdfItems_(items) {
+    var rows = [];
+    items.filter(function (i) { return i && i.str && i.str.trim(); })
+      .sort(function (a, b) { return b.y - a.y || a.x - b.x; })
+      .forEach(function (i) {
+        var row = null;
+        for (var k = 0; k < rows.length; k++) { if (Math.abs(rows[k].y - i.y) <= 2.5) { row = rows[k]; break; } }
+        if (!row) { row = { y: i.y, items: [] }; rows.push(row); }
+        row.items.push(i);
+      });
+    return rows.sort(function (a, b) { return b.y - a.y; }).map(function (r) {
+      var out = '', prevEnd = null;
+      r.items.sort(function (a, b) { return a.x - b.x; }).forEach(function (i) {
+        var text = i.str.replace(/\s+$/, '');
+        if (out) {
+          var gap = i.x - prevEnd;
+          out += gap <= 1 ? '' : (gap <= 8 ? ' ' : '  ');
+        }
+        out += text.replace(/^\s+/, out ? '' : '');
+        prevEnd = i.x + (i.w || 0);
+      });
+      return out.trim();
+    }).filter(function (l) { return l; });
+  }
+
+  /** "Casa do Carpinteiro - 9/10" / "Loja (3/8)" / "Loja Parcela 2 de 5" -> { name, seq, total }. Sem parcela: seq/total null. */
+  function splitInvoiceInstallment_(text) {
+    var s = String(text || '').trim(), m;
+    var patterns = [
+      /\s*\((\d{1,2})\s*\/\s*(\d{1,2})\)\s*$/,
+      /\s*-\s*(?:parcela\s*)?(\d{1,2})\s*\/\s*(\d{1,2})\s*$/i,
+      /\s*[-–]?\s*parcela\s+(\d{1,2})\s*(?:\/|de)\s*(\d{1,2})\s*$/i,
+      /\s+(\d{1,2})\s*\/\s*(\d{1,2})\s*$/
+    ];
+    for (var i = 0; i < patterns.length; i++) {
+      m = s.match(patterns[i]);
+      if (m) {
+        var seq = Number(m[1]), total = Number(m[2]);
+        if (total >= 2 && total <= 60 && seq >= 1 && seq <= total) {
+          return { name: s.slice(0, m.index).replace(/[\s\-–]+$/, '').trim(), seq: seq, total: total };
+        }
+      }
+    }
+    return { name: s.replace(/[\s\-–]+$/, '').trim(), seq: null, total: null };
+  }
+
+  /** Pagamento da fatura anterior (não é gasto: o usuário registra à parte, como transferência). */
+  function isInvoicePaymentText_(text) {
+    return /\bpagamento\b.*\b(recebido|efetuado|da fatura|em \d{1,2}|online|boleto)\b|^pagamento (recebido|em)\b|^pgto\b|obrigado pelo pagamento|pagamento (de )?fatura|^pagamento$/i.test(invoiceNorm_(text));
+  }
+  function isInvoiceCreditText_(text) {
+    return /\b(estorno|cancelamento|purchase cancellation|reembolso|cr[eé]dito|devolu[cç][aã]o|chargeback)\b/i.test(invoiceNorm_(text));
+  }
+
+  /** Último valor da linha: { amount (absoluto), sign: '+' | '-' | '' (como aparece), head (texto antes do valor) } ou null. */
+  function invoiceTailAmount_(line) {
+    var m = line.match(INVOICE_AMOUNT_TAIL_RE_);
+    if (!m) return null;
+    var sign = (m[1] || m[3] || '');
+    if (/[−–]/.test(sign)) sign = '-';
+    var suffix = (m[5] || '').toUpperCase();
+    if (suffix === 'CR') sign = sign || '+';
+    return { amount: invoiceNum_(m[4]), sign: sign, head: line.slice(0, m.index).trim() };
+  }
+
+  /** Resolve o ano de um dia/mês sem ano: a data mais recente que não passa de refYmd (+ folga de 7 dias). */
+  function invoiceResolveYear_(day, month, refYmd) {
+    var ref = refYmd.split('-').map(Number);
+    var refDate = new Date(ref[0], ref[1] - 1, ref[2] + 7);
+    for (var y = ref[0] + 1; y >= ref[0] - 6; y--) {
+      if (day > invoiceDaysIn_(y, month)) continue;
+      if (new Date(y, month - 1, day) <= refDate) return y;
+    }
+    return ref[0];
+  }
+
+  /** Data no começo da linha (dd/mm/aaaa, dd/mm/aa, dd/mm, dd MMM[ aaaa], aaaa-mm-dd): { day, month, year|null, rest } ou null. */
+  function invoiceLeadingDate_(line) {
+    var s = line.replace(/^[•·▪\-\s]+/, ''), m;
+    if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})\b\s*(.*)$/))) return { day: +m[3], month: +m[2], year: +m[1], rest: m[4] };
+    if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\b\s*(.*)$/))) return { day: +m[1], month: +m[2], year: +m[3], rest: m[4] };
+    if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})\b\s*(.*)$/))) return { day: +m[1], month: +m[2], year: 2000 + (+m[3]), rest: m[4] };
+    if ((m = s.match(/^(\d{1,2})\s+(?:de\s+)?(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[a-zç]*\.?(?:\s+(?:de\s+)?(\d{4}))?\b\s*(.*)$/i)) && +m[1] >= 1 && +m[1] <= 31) {
+      return { day: +m[1], month: INVOICE_MONTHS_ABBR_[m[2].toLowerCase()], year: m[3] ? +m[3] : null, rest: m[4] };
+    }
+    if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\b(?!\/)\s*(.*)$/)) && +m[1] >= 1 && +m[1] <= 31 && +m[2] >= 1 && +m[2] <= 12) {
+      return { day: +m[1], month: +m[2], year: null, rest: m[3] };
+    }
+    return null;
+  }
+
+  /** Primeira data completa (dd/mm/aaaa ou "17 JAN 2023") depois de um rótulo (regex), no texto inteiro. */
+  function invoiceDateAfter_(text, labelRe) {
+    var m = text.match(new RegExp('(?:' + labelRe.source + ')[^\\d\\n]{0,40}(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})', 'i'));
+    if (m) return invoiceYmd_(+m[3], +m[2], +m[1]);
+    m = text.match(new RegExp('(?:' + labelRe.source + ')[^\\d\\n]{0,40}(\\d{1,2})\\s+(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[a-zç]*\\.?\\s+(?:de\\s+)?(\\d{4})', 'i'));
+    return m ? invoiceYmd_(+m[3], INVOICE_MONTHS_ABBR_[m[2].toLowerCase()], +m[1]) : null;
+  }
+
+  function invoiceMonthLabel_(billMonth) {
+    if (!billMonth) return '';
+    var p = billMonth.split('-');
+    return MONTH_NAMES_PT[Number(p[1]) - 1].slice(0, 3) + '/' + p[0];
+  }
+
+  /** Nome do emissor pelo texto do PDF (null = desconhecido). */
+  function detectInvoiceIssuer_(text) {
+    var t = invoiceNorm_(text);
+    var known = [['nubank', /nu pagamentos|nubank/], ['RecargaPay', /recargapay/], ['Itaú', /itau unibanco|banco itau/], ['Bradesco', /bradesco/],
+      ['Santander', /santander/], ['C6 Bank', /c6 bank|c6bank/], ['Inter', /banco inter|bancointer/], ['Mercado Pago', /mercado pago|mercadopago/],
+      ['XP', /\bxp (investimentos|inc)|cartao xp/], ['Banco do Brasil', /banco do brasil/], ['Caixa', /caixa economica/]];
+    for (var i = 0; i < known.length; i++) if (known[i][1].test(t)) return known[i][0] === 'nubank' ? 'Nubank' : known[i][0];
+    return null;
+  }
+
+  /**
+   * Leitor específico da fatura do Nubank (PDF). Linhas "DD MMM  descrição  valor" dentro de "TRANSAÇÕES DE DD MMM A DD MMM";
+   * parcelas vêm como "Loja - 2/3"; o pagamento da fatura anterior aparece com valor positivo ("Pagamento em 19 DEZ").
+   * Linhas de conversão cambial ("BRL 52,49 = USD 9,91") são só informação e ficam de fora.
+   */
+  function parseNubankInvoice_(lines) {
+    var text = lines.join('\n');
+    var due = null, closing = null, m;
+    if ((m = text.match(/(?:vencimento|FATURA)\s*:?\s*(\d{1,2})\s+(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)\s+(\d{4})/i))) {
+      due = invoiceYmd_(+m[3], INVOICE_MONTHS_ABBR_[m[2].toLowerCase()], +m[1]);
+    }
+    var periodRe = /TRANSA[CÇ][OÕ]ES\s+DE\s+(\d{1,2})\s+([A-Z]{3})\s+A\s+(\d{1,2})\s+([A-Z]{3})/i;
+    var pm = text.match(periodRe);
+    if (pm && due) {
+      var cDay = +pm[3], cMonth = INVOICE_MONTHS_ABBR_[pm[4].toLowerCase()];
+      closing = invoiceYmd_(invoiceResolveYear_(cDay, cMonth, due), cMonth, cDay);
+    }
+    var ref = closing || due || todayYmd();
+    var items = [];
+    var dateLine = /^(\d{1,2})\s+(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)\b\s*(.*)$/;
+    var inTx = false;
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (/^TRANSA[CÇ][OÕ]ES\s+DE\b/i.test(line)) { inTx = true; continue; }
+      if (!inTx) continue;
+      var dm = line.match(dateLine);
+      if (!dm) continue;
+      var rest = dm[3];
+      var tail = invoiceTailAmount_(rest);
+      // valor que o PDF jogou pra linha de baixo (descrição quebrada)
+      if (!tail && i + 1 < lines.length && !dateLine.test(lines[i + 1])) {
+        var nextTail = invoiceTailAmount_(lines[i + 1]);
+        if (nextTail && !/^(BRL|USD)\b/i.test(lines[i + 1])) { tail = { amount: nextTail.amount, sign: nextTail.sign, head: (rest + ' ' + nextTail.head).trim() }; i++; }
+      }
+      if (!tail) continue;
+      var day = +dm[1], month = INVOICE_MONTHS_ABBR_[dm[2].toLowerCase()];
+      var inst = splitInvoiceInstallment_(tail.head.replace(/^R\$\s*/, ''));
+      var kind = 'expense';
+      if (isInvoicePaymentText_(inst.name)) kind = 'payment';
+      else if (tail.sign === '-' || isInvoiceCreditText_(inst.name)) kind = 'income';
+      items.push({
+        date: invoiceYmd_(invoiceResolveYear_(day, month, ref), month, day),
+        description: inst.name, amount: tail.amount, installmentSeq: inst.seq, installmentTotal: inst.total, kind: kind
+      });
+    }
+    var total = null;
+    if ((m = text.match(/no valor de\s*R\$\s*([\d.]+,\d{2})/i)) || (m = text.match(/Total a pagar\s*(?:\n|\s)*R\$\s*([\d.]+,\d{2})/i))) total = invoiceNum_(m[1]);
+    var billMonth = closing ? closing.slice(0, 7) : (due ? due.slice(0, 7) : '');
+    return {
+      parser: 'nubank', issuer: 'Nubank', billMonth: billMonth, periodStart: null, periodEnd: closing, dueDate: due, total: total, items: items
+    };
+  }
+
+  /**
+   * Leitor universal: serve para qualquer fatura em PDF cujas linhas tenham "data ... valor". Reconhece data no começo da
+   * linha (dd/mm/aaaa, dd/mm, dd MMM...), valor no fim, parcela em "(3/8)" / "- 3/10" / "Parcela 3 de 10", pagamento da fatura
+   * e estorno pelo texto, e herda a data da linha de cima quando a data só aparece na primeira compra do dia (RecargaPay).
+   * O sinal "−" pode significar compra (RecargaPay) ou crédito (a maioria): vale o sinal que aparece na MAIORIA das linhas.
+   * Para antes de "Total da fatura"/"Próxima fatura" e só volta a ler ao achar um novo título de seção.
+   */
+  function parseGenericInvoice_(lines) {
+    var text = lines.join('\n');
+    var period = text.match(/\bDe\s+(\d{1,2})\/(\d{1,2})\/(\d{4})\s+at[eé]\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i);
+    var periodStart = period ? invoiceYmd_(+period[3], +period[2], +period[1]) : null;
+    var closing = period ? invoiceYmd_(+period[6], +period[5], +period[4]) : invoiceDateAfter_(lines.filter(function (l) { return !/pr[oó]xima/i.test(l); }).join('\n'), /(?:fechamento|fecha em|data de fechamento)/);
+    var due = invoiceDateAfter_(text, /data de vencimento|vencimento/);
+    if (!due) {
+      for (var d = 0; d < lines.length - 1; d++) {
+        if (/data de vencimento/i.test(lines[d])) { var dd = lines[d + 1].match(/(\d{2})\/(\d{2})\/(\d{4})\s*$/); if (dd) { due = invoiceYmd_(+dd[3], +dd[2], +dd[1]); break; } }
+      }
+    }
+    var due2 = due;
+    if (!closing && due2) {
+      var pm = text.match(/TRANSA[CÇ][OÕ]ES\s+DE\s+(\d{1,2})\s+(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)\w*\s+A\s+(\d{1,2})\s+(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)/i)
+        || text.match(/(?:DE|per[ií]odo(?:\s+de)?)\s+(\d{1,2})\s+(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)\w*\s+(?:A|AT[EÉ])\s+(\d{1,2})\s+(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)/i);
+      if (pm) {
+        var cm = INVOICE_MONTHS_ABBR_[pm[4].toLowerCase()];
+        closing = invoiceYmd_(invoiceResolveYear_(+pm[3], cm, due2), cm, +pm[3]);
+      }
+    }
+    var ref = closing || due || todayYmd();
+
+    var SECTION_RE = /^(transa[cç][oõ]es|lan[cç]amentos|outros lan[cç]amentos|compras|movimenta[cç][oõ]es|cart[aã]o\s+\S+\s+de\s+\d|despesas|detalhamento|hist[oó]rico)/i;
+    var SOFT_STOP_RE = /^(total da fatura|total a pagar|valor total da fatura|encargos|resumo da fatura|total desta fatura|saldo (anterior|desta))/i;
+    var HARD_STOP_RE = /^(pr[oó]xima fatura|simula[cç][aã]o|total de compras parceladas|compras parceladas (futuras|a vencer)|pr[oó]ximos vencimentos)/i;
+    var HEADER_NOISE_RE = /^(data\s+(da\s+)?(transa[cç][aã]o|compra|lan[cç]amento)|data\s+descri[cç][aã]o|valor\s*$|descri[cç][aã]o|estabelecimento)/i;
+
+    var raw = [], lastDate = null, active = false, hardStopped = false;
+    for (var i = 0; i < lines.length && !hardStopped; i++) {
+      var line = lines[i].trim();
+      if (!line) continue;
+      var norm = invoiceNorm_(line);
+      if (HARD_STOP_RE.test(norm)) { if (raw.length) hardStopped = true; active = false; continue; }
+      if (SOFT_STOP_RE.test(norm)) { if (raw.length) { active = false; lastDate = null; } continue; }
+      if (SECTION_RE.test(norm) && !invoiceLeadingDate_(line)) { active = true; lastDate = null; continue; }
+      if (HEADER_NOISE_RE.test(norm)) { if (/^data\b/.test(norm)) active = active || false; continue; }
+
+      // linhas de conversão cambial ("BRL 52,49 = USD 9,91", "Conversão: ...") são só informação
+      if (/^(brl|usd|eur|gbp|convers[aã]o)\b/.test(norm) && !invoiceLeadingDate_(line)) continue;
+      var lead = invoiceLeadingDate_(line);
+      var body = line, date = null;
+      if (lead) {
+        date = lead; body = lead.rest;
+        lastDate = lead;
+        if (!raw.length && !active) {
+          // linha com data e valor antes de qualquer título de seção: já é lançamento
+          active = !!invoiceTailAmount_(body);
+        }
+      } else if (!active || !lastDate) {
+        continue;
+      } else {
+        date = lastDate;
+      }
+      if (!active) continue;
+      var tail = invoiceTailAmount_(body);
+      // descrição quebrada: junta a linha seguinte enquanto não houver valor nem data nova
+      var extra = 0;
+      while (!tail && body && extra < 2 && i + 1 < lines.length && !invoiceLeadingDate_(lines[i + 1]) && !SOFT_STOP_RE.test(invoiceNorm_(lines[i + 1])) && !HARD_STOP_RE.test(invoiceNorm_(lines[i + 1])) && !SECTION_RE.test(invoiceNorm_(lines[i + 1]))) {
+        i++; extra++; body = body + ' ' + lines[i].trim(); tail = invoiceTailAmount_(body);
+      }
+      if (!tail || !tail.head) continue;
+      if (/^(total|saldo (anterior|desta|total|restante|da fatura|em aberto|devedor)|limite|pagamento minimo|subtotal)\b/.test(invoiceNorm_(tail.head))) continue;
+      raw.push({ lead: date, head: tail.head.replace(/^R\$\s*/, ''), amount: tail.amount, sign: tail.sign });
+    }
+
+    // convenção de sinal do documento: o sinal mais frequente é o das compras
+    var minus = raw.filter(function (r) { return r.sign === '-'; }).length;
+    var plus = raw.filter(function (r) { return r.sign === '+'; }).length;
+    var minusIsCharge = minus > 0 && minus >= raw.length / 2 && minus > plus;
+
+    var items = raw.map(function (r) {
+      var inst = splitInvoiceInstallment_(r.head);
+      var kind = 'expense';
+      if (isInvoicePaymentText_(inst.name)) kind = 'payment';
+      else if (isInvoiceCreditText_(inst.name)) kind = 'income';
+      else if (r.sign === '+' && minusIsCharge) kind = 'income';
+      else if (r.sign === '-' && !minusIsCharge) kind = 'income';
+      var year = r.lead.year || invoiceResolveYear_(r.lead.day, r.lead.month, ref);
+      return { date: invoiceYmd_(year, r.lead.month, r.lead.day), description: inst.name, amount: r.amount, installmentSeq: inst.seq, installmentTotal: inst.total, kind: kind };
+    });
+
+    var total = null, tm;
+    for (var t = 0; t < lines.length && total === null; t++) {
+      tm = lines[t].match(/^total da fatura\s+R\$\s*([\d.]+,\d{2})\s*$/i) || lines[t].match(/^total a pagar\s+R\$\s*([\d.]+,\d{2})\s*$/i);
+      if (tm) total = invoiceNum_(tm[1]);
+    }
+    if (total === null) {
+      for (var h = 0; h < lines.length - 1 && total === null; h++) {
+        if (/^total da fatura\b/i.test(lines[h]) && /pagamento m[ií]nimo/i.test(lines[h])) {
+          var first = lines[h + 1].match(/R\$\s*([\d.]+,\d{2})/);
+          if (first) total = invoiceNum_(first[1]);
+        }
+      }
+    }
+    var billMonth = closing ? closing.slice(0, 7) : '';
+    if (!billMonth && items.length) {
+      billMonth = items.map(function (i) { return i.date; }).sort().pop().slice(0, 7);
+    }
+    return { parser: 'generic', issuer: detectInvoiceIssuer_(text), billMonth: billMonth, periodStart: periodStart, periodEnd: closing, dueDate: due, total: total, items: items };
+  }
+
+  /** Escolhe o leitor pelo texto (Nubank tem leitor próprio; qualquer outro emissor usa o universal). */
+  function parseInvoiceLines_(lines) {
+    var issuer = detectInvoiceIssuer_(lines.join('\n'));
+    var result = issuer === 'Nubank' && lines.some(function (l) { return /^TRANSA[CÇ][OÕ]ES\s+DE\b/i.test(l); })
+      ? parseNubankInvoice_(lines) : parseGenericInvoice_(lines);
+    if (result.items.length === 0 && result.parser !== 'generic') result = parseGenericInvoice_(lines);
+    result.issuer = result.issuer || issuer;
+    result.cancelledPairs = 0;
+    if (result.parser === 'generic') { var cp = invoiceCancelPairs_(result.items); result.items = cp.items; result.cancelledPairs = cp.cancelled; }
+    return result;
+  }
+
+  /**
+   * Soma conferível: compras − créditos (o pagamento da fatura anterior não entra) contra o "total da fatura". Dá pra
+   * não bater sem estar errado (juros/IOF de fatura anterior em aberto, saldo financiado); por isso é só um aviso.
+   */
+  function invoiceSum_(items) {
+    var sum = 0;
+    items.forEach(function (i) { if (i.kind === 'expense') sum += i.amount; else if (i.kind === 'income') sum -= i.amount; });
+    return Math.round(sum * 100) / 100;
+  }
+
+  /**
+   * Compara a soma dos itens com o "total da fatura". Retorna { ok, note }. Aceita também a soma menos algum dos pagamentos
+   * listados (a RecargaPay abate no total um pagamento feito depois do vencimento anterior, e ele aparece nos lançamentos).
+   */
+  function invoiceTotalCheck_(result) {
+    if (result.total === null || result.total === undefined) return { ok: null, note: 'O total da fatura não foi encontrado no documento: confira os valores.' };
+    var sum = invoiceSum_(result.items), eq = function (a, b) { return Math.abs(a - b) < 0.015; };
+    if (eq(sum, result.total)) return { ok: true, note: 'A soma dos lançamentos bate com o total da fatura (' + fmtMoney(result.total) + ').' };
+    var pays = result.items.filter(function (i) { return i.kind === 'payment'; }).map(function (i) { return i.amount; }).slice(0, 6);
+    for (var mask = 1; mask < (1 << pays.length); mask++) {
+      var s = sum;
+      for (var b = 0; b < pays.length; b++) if (mask & (1 << b)) s -= pays[b];
+      if (eq(s, result.total)) return { ok: true, note: 'A soma bate com o total da fatura (' + fmtMoney(result.total) + ') descontando pagamento(s) já abatido(s) nele.' };
+    }
+    return { ok: false, note: 'A soma dos lançamentos (' + fmtMoney(sum) + ') difere do total da fatura (' + fmtMoney(result.total) + '): pode faltar ou sobrar algum item. Confira antes de aceitar.' };
+  }
+
+  // ---------- Tabelas (CSV / XLSX): o mesmo resultado { meta, items } do leitor de PDF ----------
+
+  /** Texto CSV -> matriz de células. Detecta o separador (vírgula, ponto e vírgula ou tab) e respeita aspas (inclusive quebra de linha dentro). */
+  function invoiceParseCsvText_(text) {
+    var src = String(text || '').replace(/^﻿/, '');
+    var sample = src.split(/\r?\n/).slice(0, 12).join('\n'), best = ',', bestCount = -1;
+    [',', ';', '\t'].forEach(function (d) {
+      var n = 0, q = false;
+      for (var i = 0; i < sample.length; i++) { var c = sample[i]; if (c === '"') q = !q; else if (!q && c === d) n++; }
+      if (n > bestCount) { best = d; bestCount = n; }
+    });
+    var rows = [], row = [], cur = '', quoted = false;
+    for (var k = 0; k < src.length; k++) {
+      var ch = src[k];
+      if (quoted) {
+        if (ch === '"') { if (src[k + 1] === '"') { cur += '"'; k++; } else quoted = false; } else cur += ch;
+      } else if (ch === '"') quoted = true;
+      else if (ch === best) { row.push(cur); cur = ''; }
+      else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && src[k + 1] === '\n') k++;
+        row.push(cur); cur = '';
+        if (row.some(function (c) { return String(c).trim(); })) rows.push(row);
+        row = [];
+      } else cur += ch;
+    }
+    row.push(cur);
+    if (row.some(function (c) { return String(c).trim(); })) rows.push(row);
+    return rows;
+  }
+
+  /** Data de uma célula: ISO, dd/mm/aaaa, dd/mm/aa, serial do Excel ou Date -> 'YYYY-MM-DD' (null se não for data). */
+  function invoiceCellDate_(cell) {
+    if (cell === null || cell === undefined || cell === '') return null;
+    if (cell instanceof Date) return isNaN(cell.getTime()) ? null : invoiceYmd_(cell.getFullYear(), cell.getMonth() + 1, cell.getDate());
+    if (typeof cell === 'number') {
+      if (cell < 20000 || cell > 80000) return null;
+      var d = new Date(Math.round((cell - 25569) * 86400000));
+      return invoiceYmd_(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+    }
+    var s = String(cell).trim(), m;
+    if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/))) return invoiceYmd_(+m[1], +m[2], +m[3]);
+    if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s.*)?$/))) return invoiceYmd_(+m[3], +m[2], +m[1]);
+    if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})(?:\s.*)?$/))) return invoiceYmd_(2000 + (+m[3]), +m[2], +m[1]);
+    if ((m = s.match(/^(\d{1,2})[\s\-]+(?:de\s+)?(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[a-zç]*\.?[\s\-]+(?:de\s+)?(\d{4})$/i))) return invoiceYmd_(+m[3], INVOICE_MONTHS_ABBR_[m[2].toLowerCase()], +m[1]);
+    return null;
+  }
+
+  /** Valor de uma célula: número, "R$ 1.234,56", "-12,30", "(12,30)", "12,30 CR", "1234.56" -> número com sinal (null se não for valor). */
+  function invoiceCellAmount_(cell) {
+    if (typeof cell === 'number') return isNaN(cell) ? null : cell;
+    if (cell === null || cell === undefined) return null;
+    var s = String(cell).trim();
+    if (!s) return null;
+    var neg = /^\(.*\)$/.test(s) || /^[-−–]/.test(s) || /[-−–]\s*$/.test(s);
+    var credit = /\bCR\s*$/i.test(s);
+    s = s.replace(/R\$|\s|CR|DB|[()−–]/gi, '').replace(/^\+/, '');
+    s = s.replace(/^-+|-+$/g, '');
+    if (!/^\d[\d.,]*$/.test(s)) return null;
+    var v;
+    if (s.indexOf(',') !== -1) v = Number(s.replace(/\./g, '').replace(',', '.'));
+    else if (/^\d{1,3}(\.\d{3})+$/.test(s)) v = Number(s.replace(/\./g, ''));
+    else v = Number(s);
+    if (isNaN(v)) return null;
+    return (neg || credit) ? -v : v;
+  }
+
+  /**
+   * Matriz (CSV/XLSX) -> resultado da fatura, ou null se não achar colunas de data e valor. Acha a linha de cabeçalho pelos nomes
+   * (data/date, descrição/title/estabelecimento/histórico, valor/amount, categoria, tipo, parcela, ou colunas separadas de
+   * débito/crédito); sem cabeçalho, deduz as colunas pelo conteúdo. Convenção de sinal: se a maioria dos valores é negativa, o
+   * "−" é compra; senão o "−" é crédito/pagamento (o caso do CSV do Nubank).
+   */
+  function parseInvoiceTable_(rows, fileName) {
+    rows = (rows || []).filter(function (r) { return r && r.some(function (c) { return String(c === null || c === undefined ? '' : c).trim(); }); });
+    var hdrIdx = -1, cols = null, i, j;
+    function headerCols(r) {
+      var c = { date: -1, desc: -1, amount: -1, debit: -1, credit: -1, type: -1, cat: -1, inst: -1 };
+      r.forEach(function (cell, k) {
+        var h = invoiceNorm_(String(cell === null || cell === undefined ? '' : cell)).trim();
+        if (!h) return;
+        if (c.date < 0 && /^(data|date|dt)\b|data (da )?(compra|transacao|lancamento|movimentacao)/.test(h) && !/venc/.test(h)) c.date = k;
+        else if (c.desc < 0 && /descri|title|titulo|estabelecimento|historico|lancamento|merchant|nome|detalhe|^compra$/.test(h) && !/data/.test(h)) c.desc = k;
+        else if (c.debit < 0 && /^(debito|saida)/.test(h)) c.debit = k;
+        else if (c.credit < 0 && /^(credito|entrada)/.test(h)) c.credit = k;
+        else if (c.amount < 0 && /^(valor|amount|value|montante|total)\b|valor \(r\$\)|^r\$$/.test(h)) c.amount = k;
+        else if (c.type < 0 && /^(tipo|type)\b/.test(h)) c.type = k;
+        else if (c.cat < 0 && /categoria|category/.test(h)) c.cat = k;
+        else if (c.inst < 0 && /parcela|installment/.test(h)) c.inst = k;
+      });
+      return c;
+    }
+    for (i = 0; i < Math.min(rows.length, 20); i++) {
+      var c = headerCols(rows[i]);
+      if (c.date >= 0 && (c.amount >= 0 || c.debit >= 0 || c.credit >= 0)) { hdrIdx = i; cols = c; break; }
+    }
+    var body;
+    if (cols) {
+      body = rows.slice(hdrIdx + 1);
+      if (cols.desc < 0) {
+        for (j = 0; j < (rows[hdrIdx] || []).length && cols.desc < 0; j++) {
+          if ([cols.date, cols.amount, cols.debit, cols.credit, cols.type, cols.cat, cols.inst].indexOf(j) === -1) cols.desc = j;
+        }
+      }
+    } else {
+      // sem cabeçalho: coluna de data = a que mais tem data; valor = a que mais tem número; descrição = texto mais longo
+      body = rows;
+      var width = rows.reduce(function (m, r) { return Math.max(m, r.length); }, 0), score = [];
+      for (j = 0; j < width; j++) {
+        var nd = 0, na = 0, len = 0;
+        body.forEach(function (r) { if (invoiceCellDate_(r[j])) nd++; else if (invoiceCellAmount_(r[j]) !== null) na++; len += String(r[j] || '').length; });
+        score.push({ nd: nd, na: na, len: len });
+      }
+      cols = { date: -1, desc: -1, amount: -1, debit: -1, credit: -1, type: -1, cat: -1, inst: -1 };
+      var bd = 0, ba = 0, bl = 0;
+      score.forEach(function (s, k) { if (s.nd > bd) { bd = s.nd; cols.date = k; } });
+      score.forEach(function (s, k) { if (k !== cols.date && s.na > ba) { ba = s.na; cols.amount = k; } });
+      score.forEach(function (s, k) { if (k !== cols.date && k !== cols.amount && s.len > bl) { bl = s.len; cols.desc = k; } });
+      if (cols.date < 0 || cols.amount < 0 || cols.desc < 0 || bd < Math.max(2, body.length / 2)) return null;
+    }
+    var raw = [];
+    body.forEach(function (r) {
+      var date = invoiceCellDate_(r[cols.date]);
+      if (!date) return;
+      var desc = String(r[cols.desc] === null || r[cols.desc] === undefined ? '' : r[cols.desc]).replace(/\s+/g, ' ').trim();
+      if (!desc) return;
+      var amt = null;
+      if (cols.amount >= 0) amt = invoiceCellAmount_(r[cols.amount]);
+      else {
+        var deb = cols.debit >= 0 ? invoiceCellAmount_(r[cols.debit]) : null, cre = cols.credit >= 0 ? invoiceCellAmount_(r[cols.credit]) : null;
+        if (deb) amt = Math.abs(deb); else if (cre) amt = -Math.abs(cre);
+      }
+      if (amt === null || amt === 0) return;
+      if (/^(total|saldo (anterior|desta|total|restante|da fatura)|subtotal)\b/.test(invoiceNorm_(desc))) return;
+      raw.push({ date: date, desc: desc, amt: amt, type: cols.type >= 0 ? invoiceNorm_(String(r[cols.type] || '')) : '', cat: cols.cat >= 0 ? String(r[cols.cat] || '').trim().toLowerCase() : '', inst: cols.inst >= 0 ? String(r[cols.inst] || '').trim() : (cols.type >= 0 ? String(r[cols.type] || '') : '') });
+    });
+    if (!raw.length) return null;
+    var negatives = raw.filter(function (r) { return r.amt < 0; }).length;
+    var minusIsCharge = negatives > raw.length / 2;
+    var items = raw.map(function (r) {
+      var d = r.desc;
+      if (r.inst && !/\d\s*\/\s*\d/.test(d)) { var im = r.inst.match(/(\d{1,2})\s*(?:\/|de)\s*(\d{1,2})/i); if (im) d += ' - ' + im[1] + '/' + im[2]; }
+      var inst = splitInvoiceInstallment_(d.replace(/\s*-\s*Parcela\s+(\d+\/\d+)$/i, ' - $1'));
+      var isCharge = minusIsCharge ? r.amt < 0 : r.amt > 0;
+      var kind = 'expense';
+      if (isInvoicePaymentText_(inst.name) || r.cat === 'payment' || /^pagamento/.test(r.type)) kind = 'payment';
+      else if (!isCharge || isInvoiceCreditText_(inst.name) || /^(estorno|credito)/.test(r.type)) kind = 'income';
+      return { date: r.date, description: inst.name, amount: Math.abs(r.amt), installmentSeq: inst.seq, installmentTotal: inst.total, kind: kind };
+    });
+    var fm = String(fileName || '').match(/(\d{4})[-_](\d{2})/);
+    var billMonth = fm && +fm[2] >= 1 && +fm[2] <= 12 ? fm[1] + '-' + fm[2] : '';
+    if (!billMonth) billMonth = items.map(function (it) { return it.date; }).sort().pop().slice(0, 7);
+    var result = { parser: 'table', issuer: detectInvoiceIssuer_(String(fileName || '')) , billMonth: billMonth, periodStart: null, periodEnd: null, dueDate: null, total: null, items: items };
+    var cp = invoiceCancelPairs_(items);
+    result.items = cp.items; result.cancelledPairs = cp.cancelled;
+    return result;
+  }
+
+  /** Compra e "cancelamento" do mesmo valor no mesmo dia (RecargaPay: "Purchase Cancellation - ...") se anulam: sai o par. */
+  function invoiceCancelPairs_(items) {
+    var out = items.slice(), cancelled = 0;
+    items.forEach(function (it) {
+      if (it.kind !== 'income' || !/cancellation|cancelamento/i.test(it.description)) return;
+      var k = -1;
+      for (var j = 0; j < out.length; j++) {
+        if (out[j].kind === 'expense' && out[j].date === it.date && Math.abs(out[j].amount - it.amount) < 0.005) { k = j; break; }
+      }
+      var ci = out.indexOf(it);
+      if (k >= 0 && ci >= 0) { out.splice(Math.max(k, ci), 1); out.splice(Math.min(k, ci), 1); cancelled++; }
+    });
+    return { items: out, cancelled: cancelled };
+  }
+  // </invoice-parsers>
+
+  // ---------- Subir fatura: leitura do arquivo (PDF / CSV / XLSX) ----------
+  var INVOICE_PDFJS_URL_ = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  var INVOICE_PDFJS_WORKER_URL_ = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  var INVOICE_SHEETJS_URL_ = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  var invoiceScriptPromises_ = {};
+
+  /** Carrega uma biblioteca externa só na primeira vez que alguém sobe um documento (o app não paga esse peso no uso normal). */
+  function invoiceLoadScript_(url) {
+    if (!invoiceScriptPromises_[url]) {
+      invoiceScriptPromises_[url] = new Promise(function (resolve, reject) {
+        var s = document.createElement('script');
+        s.src = url;
+        s.onload = resolve;
+        s.onerror = function () { delete invoiceScriptPromises_[url]; reject(new Error('Não consegui carregar o leitor de documentos. Confira a conexão e tente de novo.')); };
+        document.head.appendChild(s);
+      });
+    }
+    return invoiceScriptPromises_[url];
+  }
+
+  function invoiceReadBuffer_(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () { resolve(reader.result); };
+      reader.onerror = function () { reject(new Error('Não consegui abrir o arquivo.')); };
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  /** PDF -> linhas de texto. Senha errada/ausente rejeita com err.needPassword (e err.wrongPassword). */
+  function invoiceReadPdfLines_(buffer, password) {
+    return invoiceLoadScript_(INVOICE_PDFJS_URL_).then(function () {
+      var lib = window.pdfjsLib;
+      if (!lib) throw new Error('Leitor de PDF indisponível.');
+      lib.GlobalWorkerOptions.workerSrc = INVOICE_PDFJS_WORKER_URL_;
+      var task = lib.getDocument({ data: new Uint8Array(buffer), password: password || undefined });
+      return task.promise.then(function (doc) {
+        var pages = [], chain = Promise.resolve();
+        for (var p = 1; p <= doc.numPages; p++) {
+          (function (n) {
+            chain = chain.then(function () { return doc.getPage(n); }).then(function (page) { return page.getTextContent(); }).then(function (tc) {
+              pages.push(invoiceLinesFromPdfItems_(tc.items.filter(function (i) { return i.str !== undefined; }).map(function (i) {
+                return { str: i.str, x: i.transform[4], y: i.transform[5], w: i.width };
+              })));
+            });
+          })(p);
+        }
+        return chain.then(function () { return [].concat.apply([], pages); });
+      });
+    }, function (err) { throw err; }).catch(function (err) {
+      if (err && err.name === 'PasswordException') {
+        var e = new Error(err.code === 2 ? 'Senha incorreta.' : 'Este PDF tem senha.');
+        e.needPassword = true; e.wrongPassword = err.code === 2;
+        throw e;
+      }
+      throw err;
+    });
+  }
+
+  function invoiceDecodeText_(buffer) {
+    try { return new TextDecoder('utf-8', { fatal: true }).decode(buffer); }
+    catch (e) { return new TextDecoder('windows-1252').decode(buffer); }
+  }
+
+  /** Lê o arquivo e devolve { result, sourceType } (result: ver parseInvoiceLines_/parseInvoiceTable_); lança erro legível se não entender. */
+  function invoiceReadFile_(file, password) {
+    var name = String(file.name || ''), ext = (name.match(/\.([a-z0-9]+)$/i) || [])[1];
+    ext = (ext || '').toLowerCase();
+    return invoiceReadBuffer_(file).then(function (buffer) {
+      var parsed;
+      if (ext === 'pdf' || (!ext && file.type === 'application/pdf')) {
+        return invoiceReadPdfLines_(buffer, password).then(function (lines) {
+          if (!lines.length) throw new Error('Esse PDF não tem texto selecionável (parece uma imagem escaneada). Use o PDF baixado do app do banco, ou o CSV/XLSX.');
+          return { result: parseInvoiceLines_(lines), sourceType: 'pdf' };
+        });
+      }
+      if (ext === 'csv' || ext === 'txt' || file.type === 'text/csv') {
+        parsed = parseInvoiceTable_(invoiceParseCsvText_(invoiceDecodeText_(buffer)), name);
+        return { result: parsed, sourceType: 'csv' };
+      }
+      if (ext === 'xlsx' || ext === 'xls' || ext === 'xlsm') {
+        return invoiceLoadScript_(INVOICE_SHEETJS_URL_).then(function () {
+          var wb = window.XLSX.read(buffer, { type: 'array' }), found = null;
+          wb.SheetNames.forEach(function (sn) {
+            if (found) return;
+            var rows = window.XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, raw: true, defval: '' });
+            found = parseInvoiceTable_(rows, name);
+          });
+          return { result: found, sourceType: 'xlsx' };
+        });
+      }
+      throw new Error('Formato não suportado. Suba um PDF, CSV ou XLSX.');
+    }).then(function (r) {
+      if (!r.result || !r.result.items.length) throw new Error('Não encontrei lançamentos nesse documento. Se for um layout novo, me mande um exemplo pra eu ensinar o leitor.');
+      return r;
+    });
+  }
+
+  // ---------- Subir fatura: comparação com os lançamentos existentes ----------
+  function invoiceNameKey_(text) { return invoiceNorm_(text).replace(/[^a-z0-9]/g, ''); }
+  function invoiceNamesAlike_(tx, item) {
+    var a = invoiceNameKey_(item.description);
+    if (a.length < 4) return false;
+    return [tx.counterparty, tx.description].some(function (s) {
+      var b = invoiceNameKey_(s);
+      return b.length >= 4 && (b.indexOf(a.slice(0, 6)) !== -1 || a.indexOf(b.slice(0, 6)) !== -1);
+    });
+  }
+  function invoiceDayDiff_(a, b) {
+    var pa = a.split('-'), pb = b.split('-');
+    return Math.abs(Math.round((Date.UTC(+pa[0], +pa[1] - 1, +pa[2]) - Date.UTC(+pb[0], +pb[1] - 1, +pb[2])) / 86400000));
+  }
+
+  /**
+   * Compara os itens ainda pendentes de um documento com os lançamentos da MESMA conta, um a um (cada lançamento só "cobre" um item:
+   * duas compras iguais no mesmo dia precisam de dois lançamentos). Devolve { itemId: { level: 'exact' | 'maybe', tx } }.
+   * exact = mesma data e valor (parcela: mesma parcela da mesma compra); maybe = mesmo valor com até 4 dias de diferença.
+   * Lançamentos que nasceram de itens aceitos DESTE documento ficam de fora (senão uma compra repetida "se cobriria" com a irmã
+   * que acabou de aceitar); os de outros documentos contam como lançamentos existentes.
+   */
+  function invoiceMatches_(inv, items) {
+    var linked = {};
+    invoiceUi_.items.forEach(function (it) { if (it.transactionId && it.invoiceId === inv.id) linked[it.transactionId] = true; });
+    var pool = (STATE.allTransactions || []).filter(function (t) {
+      return t.accountId === inv.accountId && (t.kind === 'expense' || t.kind === 'income') && !t.transferGroupId && !linked[t.id];
+    });
+    var used = {}, out = {};
+    var pending = items.filter(function (it) { return it.status === 'pending'; });
+    pending.forEach(function (it) {
+      var tx = pool.filter(function (t) {
+        if (used[t.id] || t.kind !== it.kind) return false;
+        if (it.installmentSeq && it.installmentTotal) {
+          return t.installmentSeq === it.installmentSeq && t.installmentTotal === it.installmentTotal &&
+            (t.purchaseDate === it.date || (invoiceNamesAlike_(t, it) && Math.abs(t.amount - it.amount) < 0.05));
+        }
+        return t.date === it.date && Math.abs(t.amount - it.amount) < 0.01;
+      })[0];
+      if (tx) { used[tx.id] = true; out[it.id] = { level: 'exact', tx: tx }; }
+    });
+    pending.forEach(function (it) {
+      if (out[it.id] || (it.installmentSeq && it.installmentTotal)) return;
+      var best = null;
+      pool.forEach(function (t) {
+        if (used[t.id] || t.kind !== it.kind || Math.abs(t.amount - it.amount) >= 0.01) return;
+        var d = invoiceDayDiff_(t.date, it.date);
+        if (d <= 4 && (!best || d < best.d)) best = { tx: t, d: d };
+      });
+      if (best) { used[best.tx.id] = true; out[it.id] = { level: 'maybe', tx: best.tx }; }
+    });
+    return out;
+  }
+
+  function invoiceSuggestedCategory_(item) {
+    var override = invoiceUi_.cat[item.id];
+    if (override !== undefined) return override || null;
+    return findCategoryIdForCounterpartyClient_(item.description) || findCategoryIdByKeywordClient_(item.description, item.kind) || null;
+  }
+
+  // ---------- Subir fatura: tela ----------
+  var invoiceUi_ = { loaded: false, invoices: [], items: [], view: 'list', openId: null, draft: null, cat: {}, busy: '', error: '' };
+
+  function openInvoiceModal() {
+    invoiceUi_.view = 'list'; invoiceUi_.openId = null; invoiceUi_.draft = null; invoiceUi_.busy = ''; invoiceUi_.error = '';
+    openModal('<div id="inv-body" class="inv"><h2>Subir fatura</h2><p class="inv-hint">Carregando…</p></div>');
+    wireInvoiceBody_();
+    run('listInvoices').then(function (data) {
+      invoiceUi_.loaded = true; invoiceUi_.invoices = data.invoices || []; invoiceUi_.items = data.items || [];
+      renderInvoiceBody_();
+    }).catch(function (err) { showToast(err.message, true); closeModal(); });
+  }
+
+  function invoiceById_(id) { return invoiceUi_.invoices.filter(function (i) { return i.id === id; })[0] || null; }
+  function invoiceAccountName_(id) {
+    var a = STATE.accounts.filter(function (x) { return x.id === id; })[0];
+    return a ? a.name : 'Sem conta';
+  }
+  function invoiceMonthText_(ym) { return ym ? invoiceMonthLabel_(ym) : 'sem mês'; }
+
+  function invoiceDocStats_(inv) {
+    var items = invoiceUi_.items.filter(function (i) { return i.invoiceId === inv.id; });
+    var matches = invoiceMatches_(inv, items);
+    var s = { total: items.length, accepted: 0, ignored: 0, exact: 0, maybe: 0, fresh: 0 };
+    items.forEach(function (it) {
+      if (it.status === 'accepted') s.accepted++;
+      else if (it.status === 'ignored') s.ignored++;
+      else if (matches[it.id] && matches[it.id].level === 'exact') s.exact++;
+      else if (matches[it.id]) s.maybe++;
+      else s.fresh++;
+    });
+    return { s: s, items: items, matches: matches };
+  }
+
+  function renderInvoiceBody_() {
+    var body = document.getElementById('inv-body');
+    if (!body) return;
+    body.innerHTML = invoiceUi_.view === 'doc' ? invoiceDocHtml_() : (invoiceUi_.view === 'preview' ? invoicePreviewHtml_() : invoiceListHtml_());
+    if (invoiceUi_.view === 'preview') wireInvoicePreview_();
+  }
+
+  function invoiceListHtml_() {
+    var docs = invoiceUi_.invoices.map(function (inv) {
+      var st = invoiceDocStats_(inv), s = st.s, done = s.accepted + s.ignored + s.exact;
+      var pct = s.total ? Math.round(done * 100 / s.total) : 100;
+      var bits = [];
+      if (s.fresh) bits.push('<b>' + s.fresh + '</b> por revisar');
+      if (s.maybe) bits.push(s.maybe + ' possível duplicata');
+      if (s.exact) bits.push(s.exact + ' já lançado' + (s.exact > 1 ? 's' : ''));
+      if (s.accepted) bits.push(s.accepted + ' aceito' + (s.accepted > 1 ? 's' : ''));
+      if (s.ignored) bits.push(s.ignored + ' ignorado' + (s.ignored > 1 ? 's' : ''));
+      return '<button type="button" class="inv-doc" data-inv-open="' + escapeHtml(inv.id) + '">' +
+        '<div class="inv-doc-title">' + escapeHtml((inv.issuer ? inv.issuer + ' · ' : '') + 'fatura ' + invoiceMonthText_(inv.billMonth)) + '</div>' +
+        '<div class="inv-doc-sub">' + escapeHtml(inv.fileName) + ' · ' + escapeHtml(invoiceAccountName_(inv.accountId)) + '</div>' +
+        '<div class="inv-doc-sub">' + (bits.join(' · ') || 'Tudo resolvido') + '</div>' +
+        '<div class="inv-bar"><i style="width:' + pct + '%"></i></div></button>';
+    }).join('');
+    return '<h2>Subir fatura</h2>' +
+      '<p class="inv-hint">Suba a fatura do cartão (PDF, CSV ou XLSX). Ela vira uma fila própria, comparada com os lançamentos que você já tem — nada entra no Extrato sem você aceitar.</p>' +
+      '<label class="inv-drop" id="inv-drop"><input type="file" id="inv-file" accept=".pdf,.csv,.xlsx,.xls,.txt,application/pdf,text/csv" hidden>' +
+        '<b>Escolher arquivo</b><span>PDF, CSV ou XLSX — ou arraste aqui</span></label>' +
+      (invoiceUi_.busy ? '<div class="inv-note">' + escapeHtml(invoiceUi_.busy) + '</div>' : '') +
+      (invoiceUi_.error ? '<div class="inv-note warn">' + escapeHtml(invoiceUi_.error) + '</div>' : '') +
+      (invoiceUi_.needPassword ? '<div class="field"><label>Senha do PDF</label><input id="inv-pass" type="password" autocomplete="off"><button type="button" id="inv-pass-go" style="margin-top:8px">Abrir com a senha</button></div>' : '') +
+      '<div class="inv-section-title">Documentos</div>' +
+      (docs || '<p class="inv-hint">Nenhum documento ainda.</p>');
+  }
+
+  // ----- conferir antes de criar a fila -----
+  function invoiceGuessAccount_(issuer) {
+    var cards = STATE.accounts.filter(function (a) { return a.type === 'credit_card' && !a.archived; });
+    var key = invoiceNameKey_(issuer);
+    var byName = key ? cards.filter(function (a) { return invoiceNameKey_(a.name).indexOf(key) !== -1; }) : [];
+    if (byName.length === 1) return byName[0].id;
+    if (cards.length === 1) return cards[0].id;
+    return '';
+  }
+
+  function invoicePreviewHtml_() {
+    var d = invoiceUi_.draft, r = d.result;
+    var charges = r.items.filter(function (i) { return i.kind === 'expense'; }), credits = r.items.filter(function (i) { return i.kind === 'income'; });
+    var payments = r.items.filter(function (i) { return i.kind === 'payment'; });
+    var check = invoiceTotalCheck_(r);
+    return '<h2>Conferir documento</h2>' +
+      '<div class="inv-summary"><b>' + escapeHtml(r.issuer || 'Fatura') + '</b> · ' + escapeHtml(d.fileName) + '<br>' +
+        (charges.length + credits.length) + ' lançamento' + (charges.length + credits.length === 1 ? '' : 's') + ' (' + charges.length + ' compra' + (charges.length === 1 ? '' : 's') +
+        (credits.length ? ', ' + credits.length + ' estorno' + (credits.length === 1 ? '' : 's') + '/crédito' + (credits.length === 1 ? '' : 's') : '') + ')' +
+        (payments.length ? ' · ' + payments.length + ' pagamento' + (payments.length === 1 ? '' : 's') + ' da fatura anterior (não entram)' : '') +
+        (r.cancelledPairs ? ' · ' + r.cancelledPairs + ' compra(s) cancelada(s) no mesmo dia já descontada(s)' : '') + '</div>' +
+      '<div class="inv-note ' + (check.ok === false ? 'warn' : (check.ok ? 'ok' : '')) + '">' + escapeHtml(check.note) + '</div>' +
+      '<div class="field"><label>Conta do cartão</label>' + appSelectHtml_('inv-acc', invoiceAccountOptions_(), d.accountId) + '</div>' +
+      '<div class="field"><label>Fatura</label>' + appSelectHtml_('inv-month', invoiceMonthOptions_(d.billMonth), d.billMonth) + '</div>' +
+      (invoiceUi_.error ? '<div class="inv-note warn">' + escapeHtml(invoiceUi_.error) + '</div>' : '') +
+      '<div class="btn-pair"><button type="button" class="secondary" id="inv-cancel">Cancelar</button><button type="button" id="inv-create">Criar fila</button></div>';
+  }
+
+  function invoiceMonthOptions_(selected) {
+    var start = new Date(new Date().getFullYear(), new Date().getMonth() + 2, 1), y = start.getFullYear(), m = start.getMonth() + 1, out = [];
+    for (var i = 0; i < 40; i++) {
+      var ym = y + '-' + String(m).padStart(2, '0');
+      out.push({ value: ym, label: invoiceMonthText_(ym) });
+      m--; if (m === 0) { m = 12; y--; }
+    }
+    if (selected && !out.some(function (o) { return o.value === selected; })) out.unshift({ value: selected, label: invoiceMonthText_(selected) });
+    if (!selected) out.unshift({ value: '', label: 'Escolher mês' });
+    return out;
+  }
+  function invoiceAccountOptions_() {
+    var accounts = STATE.accounts.filter(function (a) { return a.type !== 'investment' && !a.archived; })
+      .sort(function (x, y) { return (y.type === 'credit_card' ? 1 : 0) - (x.type === 'credit_card' ? 1 : 0); });
+    var out = accounts.map(function (a) { return { value: a.id, label: a.name }; });
+    return [{ value: '', label: 'Escolher conta' }].concat(out);
+  }
+
+  function wireInvoicePreview_() {
+    var d = invoiceUi_.draft;
+    document.getElementById('inv-acc').addEventListener('change', function (e) { d.accountId = e.target.value; });
+    document.getElementById('inv-month').addEventListener('change', function (e) { d.billMonth = e.target.value; });
+    document.getElementById('inv-cancel').onclick = function () { invoiceUi_.view = 'list'; invoiceUi_.draft = null; invoiceUi_.error = ''; renderInvoiceBody_(); };
+    document.getElementById('inv-create').onclick = function () {
+      var btn = document.getElementById('inv-create');
+      if (!d.accountId) { errorPopover(btn, 'Escolha a conta do cartão.'); return; }
+      var dup = invoiceUi_.invoices.filter(function (i) { return i.fileName === d.fileName && i.billMonth === d.billMonth && i.accountId === d.accountId; })[0];
+      if (dup) { errorPopover(btn, 'Esse documento já foi subido (fatura ' + invoiceMonthText_(dup.billMonth) + '). Apague o anterior pra subir de novo.'); return; }
+      btn.disabled = true; btn.textContent = 'Criando…';
+      var r = d.result;
+      run('createInvoice', {
+        fileName: d.fileName, issuer: r.issuer || '', accountId: d.accountId, billMonth: d.billMonth, dueDate: r.dueDate || '', total: r.total,
+        sourceType: d.sourceType, items: r.items.filter(function (i) { return i.kind !== 'payment'; }).map(function (i) {
+          return { date: i.date, description: i.description, amount: i.amount, kind: i.kind, installmentSeq: i.installmentSeq, installmentTotal: i.installmentTotal };
+        })
+      }).then(function (created) {
+        invoiceUi_.invoices.unshift(created.invoice);
+        invoiceUi_.items = invoiceUi_.items.concat(created.items);
+        invoiceUi_.draft = null; invoiceUi_.view = 'doc'; invoiceUi_.openId = created.invoice.id;
+        renderInvoiceBody_();
+      }).catch(function (err) { invoiceUi_.error = err.message; renderInvoiceBody_(); });
+    };
+  }
+
+  // ----- fila de um documento -----
+  function invoiceRowHtml_(it, match, mode) {
+    var inst = it.installmentSeq ? ' <em class="inv-inst">' + it.installmentSeq + '/' + it.installmentTotal + '</em>' : '';
+    var cat = invoiceSuggestedCategory_(it);
+    var amountCls = it.kind === 'income' ? ' inc' : '';
+    var sub = '';
+    if (mode === 'fresh' || mode === 'maybe' || mode === 'exact-open') {
+      var catChip = '<button type="button" class="capsule dd-btn inv-cat" data-inv-cat="' + escapeHtml(it.id) + '">' + categoryLabelHtml(cat) + ' <span class="dd-chev">▾</span></button>';
+      var accept = '<button type="button" class="inv-act primary" data-inv-accept="' + escapeHtml(it.id) + '">' + (mode === 'fresh' ? 'Aceitar' : 'Lançar mesmo assim') + '</button>';
+      var ignore = '<button type="button" class="inv-act" data-inv-ignore="' + escapeHtml(it.id) + '">' + (mode === 'maybe' ? 'É a mesma — ignorar' : 'Ignorar') + '</button>';
+      sub = '<div class="inv-sub">' + catChip + accept + ignore + '</div>';
+    } else if (mode === 'ignored') {
+      sub = '<div class="inv-sub"><button type="button" class="inv-act" data-inv-restore="' + escapeHtml(it.id) + '">Restaurar</button></div>';
+    }
+    var matchTxt = '';
+    if (match) {
+      var t = match.tx;
+      matchTxt = '<div class="inv-match">' + (match.level === 'exact' ? 'Já lançado: ' : 'Parecido: ') + escapeHtml(fmtDate(t.date)) + ' · ' + escapeHtml(t.counterparty || t.description || 'sem nome') + ' · ' + escapeHtml(fmtMoney(t.amount)) + '</div>';
+    }
+    return '<div class="inv-row" data-item="' + escapeHtml(it.id) + '"><div class="inv-main"><span class="inv-date">' + escapeHtml(fmtDate(it.date).slice(0, 5)) + '</span>' +
+      '<span class="inv-desc">' + escapeHtml(it.description) + inst + '</span><span class="inv-amt' + amountCls + '">' + (it.kind === 'income' ? '+ ' : '') + escapeHtml(fmtMoney(it.amount)) + '</span></div>' +
+      matchTxt + sub + '</div>';
+  }
+
+  function invoiceDocHtml_() {
+    var inv = invoiceById_(invoiceUi_.openId);
+    if (!inv) return invoiceListHtml_();
+    var st = invoiceDocStats_(inv), s = st.s, items = st.items, matches = st.matches;
+    var fresh = [], maybe = [], exact = [], accepted = [], ignored = [];
+    items.forEach(function (it) {
+      if (it.status === 'accepted') accepted.push(it);
+      else if (it.status === 'ignored') ignored.push(it);
+      else if (matches[it.id] && matches[it.id].level === 'exact') exact.push(it);
+      else if (matches[it.id]) maybe.push(it);
+      else fresh.push(it);
+    });
+    function group(title, list, mode, open) {
+      if (!list.length) return '';
+      return '<details class="inv-group"' + (open ? ' open' : '') + '><summary>' + title + ' <span>' + list.length + '</span></summary>' +
+        list.map(function (it) { return invoiceRowHtml_(it, matches[it.id], mode); }).join('') + '</details>';
+    }
+    var freshSum = fresh.reduce(function (a, it) { return a + (it.kind === 'income' ? -it.amount : it.amount); }, 0);
+    return '<button type="button" class="inv-back" data-inv-back="1">‹ Documentos</button>' +
+      '<h2>' + escapeHtml((inv.issuer ? inv.issuer + ' · ' : '') + 'fatura ' + invoiceMonthText_(inv.billMonth)) + '</h2>' +
+      '<div class="inv-summary">' + escapeHtml(inv.fileName) + '<br>' + escapeHtml(invoiceAccountName_(inv.accountId)) +
+        (inv.total !== null ? ' · total do documento ' + escapeHtml(fmtMoney(inv.total)) : '') + '</div>' +
+      '<div class="inv-counts"><span><b>' + s.fresh + '</b> novos</span><span><b>' + s.maybe + '</b> possíveis duplicatas</span><span><b>' + s.exact + '</b> já lançados</span><span><b>' + s.accepted + '</b> aceitos</span><span><b>' + s.ignored + '</b> ignorados</span></div>' +
+      (fresh.length ? '<div class="btn-pair" style="margin:12px 0"><button type="button" id="inv-accept-all">Aceitar os ' + fresh.length + ' novos (' + escapeHtml(fmtMoney(freshSum)) + ')</button></div>' : '') +
+      group('Novos', fresh, 'fresh', true) +
+      group('Possíveis duplicatas', maybe, 'maybe', true) +
+      group('Já lançados', exact, 'exact-open', false) +
+      group('Aceitos', accepted, 'accepted', false) +
+      group('Ignorados', ignored, 'ignored', false) +
+      '<div class="inv-footer"><button type="button" class="inv-act inv-del" data-inv-delete="' + escapeHtml(inv.id) + '">Apagar documento</button><span>Os lançamentos já aceitos continuam no Extrato.</span></div>';
+  }
+
+  // ----- ações -----
+  function invoiceItemById_(id) { return invoiceUi_.items.filter(function (i) { return i.id === id; })[0] || null; }
+
+  function invoiceAccept_(itemIds) {
+    var list = itemIds.map(invoiceItemById_).filter(function (it) { return it && it.status === 'pending'; });
+    if (!list.length) return;
+    var payload = list.map(function (it) { return { itemId: it.id, categoryId: invoiceSuggestedCategory_(it) || '' }; });
+    var prev = list.map(function (it) { return { it: it, status: it.status }; });
+    list.forEach(function (it) { it.status = 'accepted'; });
+    renderInvoiceBody_();
+    afterMutation_(run('acceptInvoiceItems', { items: payload }).then(function (res) {
+      var byId = {};
+      (res.accepted || []).forEach(function (id) { byId[id] = true; });
+      return res;
+    })).then(function () {
+      return run('listInvoices');
+    }).then(function (data) {
+      invoiceUi_.invoices = data.invoices || invoiceUi_.invoices; invoiceUi_.items = data.items || invoiceUi_.items;
+      renderInvoiceBody_();
+      celebrate_();
+    }).catch(function (err) {
+      prev.forEach(function (p) { p.it.status = p.status; });
+      renderInvoiceBody_();
+      showToast(err.message, true);
+    });
+  }
+
+  function invoiceSetStatus_(itemIds, status) {
+    var list = itemIds.map(invoiceItemById_).filter(Boolean);
+    var prev = list.map(function (it) { return { it: it, status: it.status }; });
+    list.forEach(function (it) { it.status = status; });
+    renderInvoiceBody_();
+    run('setInvoiceItemsStatus', { ids: itemIds, status: status }).catch(function (err) {
+      prev.forEach(function (p) { p.it.status = p.status; });
+      renderInvoiceBody_();
+      showToast(err.message, true);
+    });
+  }
+
+  function invoiceHandleFile_(file, password) {
+    invoiceUi_.error = ''; invoiceUi_.needPassword = false; invoiceUi_.pendingFile = file;
+    invoiceUi_.busy = 'Lendo ' + file.name + '…';
+    renderInvoiceBody_();
+    invoiceReadFile_(file, password).then(function (r) {
+      invoiceUi_.busy = '';
+      var res = r.result;
+      invoiceUi_.draft = {
+        result: res, fileName: file.name, sourceType: r.sourceType, accountId: invoiceGuessAccount_(res.issuer || file.name),
+        billMonth: res.billMonth || ''
+      };
+      invoiceUi_.view = 'preview';
+      renderInvoiceBody_();
+    }).catch(function (err) {
+      invoiceUi_.busy = '';
+      if (err && err.needPassword) { invoiceUi_.needPassword = true; invoiceUi_.error = err.message; }
+      else invoiceUi_.error = (err && err.message) || 'Não consegui ler esse documento.';
+      renderInvoiceBody_();
+    });
+  }
+
+  function wireInvoiceBody_() {
+    var body = document.getElementById('inv-body');
+    body.addEventListener('click', function (e) {
+      var t = e.target.closest('[data-inv-open],[data-inv-back],[data-inv-accept],[data-inv-ignore],[data-inv-restore],[data-inv-cat],[data-inv-delete],#inv-accept-all,#inv-pass-go');
+      if (!t) return;
+      if (t.dataset.invOpen) { invoiceUi_.view = 'doc'; invoiceUi_.openId = t.dataset.invOpen; renderInvoiceBody_(); }
+      else if (t.dataset.invBack) { invoiceUi_.view = 'list'; invoiceUi_.openId = null; renderInvoiceBody_(); }
+      else if (t.dataset.invAccept) invoiceAccept_([t.dataset.invAccept]);
+      else if (t.dataset.invIgnore) invoiceSetStatus_([t.dataset.invIgnore], 'ignored');
+      else if (t.dataset.invRestore) invoiceSetStatus_([t.dataset.invRestore], 'pending');
+      else if (t.dataset.invCat) {
+        var it = invoiceItemById_(t.dataset.invCat);
+        var options = [{ value: '', label: 'Sem categoria', selected: !invoiceSuggestedCategory_(it) }].concat(STATE.categories.filter(function (c) { return c.kind === it.kind && !c.archived; })
+          .map(function (c) {
+            var parent = c.parentId ? STATE.categories.filter(function (p) { return p.id === c.parentId; })[0] : null;
+            return { value: c.id, label: (parent ? parent.name + ' › ' : '') + c.name, selected: c.id === invoiceSuggestedCategory_(it) };
+          }));
+        openDropdownMenu_(t, options, function (v) { invoiceUi_.cat[it.id] = v; renderInvoiceBody_(); });
+      }
+      else if (t.dataset.invDelete) {
+        confirmPopover(t, 'Apagar este documento e a fila dele? Os lançamentos já aceitos continuam.', function () {
+          var id = t.dataset.invDelete;
+          var snapshot = { invoices: invoiceUi_.invoices.slice(), items: invoiceUi_.items.slice() };
+          invoiceUi_.invoices = invoiceUi_.invoices.filter(function (i) { return i.id !== id; });
+          invoiceUi_.items = invoiceUi_.items.filter(function (i) { return i.invoiceId !== id; });
+          invoiceUi_.view = 'list'; invoiceUi_.openId = null;
+          renderInvoiceBody_();
+          run('deleteInvoice', id).catch(function (err) { invoiceUi_.invoices = snapshot.invoices; invoiceUi_.items = snapshot.items; renderInvoiceBody_(); showToast(err.message, true); });
+        });
+      }
+      else if (t.id === 'inv-accept-all') {
+        var inv = invoiceById_(invoiceUi_.openId), st = invoiceDocStats_(inv);
+        var fresh = st.items.filter(function (it) { return it.status === 'pending' && !st.matches[it.id]; }).map(function (it) { return it.id; });
+        invoiceAccept_(fresh);
+      }
+      else if (t.id === 'inv-pass-go') {
+        var pass = document.getElementById('inv-pass').value;
+        if (pass && invoiceUi_.pendingFile) invoiceHandleFile_(invoiceUi_.pendingFile, pass);
+      }
+    });
+    body.addEventListener('change', function (e) {
+      if (e.target.id === 'inv-file' && e.target.files && e.target.files[0]) invoiceHandleFile_(e.target.files[0]);
+    });
+    ['dragover', 'drop'].forEach(function (ev) {
+      body.addEventListener(ev, function (e) {
+        if (!e.dataTransfer || invoiceUi_.view !== 'list') return;
+        e.preventDefault();
+        if (ev === 'drop' && e.dataTransfer.files && e.dataTransfer.files[0]) invoiceHandleFile_(e.dataTransfer.files[0]);
+      });
+    });
+  }
+
   // ---------- menu de atalhos do "+" ----------
   /**
    * Segurar o "+" revela, colada à esquerda dele, a cápsula "Novo lançamento" (mesma
@@ -16172,6 +17205,7 @@
    * tem mais um botão dedicado em lugar nenhum.
    */
   var SPEED_DIAL_ACTIONS_ = [
+    { label: 'Subir fatura', open: function () { openInvoiceModal(); } },
     { label: 'Nova conta', open: function () { openAccountModal(); } },
     { label: 'Nova categoria', open: function () { openCategoryModal(); } },
     { label: 'Novo orçamento', open: function () { openBudgetModal(); } },
