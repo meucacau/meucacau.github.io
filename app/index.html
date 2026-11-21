@@ -677,9 +677,11 @@
   .review-badge {
     /* Preso ao canto do botão (não ao ícone) e fora do recorte: pode passar da borda do círculo. */
     position: absolute; top: -6px; right: -6px;
-    min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box;
+    min-width: 18px; height: 18px; padding: 2px 5px 0; box-sizing: border-box;
+    display: flex; align-items: center; justify-content: center;
     border-radius: 9px; background: var(--expense); color: #fff;
-    font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
+    /* A fonte deixa espaço extra embaixo da linha de base: o padding de cima desce o número pro centro óptico do círculo. */
+    font-size: 11px; font-weight: 700; line-height: 1; text-align: center;
     box-shadow: 0 1px 3px rgba(0,0,0,0.3);
   }
   .review-fab .tab-label { overflow: hidden; max-width: 0; opacity: 0; transform: translateY(2px); transition: opacity .12s ease, max-width .15s ease; }
@@ -957,6 +959,13 @@
   /* ---------- Celular (<= 640px): janelas viram "bottom sheets" que acompanham o teclado. O PC não muda. ----------
      --vvh/--vvt (JavaScript.html, setupViewportVars_) = altura/topo da área visível já descontado o teclado. */
   .sheet-grabber { display: none; }
+  /* Botões do fim da janela (Salvar, Cancelar/Vincular...) presos no fim, sempre à vista (PC e celular; no celular, acima do teclado). */
+  .modal .sheet-actions {
+    position: sticky; bottom: 0; z-index: 3;
+    margin: 10px -20px calc(-20px - env(safe-area-inset-bottom, 0px));
+    padding: 12px 20px calc(16px + env(safe-area-inset-bottom, 0px));
+    background: var(--surface); box-shadow: 0 -10px 14px -12px rgba(0,0,0,.28);
+  }
   @media (max-width: 640px) {
     .modal-backdrop:not(.modal-center) {
       inset: auto; left: 0; right: 0;
@@ -979,13 +988,6 @@
     .sheet-grabber::before {
       content: ''; position: absolute; left: 50%; top: 11px; width: 44px; height: 5px;
       margin-left: -22px; border-radius: 3px; background: var(--text-muted); opacity: .45;
-    }
-    /* Botão principal preso no fim da janela, sempre acima do teclado. */
-    .modal .sheet-actions {
-      position: sticky; bottom: 0; z-index: 3;
-      margin: 10px -20px calc(-20px - env(safe-area-inset-bottom, 0px));
-      padding: 12px 20px calc(16px + env(safe-area-inset-bottom, 0px));
-      background: var(--surface); box-shadow: 0 -10px 14px -12px rgba(0,0,0,.28);
     }
     .kb-open .modal .sheet-actions { margin-bottom: -20px; padding-bottom: 14px; }
     .sheet-actions > button:only-child { width: 100%; padding: 13px 16px; }
@@ -1616,7 +1618,10 @@
      estreita (até 520px) o nome ocupa a linha de cima e círculos + texto ficam embaixo, nas mesmas 2 colunas
      em todas as linhas -- cabe nos ~310px de um celular sem rolagem lateral. */
   .budget-circles-row { --budget-circle: 20px; --budget-track-w: 181px; --budget-advice-w: 200px; } /* 8 slots x 20px + 7 x 3px */
-  .budget-circles-head { display: grid; grid-template-columns: minmax(0, 1fr) var(--budget-track-w) var(--budget-advice-w); align-items: center; column-gap: 10px; }
+  .budget-circles-head { display: grid; grid-template-columns: var(--budget-track-w) minmax(0, 1fr); grid-template-areas: "name name" "track advice"; align-items: center; column-gap: 10px; row-gap: 4px; }
+  .budget-circles-head .budget-timebar-name { grid-area: name; }
+  .budget-circles-head .budget-circles-track { grid-area: track; }
+  .budget-circles-head .budget-circles-advice { grid-area: advice; }
   /* O título quebra em várias linhas se precisar (centralizado na vertical com o resto da linha, pelo align-items do grid) e nunca
      invade a coluna do lado: o ícone fica fixo e o texto se ajusta dentro da coluna. */
   .budget-circles-head .budget-timebar-name { min-width: 0; display: flex; align-items: center; gap: 8px; overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
@@ -1627,12 +1632,6 @@
   .budget-circles-advice {
     min-width: 0; font-size: 12px; line-height: 1.3; color: var(--text-muted); text-align: right;
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden;
-  }
-  @media (max-width: 520px) {
-    .budget-circles-head { grid-template-columns: var(--budget-track-w) minmax(0, 1fr); grid-template-areas: "name name" "track advice"; row-gap: 4px; }
-    .budget-circles-head .budget-timebar-name { grid-area: name; }
-    .budget-circles-head .budget-circles-track { grid-area: track; }
-    .budget-circles-head .budget-circles-advice { grid-area: advice; }
   }
   .budget-circles-track { display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px; flex: none; width: var(--budget-track-w, 181px); }
   .budget-circle {
@@ -2960,6 +2959,17 @@
     activeConfirmPopoverCleanup_ = null;
     fn();
   }
+  /** Esc (e o botão voltar do celular, que vira Esc) fecha UMA camada por vez, a de cima: primeiro o tooltip, depois o menu/popover
+   *  aberto; só então os listeners de modal tratam o Esc. Em captura no document e registrado antes de todos os outros, por isso
+   *  pode barrar (stopPropagation) o Esc antes dele chegar nos listeners do modal/popup de reembolso, que fechariam tudo junto.
+   *  O menu em folha do celular (.dd-sheet-backdrop) tem o próprio Esc animado e fica de fora. */
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (document.getElementById('shared-tooltip')) { hideTooltip_(); e.preventDefault(); e.stopPropagation(); return; }
+    if (activeConfirmPopoverCleanup_ && !document.querySelector('.dd-sheet-backdrop')) {
+      closeActiveConfirmPopover_(); e.preventDefault(); e.stopPropagation();
+    }
+  }, true);
 
   /**
    * Liga um elemento com atributo data-tooltip a showTooltip_/hideTooltip_: hover no
@@ -4501,7 +4511,8 @@
     inputEl.addEventListener('focus', renderList);
     inputEl.addEventListener('input', function (e) { if (e.isTrusted) renderList(); });
     inputEl.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') { close(); return; }
+      // Esc fecha só a lista de sugestões; sem lista aberta, passa pro modal (uma camada por Esc).
+      if (e.key === 'Escape') { if (pop) { close(); e.preventDefault(); e.stopPropagation(); } return; }
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
         if (!pop) renderList();
@@ -6480,6 +6491,7 @@
     document.body.appendChild(root);
     root.innerHTML = '<div class="modal-backdrop refund-modal-backdrop" id="refund-modal-backdrop"><div class="modal"><div class="sheet-grabber" aria-hidden="true"></div>' + innerHtml + '</div></div>';
     var refundBd_ = document.getElementById('refund-modal-backdrop');
+    markSheetActions_(refundBd_.querySelector('.modal')); // Cancelar/Vincular (ou Concluído) sempre à vista no fim da janela
     refundBd_.onclick = function (e) {
       if (e.target.id === 'refund-modal-backdrop') closeRefundModal_(true);
     };
@@ -6541,13 +6553,16 @@
       doAdd();
     });
   }
-  /** Refoca o campo de nome depois de adicionar alguém — precisa esperar o próximo
-   *  tick (setTimeout 0) pra rodar DEPOIS do auto-foco padrão de openRefundModal_
-   *  (que focaria o primeiro campo do popup reconstruído, não necessariamente este). */
-  function focusRefundNameInput_() {
+  /** Depois de adicionar alguém, foca o VALOR da pessoa recém-adicionada (última linha), com tudo selecionado -- é o que falta
+   *  preencher; o nome já foi. Precisa esperar o próximo tick (setTimeout 0) pra rodar DEPOIS do auto-foco padrão de
+   *  openRefundModal_ (que focaria o primeiro campo do popup reconstruído, não necessariamente este). */
+  function focusRefundNewAmountInput_() {
     setTimeout(function () {
-      var el = document.getElementById('refund-new-name');
-      if (el) el.focus();
+      var inputs = document.querySelectorAll('#refund-rows [data-refund-amount]');
+      var el = inputs[inputs.length - 1];
+      if (!el) return;
+      el.focus();
+      el.select();
     }, 0);
   }
 
@@ -6635,7 +6650,7 @@
         });
         rescaleUntouchedStagedShares_(staged, getTotalAmount());
         build();
-        focusRefundNameInput_();
+        focusRefundNewAmountInput_();
       });
       document.getElementById('refund-done').onclick = function () {
         var doneBtn = document.getElementById('refund-done');
@@ -12170,7 +12185,7 @@
     [input, nameInput].forEach(function (el) {
       el.addEventListener('keydown', function (e) {
         if (e.key === 'Enter') { e.preventDefault(); save_(); }
-        else if (e.key === 'Escape') { cleanup(); }
+        else if (e.key === 'Escape') { cleanup(); e.preventDefault(); e.stopPropagation(); }
       });
     });
     input.focus();
@@ -13344,6 +13359,11 @@
         if (!isDeselecting && opts.setCategoryId) {
           var chosen = allOptions.find(function (o) { return o.value === value; });
           if (chosen) opts.setCategoryId(chosen.forecast.categoryId);
+        }
+        // Quem quiser (o Novo lançamento) preenche também valor e "Pago a/Recebido a" a partir do recorrente escolhido.
+        if (!isDeselecting && opts.onPick) {
+          var picked = allOptions.find(function (o) { return o.value === value; });
+          if (picked) opts.onPick(picked.forecast);
         }
         renderForecastToggleButton_(opts);
       });
@@ -16121,7 +16141,7 @@
       // tinha; sem ela o Salvar+ ficava 2 px maior em altura e largura).
       '<div class="btn-pair">' +
         '<button id="m-submit">Salvar</button>' +
-        '<button id="m-submit-more" class="secondary" title="Salvar e manter o menu aberto, mantendo data e conta">Salvar+</button>' +
+        '<button id="m-submit-more" class="secondary" data-tooltip="Salvar e manter o menu aberto, mantendo data e conta">Salvar+</button>' +
       '</div>'
     );
     // Conta(s) escolhida(s) -- sobrevivem a trocar Despesa/Receita/Transferência quando ainda
@@ -16346,8 +16366,26 @@
         getCategoryId: function () { return categoryField.getValue(); },
         getSelected: function () { return selectedForecastId; },
         setSelected: function (v) { selectedForecastId = v; },
-        setCategoryId: function (v) { categoryTouchedByUser = true; categoryField.setValue(v); }
+        setCategoryId: function (v) { categoryTouchedByUser = true; categoryField.setValue(v); },
+        onPick: autofillFromForecastT_
       });
+    }
+    /** Escolheu um recorrente no Novo lançamento: preenche Valor (o esperado) e Pago a/Recebido a (quem recebeu/pagou no último
+     *  lançamento vinculado, senão o nome do recorrente). Só mexe no campo se estiver vazio ou ainda com o que ESTE preenchimento
+     *  pôs antes (trocar de recorrente atualiza; o que a pessoa digitou fica como está). */
+    var forecastAutofill_ = { amount: null, counterparty: null };
+    function autofillFromForecastT_(f) {
+      var amountEl = document.getElementById('t-amount');
+      if (amountEl && amountEl.setValue && f.expectedAmount > 0) {
+        var cur = amountEl.getValue();
+        if (!(cur > 0) || cur === forecastAutofill_.amount) { amountEl.setValue(f.expectedAmount); forecastAutofill_.amount = f.expectedAmount; }
+      }
+      var cpEl = document.getElementById('t-counterparty');
+      if (cpEl) {
+        var last = forecastMostRecentLinkedTransaction_(f);
+        var name = (last && last.counterparty) || f.label || '';
+        if (name && (!cpEl.value.trim() || cpEl.value === forecastAutofill_.counterparty)) { cpEl.value = name; forecastAutofill_.counterparty = name; }
+      }
     }
     function updateRememberCategoryT_() {
       renderRememberCategoryButton_({
@@ -16597,6 +16635,13 @@
       });
     }
     document.getElementById('m-submit').onclick = function () { submitTx_(false, document.getElementById('m-submit')); };
+    // Tooltip do app (não o nativo do navegador), só ao passar o mouse: clicar/tocar é salvar, não mostra nada.
+    var saveMoreBtn_ = document.getElementById('m-submit-more');
+    if (HOVER_CAPABLE_) {
+      saveMoreBtn_.addEventListener('mouseenter', function () { showTooltip_(saveMoreBtn_, saveMoreBtn_.getAttribute('data-tooltip')); });
+      saveMoreBtn_.addEventListener('mouseleave', hideTooltip_);
+      saveMoreBtn_.addEventListener('click', hideTooltip_);
+    }
     document.getElementById('m-submit-more').onclick = function () { submitTx_(true, document.getElementById('m-submit-more')); };
   }
 
@@ -17522,7 +17567,7 @@
   }
   /** O botão principal (#m-submit, sozinho ou num par) fica preso no fim da janela, acima do teclado. */
   function markSheetActions_(modal) {
-    var btn = modal && modal.querySelector('#m-submit');
+    var btn = modal && modal.querySelector('#m-submit, #refund-done'); // #refund-done = Vincular/Concluído do popup de reembolso
     if (!btn) return;
     var el = btn;
     while (el.parentNode && el.parentNode !== modal) el = el.parentNode;
