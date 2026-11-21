@@ -386,6 +386,9 @@
     color: var(--text);
     margin-bottom: 12px;
   }
+  /* Data/horário: altura fixa igual à dos campos de texto (40px). O interno nativo soma uns 3px e muda de tamanho de um tipo pro outro
+     (data ~42px, horário ~44px no Chrome do PC), o que desalinhava Data e Horário lado a lado. */
+  input[type="date"], input[type="time"] { box-sizing: border-box; height: 40px; }
   /* Foco: borda fina (a mesma de sempre) que vai se preenchendo de marrom ao receber o foco e se esvaziando ao perdê-lo (a transição
      vale nos dois sentidos, por isso fica na regra base, não só no :focus). Sem o contorno grosso preto do navegador. */
   input:not([type="checkbox"]):not([type="radio"]), select, textarea, button.app-select {
@@ -3822,10 +3825,20 @@
       render_();
       inputEl.dispatchEvent(new CustomEvent('moneychange'));
     });
+    // focusSelectAll(): foca JÁ com o campo todo selecionado (digitar substitui o valor, sem apagar antes). O handler de foco abaixo
+    // manda o cursor pro fim num setTimeout e desfaria a seleção, então ele é pulado uma vez quando o foco vem daqui.
+    var keepSelectionOnFocus_ = false;
+    inputEl.focusSelectAll = function () {
+      keepSelectionOnFocus_ = true;
+      inputEl.focus();
+      inputEl.select();
+      setTimeout(function () { keepSelectionOnFocus_ = false; }, 0); // já estava focado (sem evento de foco): não deixa a marca pro próximo foco
+    };
     inputEl.addEventListener('focus', function () {
       // Foco por teclado (Tab) não tem uma posição de clique pra preservar — manda pro
       // fim, como sempre foi.
       clearOverride_();
+      if (keepSelectionOnFocus_) { keepSelectionOnFocus_ = false; return; }
       setTimeout(function () { inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length); }, 0);
     });
     inputEl.addEventListener('click', function () { clearOverride_(); setTimeout(clampCursor, 0); });
@@ -6888,8 +6901,7 @@
       var inputs = document.querySelectorAll('#refund-rows [data-refund-amount]');
       var el = inputs[inputs.length - 1];
       if (!el) return;
-      el.focus();
-      el.select();
+      if (el.focusSelectAll) el.focusSelectAll(); else { el.focus(); el.select(); }
     }, 0);
   }
 
