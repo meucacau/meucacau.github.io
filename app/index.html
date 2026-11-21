@@ -1720,11 +1720,8 @@
   .budget-stepper #b-amount-field input { width: 100%; height: 56px; margin: 0; padding: 0 12px; box-sizing: border-box; border: 1px solid var(--border); border-radius: 28px; background: var(--surface); text-align: center; font: inherit; font-size: 18px; font-weight: 600; color: var(--text); }
   .budget-stepper #b-amount-field input:disabled { font-size: 13px; opacity: 1; -webkit-text-fill-color: var(--text); }
   .budget-value-row { display: flex; align-items: center; gap: 8px; min-height: 64px; }
-  .budget-value-row.has-mode { min-height: 112px; }
-  .budget-value-side { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
-  .budget-value-side .kind-toggle { flex-direction: column; gap: 4px; margin: 0; }
-  .budget-value-side .kind-toggle button { padding: 4px 0; font-size: 10px; white-space: nowrap; overflow: hidden; }
-  .budget-value-side .budget-switch { flex-direction: row; align-items: center; justify-content: center; gap: 8px; min-height: 0; margin: 0; font-size: 13px; line-height: 1.25; }
+  .budget-value-side { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+  .budget-value-side .budget-switch { flex-direction: row; align-items: center; justify-content: flex-start; gap: 8px; min-height: 0; margin: 0; font-size: 13px; line-height: 1.25; }
   .budget-value-side .budget-switch span { flex: 0 1 auto; min-width: 0; text-align: left; overflow-wrap: break-word; word-break: normal; hyphens: auto; }
   .budget-start-step:disabled { opacity: 0.4; cursor: default; }
   .budget-switch > span { min-width: 0; overflow-wrap: break-word; }
@@ -1735,6 +1732,9 @@
   .budget-switch input::after, .settings-switch input::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 0.15s; }
   .budget-switch input:checked, .settings-switch input:checked { background: var(--primary); }
   .budget-switch input:checked::after, .settings-switch input:checked::after { transform: translateX(16px); }
+  /* Texto dos toggles: peso normal (nas janelas o título de campo é forte, mas o toggle é só um rótulo) e esmaecido com o toggle desligado. */
+  .budget-switch, .settings-switch, .modal .field label.budget-switch { font-weight: 400; padding-left: 0; color: var(--text); transition: color .15s; }
+  .budget-switch:has(input:not(:checked)), .settings-switch:has(input:not(:checked)), .modal .field label.budget-switch:has(input:not(:checked)) { color: var(--text-muted); }
   /* Toggle de Configurações: o botão fica colado no texto (à esquerda dele), não solto no outro canto. */
   /* Editor de cards do Início: pontinhos pra arrastar, nome e toggle. A linha arrastada acompanha o dedo; as outras abrem espaço. */
   .home-card-row { position: relative; align-items: center; gap: 10px; touch-action: pan-y; }
@@ -14652,13 +14652,11 @@
           '</div>' +
           '<div class="budget-value-side">' +
             (showModeToggle
-              ? '<div class="kind-toggle" id="b-mode-toggle">' +
-                  '<button type="button" data-m="auto">Automático</button>' +
-                  '<button type="button" data-m="manual">Manual</button>' +
-                '</div>'
+              ? '<label class="budget-switch" id="b-mode-toggle">' +
+                  '<input type="checkbox" id="b-mode-auto" role="switch" aria-label="Valor Automático (desligado = Manual)"><span>Automático</span></label>'
               : '') +
-            '<label class="budget-switch" id="b-scale-wrap" data-tooltip="' + escapeHtml(BUDGET_SCALE_TIP_) + '"><span>Ajustar em meses com ± de 30 dias</span>' +
-              '<input type="checkbox" id="b-scale" role="switch" aria-label="Aumentar/diminuir em meses com mais/menos de 30 dias"></label>' +
+            '<label class="budget-switch" id="b-scale-wrap" data-tooltip="' + escapeHtml(BUDGET_SCALE_TIP_) + '">' +
+              '<input type="checkbox" id="b-scale" role="switch" aria-label="Aumentar/diminuir em meses com mais/menos de 30 dias"><span>Ajustar em meses com ± de 30 dias</span></label>' +
           '</div>' +
         '</div>' +
         (isGeral ? '<div class="muted budget-slot" id="b-geral-note"></div>' : '') +
@@ -14936,7 +14934,8 @@
       note.textContent = '';
     }
     function renderModeToggle_() {
-      document.querySelectorAll('#b-mode-toggle button').forEach(function (btn) { btn.classList.toggle('active', btn.dataset.m === periodMode); });
+      var autoSwitch = document.getElementById('b-mode-auto');
+      if (autoSwitch) autoSwitch.checked = periodMode === 'auto';
     }
     /** Geral automático: ciclo/início/escala mudam o valor calculado -- atualiza o campo e a frase. */
     function syncGeral_() {
@@ -15044,15 +15043,12 @@
       syncGeral_(); renderStart_(); renderP75_(); renderPreview_();
     };
     if (showModeToggle) {
-      document.querySelectorAll('#b-mode-toggle button').forEach(function (btn) {
-        btn.onclick = function () {
-          periodMode = btn.dataset.m;
-          renderModeToggle_();
-          renderAmountField_();
-          renderP75_();
-          renderPreview_();
-        };
-      });
+      document.getElementById('b-mode-auto').onchange = function () {
+        periodMode = this.checked ? 'auto' : 'manual';
+        renderAmountField_();
+        renderP75_();
+        renderPreview_();
+      };
     }
 
     if (!isGeral) buildCategoryFilterField_(document.getElementById('b-category-field'), selectedCategoryIds, function () {
