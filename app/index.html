@@ -972,6 +972,10 @@
   /* Cabeçalho de campo que pode ou não ter links de ação (Despesa recorrente?, Reembolso?...): a mesma altura com ou sem eles, pra a
      janela não mudar de altura quando um link some/aparece. */
   .tx-f-head { min-height: 17px; align-items: center !important; }
+  /* Os invólucros dos links herdavam fonte de 15px e line-height "normal": vazios tinham 0 de altura, com o link (12px/17px) viravam 18px
+     (a linha do strut maior empurra 1px) e a janela mexia 1px quando "Despesa recorrente?" & cia. apareciam/sumiam. Mesma fonte e
+     line-height do link: 17px com ou sem ele, nunca mais que o título (17px). */
+  .tx-f-head > span, .field-action-group, .field-action-group > span { font-size: 12px; line-height: 17px; }
 
   /* ---------- Celular (<= 640px): janelas viram "bottom sheets" que acompanham o teclado. O PC não muda. ----------
      --vvh/--vvt (JavaScript.html, setupViewportVars_) = altura/topo da área visível já descontado o teclado. */
@@ -1793,6 +1797,7 @@
   .budget-from-start { flex: 0 0 auto; padding: 4px 12px; font-size: 12px; white-space: nowrap; }
   .budget-start-date { position: relative; flex: 1 1 auto; display: flex; align-items: center; justify-content: center; height: 48px; padding: 0 12px; box-sizing: border-box; border: 1px solid var(--border); border-radius: 24px; font-size: 13px; line-height: 1.25; text-align: center; color: var(--text); }
   .budget-start-date input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; opacity: 0; cursor: pointer; }
+  .budget-geral-info { font-size: 12px; line-height: 1.4; margin: -6px 0 18px; }
   .budget-preview-title { display: block; margin: 22px 0 var(--field-title-gap); }
   .budget-preview-slot { min-height: 56px; }
   #b-preview { min-height: 22px; display: flex; align-items: center; }
@@ -3191,6 +3196,8 @@
    * linha): sem isso, arquivar/remover abriria a edição ao mesmo tempo.
    */
   var ROW_TOOLTIP_DELAY_MS = 500;
+  /** Salvar+ no PC: o tooltip só aparece depois de 2 s com o mouse em cima (no celular, toque longo). */
+  var SAVE_MORE_TOOLTIP_DELAY_MS_ = 2000;
   function wireRowTooltip_(rowEl, whatLabel, onEdit) {
     rowEl.classList.add('row-clickable');
     if (HOVER_CAPABLE_) {
@@ -3477,9 +3484,9 @@
       if (scrollHost && Math.abs(scrollHost.scrollTop - hostY) > 0.5) scrollHost.scrollTop = hostY;
     }
     if (anchorEl && anchorEl.classList) anchorEl.classList.add('dd-btn', 'dd-open');
-    function norm_(t) { return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
+    function norm_(t) { return normalizeForSearch_(t); }
     function renderList_(q) {
-      var nq = norm_(q).trim();
+      var nq = norm_(q);
       var shown = options.filter(function (o) { return !nq || norm_(o.label).indexOf(nq) !== -1; });
       list.innerHTML = shown.length ? shown.map(function (opt) {
         return '<div class="dd-sheet-option' + (opt.selected ? ' active' : '') + '" role="option" data-value="' + escapeHtml(opt.value) + '">' +
@@ -4233,6 +4240,12 @@
     return (s || '').toLowerCase().normalize('NFD').replace(DIACRITICS_RE_, '');
   }
 
+  /** Pra BUSCA e autocompletar: minúsculo, sem acento e SEM nenhum espaço (inclusive o não separável do "R$ 1.200" e os que o
+   *  teclado do celular deixa no fim da palavra): "padaria sao" casa "Padaria  São João" e "padariasao" também. */
+  function normalizeForSearch_(s) {
+    return normalizeForMatch_(s).replace(/\s+/g, '');
+  }
+
   /** Escapa caracteres especiais de regex -- defensivo (nenhuma keyword hoje usa esses
    *  caracteres, mas uma keyword futura com "." ou "-" em posição estranha não pode
    *  virar um regex quebrado ou com significado diferente do literal). */
@@ -4578,9 +4591,9 @@
       if (pop && !pop.contains(e.target) && e.target !== inputEl) close();
     }
     function renderList() {
-      var typed = normalizeForMatch_(inputEl.value.trim());
+      var typed = normalizeForSearch_(inputEl.value);
       var matches = (namesFn ? namesFn() : knownCounterpartyNames()).filter(function (n) {
-        return !typed || normalizeForMatch_(n).indexOf(typed) !== -1;
+        return !typed || normalizeForSearch_(n).indexOf(typed) !== -1;
       });
       if (!matches.length) { close(); return; }
       if (!pop) {
@@ -6857,7 +6870,7 @@
         '<input type="checkbox" data-refundlink-check="' + escapeHtml(share.id) + '"' + (checked ? ' checked' : '') + '>' +
         '<span>' + labelHtml + '<br><span class="muted" style="font-size:12px">Falta ' + fmtMoney(remaining) + ' de ' + fmtMoney(share.expectedAmount) + '</span></span>' +
       '</label>' +
-      '<span class="row-actions"><input type="text" class="input-money" data-refundlink-amount="' + escapeHtml(share.id) + '" style="width:90px;margin-bottom:0"' + (checked ? '' : ' disabled') + '></span>' +
+      '<span class="row-actions"><input type="text" class="input-money" data-refundlink-amount="' + escapeHtml(share.id) + '" style="width:130px;flex:none;margin-bottom:0"' + (checked ? '' : ' disabled') + '></span>' +
     '</div>';
   }
 
@@ -7591,13 +7604,15 @@
     // Filtro vindo da legenda do card Saldo do ciclo: só as despesas (líquidas de reembolso) do grupo clicado.
     if (f.cycleLabels && (!(netAmountOfPassive_(t) > 0.004) || f.cycleLabels.indexOf(cycleSegmentLabelOfTx_(t)) === -1)) return false;
     if (f.text) {
-      var needle = normalizeForMatch_(f.text.trim());
+      var needle = normalizeForSearch_(f.text);
       // (Number||0).toLocaleString('pt-BR') em vez de fmtMoney: fmtMoney usa o formato de
       // moeda do Intl, que insere um espaço NÃO separável entre "R$" e o número — um
       // espaço comum digitado na busca nunca bateria com aquele caractere diferente.
-      var haystack = ((t.counterparty || '') + ' ' + (t.description || '') + ' ' + (Number(t.amount) || 0).toLocaleString('pt-BR'));
-      haystack = normalizeForMatch_(haystack);
-      if (needle && haystack.indexOf(needle) === -1) return false;
+      // Sem espaços, "x1" + "27" (descrição + valor) viraria "x127" e acharia "x12" por engano: o
+      // valor é comparado à parte; estabelecimento + descrição seguem juntos ("joão silva" acha os dois campos).
+      var haystack = normalizeForSearch_((t.counterparty || '') + ' ' + (t.description || ''));
+      var amountText = normalizeForSearch_((Number(t.amount) || 0).toLocaleString('pt-BR'));
+      if (needle && haystack.indexOf(needle) === -1 && amountText.indexOf(needle) === -1) return false;
     }
     // useEffectiveDate (só usado por viewBudgetTransactions_,
     // nunca pelos filtros manuais do Extrato -- ali De/Até é sempre a data CRUA de
@@ -10251,8 +10266,8 @@
       return !ui.categoryId || (t.categoryId || '_none') === ui.categoryId;
     });
     var stats = supplierStats_(list, supplierAmountOf_);
-    var q = supplierKey_(ui.text);
-    var shown = supplierSort_(stats.suppliers.filter(function (s) { return !q || s.key.indexOf(q) !== -1; }), ui.sort);
+    var q = normalizeForSearch_(ui.text);
+    var shown = supplierSort_(stats.suppliers.filter(function (s) { return !q || normalizeForSearch_(s.key).indexOf(q) !== -1; }), ui.sort);
     var total = shown.reduce(function (sum, s) { return sum + s.total; }, 0);
     var summary = document.getElementById('sup-summary');
     if (summary) summary.textContent = shown.length + (shown.length === 1 ? ' estabelecimento' : ' estabelecimentos') + ' · ' + fmtMoney(total);
@@ -10905,7 +10920,7 @@
   // cobre TODAS as despesas de todas as categorias. Automático: limite do intervalo = soma dos limites
   // dos orçamentos que existem (cada um proporcional aos dias, ver geralPartLimit_) + a estimativa do que
   // ainda não tem orçamento (P75 mensal dos últimos 6 meses fechados, ver geralUnbudgetedEstimate_).
-  // Digitando um valor ele vira FIXO (periodMode 'manual') até a pessoa clicar em "Voltar ao automático".
+  // Digitando um valor ele vira FIXO (periodMode 'manual') até a pessoa religar o toggle "Automático".
   var BUDGET_GERAL_NAME_ = 'Geral';
   /** ids das categorias de despesa (todas -- o Geral cobre tudo). */
   function geralAllExpenseCategoryIds_() {
@@ -14641,7 +14656,7 @@
     var suggestion = opts.suggestion || null;
     var isEdit = !!existing;
     // Orçamento "Geral" (só editando): mesmo menu SEM o seletor de categoria (cobre todas as despesas). O valor
-    // começa mostrando o Automático (soma + estimativa); digitar vira valor FIXO e aparece "Voltar ao automático".
+    // começa mostrando o Automático (soma + estimativa); digitar vira valor FIXO e o toggle "Automático" desliga (religar volta ao automático).
     var isGeral = isEdit && !!existing.isUnbudgetedCatchAll && !suggestion;
     // Categorias/subs já usadas em QUALQUER OUTRO orçamento ativo — lista estática, sem
     // rollup automático de subcategoria (ver spentForBudgetInRange_): uma subcategoria
@@ -14659,8 +14674,9 @@
     var periodMode = suggestion
       ? (suggestionForcesManual ? 'manual' : 'auto')
       : (isEdit ? (existing.periodMode || 'manual') : 'manual');
-    // Seletor Automático|Manual: só pra quem JÁ é Automático (edição) -- criar não oferece mais.
-    var showModeToggle = !suggestionForcesManual && (periodMode === 'auto');
+    // Toggle Automático: só pra quem JÁ é Automático (edição) -- criar não oferece mais. O Geral sempre tem (é a única volta
+    // pro Automático depois de fixar um valor: não há mais botão "Voltar ao automático").
+    var showModeToggle = isGeral || (!suggestionForcesManual && (periodMode === 'auto'));
     var existingSpec = isEdit ? budgetCycleSpecOf_(existing) : { unit: 'month', count: 1, scaleByDays: true };
     var cycleUnit = (suggestion && suggestion.suggestedCycleUnit) || existingSpec.unit;
     var cycleCount = (suggestion && suggestion.suggestedCycleCount) || existingSpec.count;
@@ -14689,8 +14705,11 @@
     var unitPrev = { day: 'month', week: 'day', month: 'week' };    // unidade logo acima
     var unitNames = { day: ['dia', 'dias'], week: ['semana', 'semanas'], month: ['mês', 'meses'] };
     openModal(
-      '<h2>' + (isGeral ? 'Editar orçamento Geral' : (isEdit ? 'Editar orçamento' : 'Novo orçamento')) + '</h2>' +
-      (isGeral ? '' : '<div class="field"><label>Categorias</label><div id="b-category-field" class="capsule-field"></div></div>') +
+      '<h2>' + (isGeral ? 'Editar orçamento geral' : (isEdit ? 'Editar orçamento' : 'Novo orçamento')) + '</h2>' +
+      (isGeral
+        ? '<div class="muted budget-geral-info">Aqui entram todas as suas despesas, de qualquer categoria: é o teto do mês inteiro. ' +
+          'Por isso ele não pode ser apagado nem ter categorias removidas, senão deixaria de mostrar o mês todo.</div>'
+        : '<div class="field"><label>Categorias</label><div id="b-category-field" class="capsule-field"></div></div>') +
       '<div class="field budget-value-field">' +
         '<div class="budget-first-head"><label>Valor</label>' +
           '<button type="button" class="secondary budget-from-start" id="b-amount-sug" style="display:none"></button></div>' +
@@ -14891,22 +14910,18 @@
       periodMode = 'manual';
       var input = document.getElementById('b-amount');
       if (input && input.setValue) input.setValue(v);
-      if (wasAuto) renderGeralNote_();
+      if (wasAuto) { renderGeralNote_(); renderModeToggle_(); }
       renderPreview_(); renderP75_();
     }
     function stepAmount_(delta) {
       if (periodMode === 'auto' && !isGeral) return;
       setAmount_(Math.round(currentAmount_() || 0) + delta);
     }
-    /** Geral: linha logo abaixo do valor -- Automático explica de onde vem; fixo mostra "Voltar ao automático". */
+    /** Geral: linha logo abaixo do valor -- no Automático explica de onde vem; fixo não mostra nada (a volta é o toggle). */
     function renderGeralNote_() {
       if (!isGeral) return;
       if (periodMode === 'manual') {
-        var auto = geralAutoAmount_();
-        setSlot_('b-geral-note', 'Valor fixo' + (auto !== null ? ' (o automático seria ' + fmtMoneyNoCents_(auto) + ')' : ''), 'Voltar ao automático', function () {
-          periodMode = 'auto'; amountTouched = false;
-          renderAmountField_(); renderGeralNote_(); renderP75_(); renderPreview_();
-        });
+        setSlot_('b-geral-note', '');
       } else {
         setSlot_('b-geral-note', geralAutoAmount_() !== null
           ? 'Automático: soma dos orçamentos + estimativa do que não tem orçamento. Digite um valor para fixar'
@@ -14922,7 +14937,7 @@
           amountTouched = true; amountValue = v;
           var wasAuto = periodMode === 'auto';
           periodMode = 'manual';
-          if (wasAuto) renderGeralNote_();
+          if (wasAuto) { renderGeralNote_(); renderModeToggle_(); }
           renderPreview_(); renderP75_();
         });
         return;
@@ -15112,6 +15127,12 @@
     if (showModeToggle) {
       document.getElementById('b-mode-auto').onchange = function () {
         periodMode = this.checked ? 'auto' : 'manual';
+        // Geral: desligar o Automático fixa o valor que a pessoa estava vendo (não recalcula nem zera em silêncio).
+        if (isGeral && periodMode === 'manual' && !amountTouched) {
+          var seen = geralAutoAmount_();
+          amountValue = seen !== null ? seen : manualAmount; amountTouched = true;
+        }
+        renderGeralNote_();
         renderAmountField_();
         renderP75_();
         renderPreview_();
@@ -16797,14 +16818,23 @@
       });
     }
     document.getElementById('m-submit').onclick = function () { submitTx_(false, document.getElementById('m-submit')); };
-    // Tooltip do app (não o nativo do navegador), só ao passar o mouse: clicar/tocar é salvar, não mostra nada.
+    // Tooltip do app (não o nativo do navegador). PC: só depois de 2 s com o mouse parado em cima (clicar é salvar, não mostra nada).
+    // Celular: o toque longo padrão do app (wireDayCell_); o toque curto salva.
     var saveMoreBtn_ = document.getElementById('m-submit-more');
+    function saveMore_() { submitTx_(true, saveMoreBtn_); }
     if (HOVER_CAPABLE_) {
-      saveMoreBtn_.addEventListener('mouseenter', function () { showTooltip_(saveMoreBtn_, saveMoreBtn_.getAttribute('data-tooltip')); });
-      saveMoreBtn_.addEventListener('mouseleave', hideTooltip_);
-      saveMoreBtn_.addEventListener('click', hideTooltip_);
+      var saveMoreTimer_ = null;
+      saveMoreBtn_.addEventListener('mouseenter', function () {
+        clearTimeout(saveMoreTimer_);
+        saveMoreTimer_ = setTimeout(function () { saveMoreTimer_ = null; showTooltip_(saveMoreBtn_, saveMoreBtn_.getAttribute('data-tooltip')); }, SAVE_MORE_TOOLTIP_DELAY_MS_);
+      });
+      function cancelSaveMoreTip_() { clearTimeout(saveMoreTimer_); saveMoreTimer_ = null; hideTooltip_(); }
+      saveMoreBtn_.addEventListener('mouseleave', cancelSaveMoreTip_);
+      saveMoreBtn_.addEventListener('click', cancelSaveMoreTip_);
+      saveMoreBtn_.onclick = saveMore_;
+    } else {
+      wireDayCell_(saveMoreBtn_, saveMore_, false);
     }
-    document.getElementById('m-submit-more').onclick = function () { submitTx_(true, document.getElementById('m-submit-more')); };
   }
 
   // ---------- swipe horizontal entre abas ----------
