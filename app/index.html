@@ -5633,7 +5633,8 @@
   // Conta cujo saldo foi consolidado (ponto fixo: saldo inicial ou ajuste manual do "Saldo atual") há mais de um mês ganha um
   // aviso no Início: atualizar o saldo atual de tempos em tempos revela o que ficou sem lançar ou foi lançado errado. Tocar no
   // aviso abre "Editar conta"; o X dispensa a conta até o mês seguinte; Configurações desliga tudo. Por aparelho, como o tema.
-  // Cartão fica de fora (o saldo dele é o limite que sobra e a fatura já se confere em "Subir fatura").
+  // Cartão entra também: o que se consolida nele é o LIMITE restante (o "saldo" do cartão), e o melhor momento é logo depois de
+  // subir a fatura e revisar a fila de lançamentos a confirmar -- o texto do aviso diz isso.
   var CONSOL_REMINDERS_OFF_KEY_ = 'financas-consolidation-reminders-off';
   var CONSOL_DISMISSED_KEY_ = 'financas-consolidation-dismissed'; // { idDaConta: 'AAAA-MM' do mês em que foi dispensado }
   var CONSOL_CONFIRMED_KEY_ = 'financas-consolidation-confirmed'; // { idDaConta: 'AAAA-MM-DD' em que o saldo foi conferido sem diferença }
@@ -5670,7 +5671,7 @@
     var dismissed = lsJsonObject_(CONSOL_DISMISSED_KEY_);
     var out = [];
     (STATE.accounts || []).forEach(function (a) {
-      if (a.archived || a.type === 'credit_card' || String(a.id).indexOf('tmp-') === 0) return;
+      if (a.archived || String(a.id).indexOf('tmp-') === 0) return;
       if (dismissed[a.id] === thisMonth) return;
       var since = lastConsolidationYmd_(a.id, today);
       if (!since || since > limitYmd) return;
@@ -5685,10 +5686,15 @@
   function consolidationReminderHtml_() {
     return consolidationRemindersDue_().map(function (r) {
       var ago = r.months === 1 ? 'há mais de um mês' : 'há ' + r.months + ' meses';
+      var isCard = r.account.type === 'credit_card';
+      var text = isCard
+        ? 'O limite restante do cartão <b>' + escapeHtml(r.account.name) + '</b> foi consolidado ' + ago + ' (em ' + fmtDate(r.since) + '). ' +
+          'Vale atualizá-lo logo depois de subir a fatura e revisar a fila de lançamentos a confirmar, pra ver se algo não foi lançado, ou foi lançado errado.'
+        : 'O saldo da conta <b>' + escapeHtml(r.account.name) + '</b> foi consolidado ' + ago + ' (em ' + fmtDate(r.since) + '). ' +
+          'Vale atualizar o saldo atual dela de tempos em tempos pra confirmar se algo não foi lançado, ou foi lançado errado.';
       return '<div class="home-reminder" role="button" tabindex="0" data-consol-acc="' + escapeHtml(r.account.id) + '">' +
         '<span class="home-reminder-ico">' + CONSOL_REMINDER_ICON_ + '</span>' +
-        '<span class="home-reminder-txt">O saldo da conta <b>' + escapeHtml(r.account.name) + '</b> foi consolidado ' + ago + ' (em ' + fmtDate(r.since) + '). ' +
-        'Vale atualizar o saldo atual dela de tempos em tempos pra confirmar se algo não foi lançado, ou foi lançado errado.</span>' +
+        '<span class="home-reminder-txt">' + text + '</span>' +
         '<button type="button" class="home-reminder-x" data-consol-dismiss="' + escapeHtml(r.account.id) + '" aria-label="Dispensar até o mês que vem" data-tooltip="Dispensar até o mês que vem">×</button>' +
       '</div>';
     }).join('');
@@ -20171,7 +20177,7 @@
       '<label class="settings-switch" style="margin-top:10px"><input type="checkbox" id="st-auto-entries" role="switch"' + (STATE.autoEntriesEnabled ? ' checked' : '') + '><div class="grow"><div>Lançar sozinho o que já é conhecido</div>' +
       '<div class="muted">Quando fornecedor, categoria e conta já vêm do seu histórico, o lançamento entra no Extrato com o selo "a confirmar" e continua na fila até você confirmar ou descartar. Desligar não desfaz os que já entraram.</div></div></label>' +
       '<label class="settings-switch" style="margin-top:10px"><input type="checkbox" id="st-consol-reminders" role="switch"' + (consolidationRemindersOn_() ? ' checked' : '') + '><div class="grow"><div>Lembrar de conferir o saldo das contas</div>' +
-      '<div class="muted">No Início, avisa quando o saldo de uma conta foi consolidado há mais de um mês. Fica só neste aparelho.</div></div></label>' +
+      '<div class="muted">No Início, avisa quando o saldo de uma conta (ou o limite restante de um cartão) foi consolidado há mais de um mês. Fica só neste aparelho.</div></div></label>' +
       (analytics_().enabled() ?
         '<label class="settings-switch" style="margin-top:10px"><input type="checkbox" id="st-analytics" role="switch"' + (analytics_().optedOut() ? '' : ' checked') + '><div class="grow"><div>Ajudar a melhorar o Meu Cacau</div>' +
         '<div class="muted">Envia, de forma anônima, quais telas você usa e por quanto tempo. Nunca envia valores, nomes ou descrições dos seus lançamentos.</div></div></label>' : '') +
