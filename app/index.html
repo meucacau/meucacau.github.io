@@ -1032,8 +1032,12 @@
     .modal input, .modal select, .modal textarea { font-size: 16px; }
   }
   /* Título do campo bem mais forte que as perguntas de ação ("Lembrar categoria?", "Reembolso?") -- PC e celular. */
-  .modal .field label { font-size: 14px; font-weight: 600; color: var(--text); padding-left: 4px; margin-bottom: 0; }
-  /* Espaçamento uniforme (referência: Valor): o título encosta no campo e cada campo fica 22px abaixo do de cima. */
+  .modal .field label { font-size: 14px; font-weight: 600; color: var(--text); padding-left: 4px; margin-bottom: var(--field-title-gap); }
+  /* Espaçamento uniforme (referência: o "Primeiro ciclo" do orçamento, cabeçalho de 34px com o título centralizado = ~9px
+     entre o título e o campo): vale pra todo título de campo; cada campo fica 22px abaixo do de cima. */
+  :root { --field-title-gap: 9px; }
+  .tx-f-head { margin-bottom: var(--field-title-gap); }
+  .modal .field .budget-first-head > label, .modal .field label.budget-switch { margin-bottom: 0; }
   .modal .field { margin-bottom: 22px; }
   /* Orçamento: os campos já trazem o próprio respiro (cabeçalho de 34px + linha de dica de altura reservada), então só 4px entre eles. */
   .modal .field:has(.budget-first-head) { margin-bottom: 4px; }
@@ -1079,10 +1083,10 @@
   .dd-sheet-empty { padding: 22px 14px; text-align: center; color: var(--text-muted); }
   @media (min-width: 641px) { .dd-sheet-backdrop { display: none; } }
   @media (prefers-reduced-motion: no-preference) {
-    .dd-sheet-backdrop.dd-sheet-bd-in { animation: modal-fade .22s ease backwards; }
-    .dd-sheet.dd-sheet-in { animation: modal-rise .34s cubic-bezier(.2,.8,.2,1) backwards; }
-    .dd-sheet-backdrop.dd-sheet-out { animation: modal-fade-out .17s ease forwards; }
-    .dd-sheet-backdrop.dd-sheet-out .dd-sheet { animation: modal-sink .17s ease-in forwards; }
+    .dd-sheet-backdrop.dd-sheet-bd-in { animation: modal-fade .15s ease backwards; }
+    .dd-sheet.dd-sheet-in { animation: modal-rise .26s cubic-bezier(.2,.8,.2,1) backwards; }
+    .dd-sheet-backdrop.dd-sheet-out { animation: modal-fade-out .15s ease forwards; }
+    .dd-sheet-backdrop.dd-sheet-out .dd-sheet { animation: modal-sink .15s ease-in forwards; }
     @keyframes modal-fade-out { to { opacity: 0; } }
     @keyframes modal-sink { to { transform: translateY(100%); } }
     .dd-sheet-option { transition: background-color .15s ease; }
@@ -1783,7 +1787,7 @@
   .budget-from-start { flex: 0 0 auto; padding: 4px 12px; font-size: 12px; white-space: nowrap; }
   .budget-start-date { position: relative; flex: 1 1 auto; display: flex; align-items: center; justify-content: center; height: 48px; padding: 0 12px; box-sizing: border-box; border: 1px solid var(--border); border-radius: 24px; font-size: 13px; line-height: 1.25; text-align: center; color: var(--text); }
   .budget-start-date input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; opacity: 0; cursor: pointer; }
-  .budget-preview-title { display: block; margin: 22px 0 6px; }
+  .budget-preview-title { display: block; margin: 22px 0 var(--field-title-gap); }
   .budget-preview-slot { min-height: 56px; }
   #b-preview { min-height: 22px; display: flex; align-items: center; }
   .budget-preview-note { font-size: 12px; margin-top: 6px; min-height: 32px; }
@@ -2056,15 +2060,15 @@
        aparecia na hora, e quando a classe view-enter saía (1,1 s) a própria animação recomeçava -- sumia e reaparecia. */
     .view-enter > .home-msg.home-msg-in { animation: home-msg-fade .65s cubic-bezier(.2,.8,.2,1) 0.08s both; }
     /* Abrir janelas · sobe da base da tela (a janela já nasce encostada embaixo; nas centralizadas, sobe um pouco). */
-    .modal.modal-pop { animation: modal-rise .3s cubic-bezier(.2,.8,.2,1) backwards; }
-    .modal-backdrop.modal-pop-bd { animation: modal-fade .2s ease backwards; }
+    .modal.modal-pop { animation: modal-rise .24s cubic-bezier(.2,.8,.2,1) backwards; }
+    .modal-backdrop.modal-pop-bd { animation: modal-fade .15s ease backwards; }
     @keyframes modal-rise { from { transform: translateY(100%); opacity: .6; } }
     .modal-backdrop.modal-center .modal.modal-pop { animation-name: modal-rise-short; }
     @keyframes modal-rise-short { from { transform: translateY(56px); opacity: 0; } }
     @keyframes modal-fade { from { opacity: 0; } }
     /* Fechar janelas (voltar, Esc, tocar fora, Salvar) · a inversa de abrir: desce e some, o fundo some junto. */
-    .modal.modal-out { animation: modal-sink .18s cubic-bezier(.4,0,1,1) forwards; }
-    .modal-backdrop.modal-out-bd { animation: modal-fade-out .18s ease forwards; }
+    .modal.modal-out { animation: modal-sink .15s cubic-bezier(.4,0,1,1) forwards; }
+    .modal-backdrop.modal-out-bd { animation: modal-fade-out .15s ease forwards; }
     .modal-backdrop.modal-center .modal.modal-out { animation-name: modal-sink-short; }
     @keyframes modal-sink-short { to { transform: translateY(56px); opacity: 0; } }
     /* Tooltips · surgem com um leve zoom/subida (a origem fica do lado da seta). */
@@ -2963,7 +2967,7 @@
    *  faria (abrir um card, marcar uma opção...): esse gesto serve só pra fechar o menu. Come o próximo "click"
    *  (fase de captura, antes de qualquer handler do alvo); desarma sozinho se começar outro gesto (mousedown/
    *  touchstart) ou depois de 3 s, pra nunca engolir um clique legítimo mais tarde. */
-  function swallowNextClick_() {
+  function swallowNextClick_(fromTouchStart) {
     var timer = null;
     function disarm() {
       document.removeEventListener('click', eat, true);
@@ -2974,12 +2978,28 @@
     function eat(ev) { ev.stopPropagation(); ev.preventDefault(); disarm(); }
     document.addEventListener('click', eat, true);
     // Registrados durante o mousedown atual: só valem pro PRÓXIMO gesto (o atual já está sendo despachado).
-    document.addEventListener('mousedown', disarm, true);
+    // Quando quem fecha é o touchstart (fromTouchStart), o mousedown emulado que vem logo antes do clique é do MESMO toque:
+    // não pode desarmar (senão o clique passaria); se o toque virar rolagem, o próximo touchstart ou os 3 s desarmam.
+    if (!fromTouchStart) document.addEventListener('mousedown', disarm, true);
     document.addEventListener('touchstart', disarm, true);
     timer = setTimeout(disarm, 3000);
   }
+  /** Tooltip aberto por toque: toque/clique FORA dele só o fecha (não faz a ação da área tocada). `pop` = o que conta
+   *  como "dentro" (objeto com contains). Só engole o clique se o tooltip ainda estava aberto (ele some sozinho em 15 s,
+   *  e um listener esquecido não pode engolir um toque legítimo depois). Guarda o desarmador em stopTooltipOutsideClick_. */
+  function dismissTooltipOnOutside_(pop) {
+    var stop = dismissOnOutsideClick(pop, function () {
+      var had = !!document.getElementById('shared-tooltip');
+      hideTooltip_();
+      stop();
+      if (stopTooltipOutsideClick_ === stop) stopTooltipOutsideClick_ = null;
+      if (had) swallowNextClick_();
+    }, false);
+    stopTooltipOutsideClick_ = stop;
+    return stop;
+  }
   /** swallowClick (opcional): o toque/clique que fecha o menu NÃO dispara o efeito dele (ver swallowNextClick_).
-   *  Fica desligado nos tooltips (fechar tooltip não deveria custar o toque). */
+   *  Os tooltips também engolem (dismissTooltipOnOutside_): tocar fora só fecha, não aciona o que estava embaixo. */
   function dismissOnOutsideClick(pop, cleanup, swallowClick) {
     function outsideClick(e) {
       if (pop.contains(e.target)) return;
@@ -3054,10 +3074,7 @@
         if (!tipText_()) return;
         if (stopTooltipOutsideClick_) stopTooltipOutsideClick_();
         showTooltipForTap_(el, tipText_(), rich);
-        stopTooltipOutsideClick_ = dismissOnOutsideClick(el, function () {
-          hideTooltip_();
-          stopTooltipOutsideClick_ = null;
-        });
+        dismissTooltipOnOutside_(el);
       });
     }
   }
@@ -3092,7 +3109,12 @@
         showTooltip_(el, tip, rich);
         // O próximo toque em qualquer lugar fecha (registrado depois do gesto atual, então
         // não pega o próprio toque longo).
-        var close = function () { hideTooltip_(); document.removeEventListener('touchstart', close, true); };
+        var close = function () {
+          var had = !!document.getElementById('shared-tooltip');
+          hideTooltip_();
+          document.removeEventListener('touchstart', close, true);
+          if (had) swallowNextClick_(true); // o toque que fecha só fecha: não abre o dia/aba que estava embaixo
+        };
         document.addEventListener('touchstart', close, true);
       }, DAY_LONG_PRESS_MS_);
     }, { passive: true });
@@ -3471,7 +3493,7 @@
       if (closed) return;
       if (!motionOk_) { cleanup_(); return; }
       rootEl.classList.add('dd-sheet-out');
-      setTimeout(cleanup_, 170);
+      setTimeout(cleanup_, 150);
     }
     function onKey_(e) {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close_(); }
@@ -8213,7 +8235,7 @@
       '</div>' +
       '<div class="field"><label>Conta</label><div id="e-account-field" class="capsule-field"></div></div>' +
       '<div class="field">' +
-        '<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:2px 8px">' +
+        '<div class="tx-f-head" style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:2px 8px">' +
           '<label style="margin-bottom:0">Categoria</label>' +
           '<span id="e-remember-cat-field"></span>' +
         '</div>' +
@@ -8221,7 +8243,7 @@
       '</div>' +
       '<div class="field" style="display:flex;gap:8px">' +
         '<div style="flex:1;min-width:0">' +
-          '<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:2px 8px">' +
+          '<div class="tx-f-head" style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:2px 8px">' +
             '<label style="margin-bottom:0">Valor</label>' +
             // .field-action-group: os 2 links lado a lado, ~um espaço entre eles, colados na
             // direita (ver Stylesheet.html) -- e o flex de fora vê UM item só (o grupo), não 2.
@@ -8248,14 +8270,14 @@
       '</div>' +
       '<div class="field" style="display:flex;gap:8px">' +
         '<div style="flex:1;min-width:0">' +
-          '<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:nowrap;gap:2px 8px">' +
+          '<div class="tx-f-head" style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:nowrap;gap:2px 8px">' +
             '<label style="margin-bottom:0;white-space:nowrap;flex-shrink:0">' + counterpartyLabel + '</label>' +
             '<span id="e-forecast-toggle-field"></span>' +
           '</div>' +
           '<input id="e-counterparty" value="' + escapeHtml(t.counterparty || '') + '">' +
         '</div>' +
         '<div style="flex:1;min-width:0">' +
-          '<div style="display:flex;align-items:baseline"><label style="margin-bottom:0">Referente a</label></div>' +
+          '<div class="tx-f-head" style="display:flex;align-items:baseline"><label style="margin-bottom:0">Referente a</label></div>' +
           '<input id="e-desc" value="' + escapeHtml(t.description || '') + '">' +
         '</div>' +
       '</div>' +
@@ -9495,8 +9517,24 @@
     });
     setupCalendarDragScroll_(wrap);
     setupCalTodayBtn_(wrap);
-    renderTxCalendar_();
+    if (deferHeavyRender_) {
+      // Troca de aba pela barra: as semanas do Resumo são a parte mais pesada da tela (~80% do HTML). Reserva a altura (a da
+      // última vez) e as desenha DEPOIS do primeiro quadro, pra a animação de entrada da aba começar na hora.
+      renderTxCalendarModeSelector_();
+      renderTxCalendarFilteredStats_();
+      wrap.style.minHeight = (calWrapHeight_[scope] || 150) + 'px';
+      afterNextPaint_(function () {
+        if (!wrap.isConnected) return;
+        txCalendarScope_ = scope;
+        renderTxCalendarWeeks_();
+        calWrapHeight_[scope] = wrap.offsetHeight || calWrapHeight_[scope];
+        wrap.style.minHeight = '';
+      });
+    } else {
+      renderTxCalendar_();
+    }
   }
+  var calWrapHeight_ = {};
 
   /** Chamada pelo primeiro render do Extrato e sempre que os filtros mudam (ver
    *  applyTxFilters_, que zera STATE.txCalendarScrollLeft antes -- filtro novo volta a
@@ -11385,12 +11423,7 @@
         if (stopTooltipOutsideClick_) { stopTooltipOutsideClick_(); stopTooltipOutsideClick_ = null; }
         var tip = show_(true);
         // "Fora" = nem o círculo nem o tooltip (senão o toque no tooltip o fecharia antes do clique chegar nele).
-        var stop = dismissOnOutsideClick({ contains: function (t) { return el.contains(t) || (tip && tip.contains(t)); } }, function () {
-          hideTooltip_();
-          stop();
-          if (stopTooltipOutsideClick_ === stop) stopTooltipOutsideClick_ = null;
-        });
-        stopTooltipOutsideClick_ = stop;
+        dismissTooltipOnOutside_({ contains: function (t) { return el.contains(t) || (tip && tip.contains(t)); } });
       });
     });
   }
@@ -14623,7 +14656,7 @@
     var unitNames = { day: ['dia', 'dias'], week: ['semana', 'semanas'], month: ['mês', 'meses'] };
     openModal(
       '<h2>' + (isGeral ? 'Editar orçamento Geral' : (isEdit ? 'Editar orçamento' : 'Novo orçamento')) + '</h2>' +
-      (isGeral ? '' : '<div class="field"><label>Categoria (pode escolher mais de uma)</label><div id="b-category-field" class="capsule-field"></div></div>') +
+      (isGeral ? '' : '<div class="field"><label>Categorias</label><div id="b-category-field" class="capsule-field"></div></div>') +
       '<div class="field">' +
         '<div class="budget-first-head"><label>Ciclo</label>' +
           '<button type="button" class="secondary budget-from-start" id="b-cycle-sug" style="display:none"></button></div>' +
@@ -15391,14 +15424,16 @@
         '<button type="button" data-k="income">Receita</button>' +
         '<button type="button" data-k="transfer">Transferência</button>' +
       '</div>' +
-      '<div class="field" style="display:flex;gap:8px">' +
+      // Mesma ordem do Novo lançamento: Conta (transferência: De, Para, fatura), Data/Horário, Valor/Parcelas, Pago a/Referente a
+      // (transferência: Descrição) e Categoria (p-fields = Conta ou De/Para; p-fields-bottom = Categoria).
+      '<div id="p-fields"></div>' +
+      '<div class="field tx-f-date" style="display:flex;gap:8px">' +
         '<div style="flex:1"><label>Data</label><input type="date" id="p-date" value="' + p.date + '"></div>' +
         '<div style="flex:1"><label>Horário</label><input type="time" id="p-time" value="' + p.time + '"></div>' +
       '</div>' +
-      '<div id="p-fields"></div>' +
       '<div class="field tx-f-amount" style="display:flex;gap:8px">' +
         '<div style="flex:1">' +
-          '<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:2px 8px">' +
+          '<div class="tx-f-head" style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:2px 8px">' +
             '<label style="margin-bottom:0">Valor</label>' +
             // Um span-invólucro só (.field-action-group, ver Stylesheet.html), não três
             // filhos flex separados do container de fora: kind alterna qual dos dois de
@@ -15416,6 +15451,7 @@
         '<div class="tx-inst-col" style="flex:1" id="p-installments-wrapper"></div>' +
       '</div>' +
       '<div id="p-counterparty-field"></div>' +
+      '<div id="p-fields-bottom"></div>' +
       '<div style="display:flex;gap:8px">' +
         '<button class="secondary" id="p-discard" style="flex:1">Descartar</button>' +
         '<button id="m-submit" style="flex:1">Confirmar</button>' +
@@ -15541,7 +15577,7 @@
         field.innerHTML =
           '<div class="field" style="display:flex;gap:8px">' +
             '<div style="flex:1;min-width:0">' +
-              '<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:nowrap;gap:2px 8px">' +
+              '<div class="tx-f-head" style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:nowrap;gap:2px 8px">' +
                 '<label style="margin-bottom:0;white-space:nowrap;flex-shrink:0">' + counterpartyLabel + '</label>' +
                 '<span style="display:flex;flex-wrap:nowrap;gap:8px;min-width:0">' +
                   '<span id="p-remember-name-field"></span>' +
@@ -15551,7 +15587,7 @@
               '<input id="p-counterparty" value="' + escapeHtml(counterpartyValue) + '">' +
             '</div>' +
             '<div style="flex:1;min-width:0">' +
-              '<div style="display:flex;align-items:baseline"><label style="margin-bottom:0">Referente a</label></div>' +
+              '<div class="tx-f-head" style="display:flex;align-items:baseline"><label style="margin-bottom:0">Referente a</label></div>' +
               '<input id="p-desc" value="">' +
             '</div>' +
           '</div>';
@@ -15587,6 +15623,7 @@
       var container = document.getElementById('p-fields');
       var installmentsWrapper = document.getElementById('p-installments-wrapper');
       if (kind === 'transfer') {
+        document.getElementById('p-fields-bottom').innerHTML = '';
         container.innerHTML =
           '<div class="field"><label>De</label><div id="p-from-field" class="capsule-field"></div></div>' +
           '<div class="field"><label>Para</label><div id="p-to-field" class="capsule-field"></div></div>' +
@@ -15604,9 +15641,10 @@
         updateBillFieldP();
       } else {
         container.innerHTML =
-          '<div class="field"><label>Conta' + (p.accountGuess && p.suggestedAccountId ? ' <span class="muted" style="font-weight:400" data-account-guess>· palpite, confira se é conta ou cartão</span>' : '') + '</label><div id="p-account-field" class="capsule-field"></div></div>' +
-          '<div class="field">' +
-            '<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:2px 8px">' +
+          '<div class="field"><label>Conta' + (p.accountGuess && p.suggestedAccountId ? ' <span class="muted" style="font-weight:400" data-account-guess>· palpite, confira se é conta ou cartão</span>' : '') + '</label><div id="p-account-field" class="capsule-field"></div></div>';
+        document.getElementById('p-fields-bottom').innerHTML =
+          '<div class="field tx-f-category">' +
+            '<div class="tx-f-head" style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:2px 8px">' +
               '<label style="margin-bottom:0">Categoria</label>' +
               '<span id="p-remember-cat-field"></span>' +
             '</div>' +
@@ -17699,7 +17737,7 @@
    * Fecha a janela com a animação inversa da de abrir (desce e some); instant = true quando o arrasto da alça já a levou
    * embora. Enquanto anima, a janela já não conta como aberta (id solto) — Enter/Esc/atalhos não a enxergam mais.
    */
-  var MODAL_OUT_MS_ = 180;
+  var MODAL_OUT_MS_ = 150;
   function closeModal(instant) {
     var root = document.getElementById('modal-root');
     var bd = root.querySelector ? root.querySelector('.modal-backdrop') : null;
@@ -18947,6 +18985,15 @@
       });
     }).observe(document.body, { childList: true, subtree: true });
   }
+  /** Roda `fn` depois que o navegador pintou o quadro atual (rAF + tarefa seguinte); se o rAF for estrangulado (aba em segundo
+   *  plano), um timer de 80 ms garante que roda mesmo assim. Roda uma vez só. */
+  var deferHeavyRender_ = false; // true só durante o render() de uma troca de aba pela barra (ver goTo_ em setupSidebar_)
+  function afterNextPaint_(fn) {
+    var done = false;
+    function run() { if (done) return; done = true; fn(); }
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function () { setTimeout(run, 0); });
+    setTimeout(run, 80);
+  }
   function setupSidebar_() {
     var nav = document.querySelector('nav.tabbar');
     if (!nav) return;
@@ -18960,9 +19007,20 @@
       // lugar de sempre dentro de #app (ver finishSwipeTransition_), e um render()
       // aqui bagunçaria a troca em andamento.
       if (document.getElementById('swipe-overlay')) return;
-      STATE.currentView = view;
-      render();
+      if (view === STATE.currentView) { render(); return; }
+      // Duas fases (pedido de 21/11/2026: Início/Extrato levavam ~1 s pra começar a animar no celular): o toque já marca a
+      // aba e começa a animação do nome NA HORA; só depois que o navegador pintou esse quadro é que a tela nova é montada
+      // (render() é síncrono e pesado -- montar antes de pintar segurava o feedback até o fim da montagem).
+      var token = ++goToToken_;
+      syncTabbar_(view);
+      afterNextPaint_(function () {
+        if (token !== goToToken_ || document.getElementById('swipe-overlay')) return;
+        STATE.currentView = view;
+        deferHeavyRender_ = true;
+        try { render(); } finally { deferHeavyRender_ = false; }
+      });
     }
+    var goToToken_ = 0;
     document.querySelectorAll('.tab-btn[data-view]').forEach(function (btn) {
       wireDayCell_(btn, function () { goTo_(btn.dataset.view); }, true, TAB_TOOLTIP_DELAY_MS_);
     });
@@ -18980,7 +19038,7 @@
         if (panel.classList.contains('open') && !panel.contains(e.target) && !more.contains(e.target)) closeTabbarMore_();
       }, true);
       document.addEventListener('touchstart', function (e) {
-        if (panel.classList.contains('open') && !panel.contains(e.target) && !more.contains(e.target)) closeTabbarMore_();
+        if (panel.classList.contains('open') && !panel.contains(e.target) && !more.contains(e.target)) { closeTabbarMore_(); swallowNextClick_(true); }
       }, { capture: true, passive: true });
     }
     syncTabbar_(STATE.currentView);
