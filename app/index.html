@@ -17462,7 +17462,7 @@
         '<div style="flex:1">' +
           '<div class="tx-f-head" style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:2px 8px">' +
             '<label style="margin-bottom:0">Valor</label>' +
-            '<span class="field-action-group"><span id="i-outlier-field"></span></span>' +
+            '<span class="field-action-group"><span id="i-refund-field"></span><span id="i-refundlink-field"></span><span id="i-outlier-field"></span></span>' +
           '</div>' +
           '<input id="i-amount" type="text">' +
         '</div>' +
@@ -17506,6 +17506,35 @@
       if (outlierFlagged) return;
       if (isLikelyOutlier_(currentAmount_(), categoryField ? categoryField.getValue() : null, kind)) { outlierFlagged = true; updateOutlier_(); }
     }
+    // Reembolso (despesa: "Reembolso?" com as pessoas; receita: "Vincular reembolso?" às despesas) -- mesmos popups do Novo lançamento.
+    // Ficam só aqui até o lançamento existir; invoiceAcceptEdited_ cria as pessoas/vínculos logo depois de aceitar.
+    var stagedRefundShares = [];
+    var stagedRefundLinks = [];
+    function renderRefund_() {
+      var field = document.getElementById('i-refund-field');
+      if (!field) return;
+      if (kind !== 'expense') { field.innerHTML = ''; return; }
+      field.innerHTML = '<span class="field-action-link" id="i-refund-btn">' + escapeHtml(stagedRefundShares.length
+        ? 'Reembolso: ' + stagedRefundShares.length + (stagedRefundShares.length === 1 ? ' pessoa' : ' pessoas') : 'Reembolso?') + '</span>';
+      document.getElementById('i-refund-btn').onclick = function () {
+        openRefundSharesPopup_(currentAmount_, stagedRefundShares, function (staged) { stagedRefundShares = staged; renderRefund_(); });
+      };
+    }
+    function renderRefundLink_() {
+      var field = document.getElementById('i-refundlink-field');
+      if (!field) return;
+      if (kind !== 'income') { field.innerHTML = ''; return; }
+      field.innerHTML = '<span class="field-action-link" id="i-refundlink-btn">' + escapeHtml(stagedRefundLinks.length
+        ? 'Vincular: ' + stagedRefundLinks.length + (stagedRefundLinks.length === 1 ? ' despesa' : ' despesas') : 'Vincular reembolso?') + '</span>';
+      document.getElementById('i-refundlink-btn').onclick = function () {
+        openRefundLinkPopup_(currentAmount_, stagedRefundLinks, function (allocations) {
+          stagedRefundLinks = allocations;
+          renderRefundLink_();
+          autofillCounterpartyFromLinks_(document.getElementById('i-counterparty'), allocations);
+          if (suggestRefundCategory_(categoryField, allocations)) updateForecast_();
+        });
+      };
+    }
     // Vincular a um lançamento recorrente (mesmo botão e mesma sugestão da janela de pendências).
     var selectedForecastId = '';
     function updateForecast_() {
@@ -17539,6 +17568,8 @@
     });
     updateRemember_();
     updateOutlier_();
+    renderRefund_();
+    renderRefundLink_();
     updateForecast_();
     maybeSuggestForecastLink_();
     setupCounterpartySuggestions_(document.getElementById('i-counterparty'));
@@ -17590,18 +17621,57 @@
         rememberCategoryForCounterparty: rememberCategory, excludeFromAnalysis: outlierFlagged
       };
       if (showInstallment) { payload.installmentSeq = instSeq; payload.installmentTotal = instTotal; }
+      if (kind === 'income' && stagedRefundLinksExceed_(stagedRefundLinks, amount)) {
+        errorPopover(submitBtn, 'Os vínculos de reembolso passam do valor da receita. Reabra "Vincular" e ajuste.');
+        return;
+      }
       var forecastEl = document.getElementById('i-forecast');
       Object.assign(payload, forecastFieldsFromSelection_(forecastEl && forecastEl.value ? forecastEl.value : undefined, date));
-      invoiceAcceptEdited_(p, payload);
+      invoiceAcceptEdited_(p, payload, { kind: kind, shares: stagedRefundShares, links: stagedRefundLinks });
       openInvoiceReviewModal_(invId, index + 1, queue);
     };
   }
 
-  /** Aceita UM item com as edições da janela da fila: marca na hora, manda ao servidor e desfaz se der erro. */
-  function invoiceAcceptEdited_(item, payload) {
+  /** Depois que o lançamento existe: cria as pessoas nomeadas e os reembolsos (despesa) ou os vínculos às despesas (receita), como o
+   *  "Confirmar" das pendências. `refund` = { kind, shares, links } escolhidos na janela. */
+  function invoiceChainRefunds_(txId, refund) {
+    if (!refund) return Promise.resolve();
+    if (refund.kind === 'expense' && refund.shares && refund.shares.length) {
+      return Promise.all(refund.shares.map(function (sh) {
+        if (sh.personId) return resolveRealId_(sh.personId);
+        return run('createPerson', { name: sh.personName }).then(function (person) {
+          STATE.people.push({ id: person.ID, name: person.Name, archived: false });
+          return person.ID;
+        });
+      })).then(function (personIds) {
+        return run('setRefundSharesForPassiveTransaction', {
+          passiveTransactionId: txId,
+          shares: refund.shares.map(function (sh, i) { return { personId: personIds[i], expectedAmount: sh.expectedAmount }; })
+        });
+      });
+    }
+    if (refund.kind === 'income' && refund.links && refund.links.length) {
+      return Promise.all(refund.links.map(function (a) { return resolveRealId_(a.shareId); })).then(function (shareIds) {
+        return run('setRefundLinksForActiveTransaction', {
+          activeTransactionId: txId,
+          allocations: refund.links.map(function (a, i) { return { shareId: shareIds[i], amount: a.amount }; })
+        });
+      });
+    }
+    return Promise.resolve();
+  }
+
+  /** Aceita UM item com as edições da janela da fila: marca na hora, manda ao servidor (e encadeia os reembolsos) e desfaz se der erro. */
+  function invoiceAcceptEdited_(item, payload, refund) {
     var prevStatus = item.status;
     item.status = 'accepted';
-    afterMutation_(run('acceptInvoiceItems', { items: [payload] })).catch(function (err) {
+    afterMutation_(run('acceptInvoiceItems', { items: [payload] }).then(function (res) {
+      var created = (res && res.created && res.created[0]) || null;
+      // O lançamento já existe: se só o reembolso falhar, o item NÃO volta a "pendente" (aceitar de novo duplicaria a compra).
+      return created ? invoiceChainRefunds_(created.id, refund).catch(function (err) {
+        showToast('Lançamento criado, mas o reembolso não foi salvo: ' + err.message + ' Abra o lançamento no Extrato e refaça.', true);
+      }) : null;
+    })).catch(function (err) {
       item.status = prevStatus;
       showToast(err.message, true);
     });
