@@ -5633,11 +5633,13 @@
   // Conta cujo saldo foi consolidado (ponto fixo: saldo inicial ou ajuste manual do "Saldo atual") há mais de um mês ganha um
   // aviso no Início: atualizar o saldo atual de tempos em tempos revela o que ficou sem lançar ou foi lançado errado. Tocar no
   // aviso abre "Editar conta"; o X dispensa a conta até o mês seguinte; Configurações desliga tudo. Por aparelho, como o tema.
-  // Cartão entra também: o que se consolida nele é o LIMITE restante (o "saldo" do cartão), e o melhor momento é logo depois de
-  // subir a fatura e revisar a fila de lançamentos a confirmar -- o texto do aviso diz isso.
+  // Cartão entra também, mas só depois de SUBIR UMA FATURA NOVA ("Subir fatura" > Criar fila): o que se consolida nele é o LIMITE
+  // restante (o "saldo" do cartão) e o melhor momento é logo depois de subir a fatura e revisar a fila de lançamentos a confirmar.
+  // Não há prazo de um mês pro cartão; o aviso some ao salvar o limite (ou ao conferir sem diferença) e uma nova fatura reabre.
   var CONSOL_REMINDERS_OFF_KEY_ = 'financas-consolidation-reminders-off';
   var CONSOL_DISMISSED_KEY_ = 'financas-consolidation-dismissed'; // { idDaConta: 'AAAA-MM' do mês em que foi dispensado }
   var CONSOL_CONFIRMED_KEY_ = 'financas-consolidation-confirmed'; // { idDaConta: 'AAAA-MM-DD' em que o saldo foi conferido sem diferença }
+  var CONSOL_UPLOADED_KEY_ = 'financas-consolidation-invoice-uploaded'; // { idDoCartão: 'AAAA-MM-DD' da última fatura subida e ainda sem limite conferido }
   function lsJsonObject_(key) {
     try { var v = JSON.parse(localStorage.getItem(key)); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch (e) { return {}; }
   }
@@ -5668,12 +5670,18 @@
     var today = todayYmd(), thisMonth = today.slice(0, 7);
     var limit = new Date(); limit.setMonth(limit.getMonth() - 1);
     var limitYmd = limit.getFullYear() + '-' + String(limit.getMonth() + 1).padStart(2, '0') + '-' + String(limit.getDate()).padStart(2, '0');
-    var dismissed = lsJsonObject_(CONSOL_DISMISSED_KEY_);
+    var dismissed = lsJsonObject_(CONSOL_DISMISSED_KEY_), uploaded = lsJsonObject_(CONSOL_UPLOADED_KEY_);
     var out = [];
     (STATE.accounts || []).forEach(function (a) {
       if (a.archived || String(a.id).indexOf('tmp-') === 0) return;
       if (dismissed[a.id] === thisMonth) return;
       var since = lastConsolidationYmd_(a.id, today);
+      if (a.type === 'credit_card') { // cartão: só depois de subir uma fatura (e se o limite não foi consolidado depois dela)
+        var up = uploaded[a.id];
+        if (!up || (since && up < since)) return;
+        out.push({ account: a, since: since, months: 0, uploaded: up });
+        return;
+      }
       if (!since || since > limitYmd) return;
       var p = since.split('-'), t = today.split('-');
       var months = (Number(t[0]) - Number(p[0])) * 12 + (Number(t[1]) - Number(p[1])) - (Number(t[2]) < Number(p[2]) ? 1 : 0);
@@ -5688,8 +5696,8 @@
       var ago = r.months === 1 ? 'há mais de um mês' : 'há ' + r.months + ' meses';
       var isCard = r.account.type === 'credit_card';
       var text = isCard
-        ? 'O limite restante do cartão <b>' + escapeHtml(r.account.name) + '</b> foi consolidado ' + ago + ' (em ' + fmtDate(r.since) + '). ' +
-          'Vale atualizá-lo logo depois de subir a fatura e revisar a fila de lançamentos a confirmar, pra ver se algo não foi lançado, ou foi lançado errado.'
+        ? 'Você subiu uma fatura do cartão <b>' + escapeHtml(r.account.name) + '</b> em ' + fmtDate(r.uploaded) + '. ' +
+          'Depois de revisar a fila de lançamentos a confirmar, vale atualizar o limite restante dele pra ver se algo não foi lançado, ou foi lançado errado.'
         : 'O saldo da conta <b>' + escapeHtml(r.account.name) + '</b> foi consolidado ' + ago + ' (em ' + fmtDate(r.since) + '). ' +
           'Vale atualizar o saldo atual dela de tempos em tempos pra confirmar se algo não foi lançado, ou foi lançado errado.';
       return '<div class="home-reminder" role="button" tabindex="0" data-consol-acc="' + escapeHtml(r.account.id) + '">' +
@@ -5723,6 +5731,17 @@
         render();
       };
     });
+  }
+  /** Fatura nova criada ("Criar fila"): o cartão passa a ter o aviso do limite (e um X anterior deixa de valer). */
+  function consolidationInvoiceUploaded_(cardId) {
+    if (!cardId) return;
+    var up = lsJsonObject_(CONSOL_UPLOADED_KEY_); up[cardId] = todayYmd(); lsJsonSet_(CONSOL_UPLOADED_KEY_, up);
+    var dis = lsJsonObject_(CONSOL_DISMISSED_KEY_); if (dis[cardId]) { delete dis[cardId]; lsJsonSet_(CONSOL_DISMISSED_KEY_, dis); }
+  }
+  /** Limite do cartão conferido (salvo com ou sem diferença): o aviso some até a próxima fatura. */
+  function consolidationInvoiceClear_(cardId) {
+    var up = lsJsonObject_(CONSOL_UPLOADED_KEY_);
+    if (up[cardId]) { delete up[cardId]; lsJsonSet_(CONSOL_UPLOADED_KEY_, up); }
   }
   /** Saldo conferido pelo aviso e igual ao do app: não cria lançamento, então guarda a data pra o lembrete voltar a contar de hoje. */
   function consolidationConfirmedToday_(accountId) {
@@ -10166,6 +10185,7 @@
           ? applyBalanceTxPreview_(existing.id, diffCents > 0 ? 'income' : 'expense', Math.abs(diffCents) / 100, ACCOUNT_CONSOLIDATION_DESCRIPTION_)
           : null;
         if (fromReminder_ && diffCents === 0) consolidationConfirmedToday_(existing.id); // conferiu e bate: o lembrete volta a contar de hoje
+        if (existing.type === 'credit_card' && (fromReminder_ || diffCents !== 0)) consolidationInvoiceClear_(existing.id); // limite conferido: sem aviso até a próxima fatura
         render();
         // resolveRealId_: existing.id pode ainda ser temporário numa corrida bem estreita
         // (editar uma conta na fração de segundo entre criá-la e o servidor confirmar).
@@ -17179,6 +17199,7 @@
           return { date: i.date, description: i.description, amount: i.amount, kind: i.kind, installmentSeq: i.installmentSeq, installmentTotal: i.installmentTotal };
         })
       }).then(function (created) {
+        consolidationInvoiceUploaded_(d.accountId);
         invoiceUi_.invoices.unshift(created.invoice);
         invoiceUi_.items = invoiceUi_.items.concat(created.items);
         invoiceUi_.draft = null; invoiceUi_.view = 'doc'; invoiceUi_.openId = created.invoice.id;
@@ -20177,7 +20198,7 @@
       '<label class="settings-switch" style="margin-top:10px"><input type="checkbox" id="st-auto-entries" role="switch"' + (STATE.autoEntriesEnabled ? ' checked' : '') + '><div class="grow"><div>Lançar sozinho o que já é conhecido</div>' +
       '<div class="muted">Quando fornecedor, categoria e conta já vêm do seu histórico, o lançamento entra no Extrato com o selo "a confirmar" e continua na fila até você confirmar ou descartar. Desligar não desfaz os que já entraram.</div></div></label>' +
       '<label class="settings-switch" style="margin-top:10px"><input type="checkbox" id="st-consol-reminders" role="switch"' + (consolidationRemindersOn_() ? ' checked' : '') + '><div class="grow"><div>Lembrar de conferir o saldo das contas</div>' +
-      '<div class="muted">No Início, avisa quando o saldo de uma conta (ou o limite restante de um cartão) foi consolidado há mais de um mês. Fica só neste aparelho.</div></div></label>' +
+      '<div class="muted">No Início, avisa quando o saldo de uma conta foi consolidado há mais de um mês e, no cartão, quando você sobe uma fatura nova (pra atualizar o limite restante). Fica só neste aparelho.</div></div></label>' +
       (analytics_().enabled() ?
         '<label class="settings-switch" style="margin-top:10px"><input type="checkbox" id="st-analytics" role="switch"' + (analytics_().optedOut() ? '' : ' checked') + '><div class="grow"><div>Ajudar a melhorar o Meu Cacau</div>' +
         '<div class="muted">Envia, de forma anônima, quais telas você usa e por quanto tempo. Nunca envia valores, nomes ou descrições dos seus lançamentos.</div></div></label>' : '') +
