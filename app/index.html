@@ -2156,6 +2156,13 @@
   .inv-inst { color: var(--text-muted); font-size: 12px; font-style: normal; }
   .inv-amt { flex: none; font-variant-numeric: tabular-nums; color: var(--expense); }
   .inv-amt.inc { color: var(--income); }
+  .inv-dup { background: var(--expense); color: #fff; padding: 8px 10px; border-radius: 8px; margin-bottom: 12px; font-size: 13px; }
+  .inv-dup-head { margin-bottom: 6px; }
+  .inv-dup-table { width: 100%; border-collapse: collapse; background: rgba(255,255,255,.16); border-radius: 6px; font-size: 12.5px; }
+  .inv-dup-table th, .inv-dup-table td { text-align: left; padding: 3px 8px; font-weight: normal; vertical-align: top; overflow-wrap: anywhere; }
+  .inv-dup-table thead th { font-weight: 600; font-size: 11.5px; opacity: .9; }
+  .inv-dup-table tbody th { opacity: .85; white-space: nowrap; }
+  .inv-dup-table .inline-icon, .inv-dup .inline-icon { stroke: currentColor; }
   .inv-match { margin: 2px 0 0 48px; color: var(--text-muted); font-size: 12px; }
   .inv-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 6px 0 0 48px; }
   .inv-act { padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: none; color: inherit; font: inherit; font-size: 12px; cursor: pointer; }
@@ -17279,6 +17286,32 @@
       .map(function (i) { return i.id; });
   }
 
+  /** Quadro do aviso de duplicata do "Fatura a confirmar": o item da fatura LADO A LADO com o lançamento que já está no Extrato
+   *  (data, nome, valor, parcela e, só do Extrato, "referente a" e categoria), pra comparar sem sair da janela. Campo diferente fica sublinhado. */
+  function invoiceMatchCompareHtml_(match, it) {
+    var t = match.tx;
+    var exact = match.level === 'exact';
+    var tName = t.counterparty || t.description || 'sem nome';
+    var tRef = t.counterparty && t.description && t.description !== t.counterparty ? t.description : '';
+    var tDate = fmtDate(t.date) + (t.time ? ' às ' + t.time : '');
+    var iInst = it.installmentSeq ? it.installmentSeq + '/' + it.installmentTotal : '';
+    var tInst = t.installmentSeq ? t.installmentSeq + '/' + t.installmentTotal : '';
+    function cell(txt, diff) { return '<td' + (diff ? ' style="text-decoration:underline"' : '') + '>' + escapeHtml(txt) + '</td>'; }
+    function row(label, a, b, diff) { return '<tr><th>' + label + '</th>' + cell(a, diff) + cell(b, diff) + '</tr>'; }
+    var rows = row('Data', fmtDate(it.date), tDate, it.date !== t.date) +
+      row('Nome', it.description, tName, String(it.description).trim().toLowerCase() !== String(tName).trim().toLowerCase()) +
+      row('Valor', fmtMoney(it.amount), fmtMoney(t.amount), Math.abs(it.amount - t.amount) >= 0.01);
+    if (iInst || tInst) rows += row('Parcela', iInst || '—', tInst || '—', iInst !== tInst);
+    var extra = '';
+    if (tRef) extra += '<tr><th>Referente a</th><td></td>' + cell(tRef, false) + '</tr>';
+    extra += '<tr><th>Categoria</th><td></td><td>' + categoryLabelHtml(t.categoryId) + '</td></tr>';
+    return '<div class="inv-dup">' +
+      '<div class="inv-dup-head">' + UI_ICON_WARN_ + ' ' + (exact ? 'Parece já lançado no Extrato' : 'Possível duplicata de um lançamento do Extrato') +
+        ' — confira antes de confirmar' + (exact ? ' (se for o mesmo, ignore).' : '.') + '</div>' +
+      '<table class="inv-dup-table"><thead><tr><th></th><th>Na fatura</th><th>No Extrato</th></tr></thead><tbody>' + rows + extra + '</tbody></table>' +
+      '</div>';
+  }
+
   function openInvoiceReviewModal_(invId, index, queue) {
     var inv = invoiceById_(invId);
     if (!inv) { openInvoiceModal(); return; }
@@ -17294,13 +17327,7 @@
     var categoryTouchedByUser = false;
     var inst = p.installmentSeq ? ' · parcela ' + p.installmentSeq + '/' + p.installmentTotal : '';
     var sortLabel = invoiceReviewSort_ === 'desc' ? 'Mais recentes primeiro' : 'Mais antigas primeiro';
-    var matchWarning = '';
-    if (match) {
-      var t = match.tx;
-      matchWarning = '<div style="background:var(--expense);color:#fff;padding:8px;border-radius:8px;margin-bottom:12px;font-size:13px">' + UI_ICON_WARN_ + ' ' +
-        (match.level === 'exact' ? 'Parece já lançado: ' : 'Possível duplicata de: ') + escapeHtml(fmtDate(t.date)) + ' · ' + escapeHtml(t.counterparty || t.description || 'sem nome') + ' · ' + escapeHtml(fmtMoney(t.amount)) +
-        ' — confira antes de confirmar' + (match.level === 'exact' ? ' (se for o mesmo, ignore).' : '.') + '</div>';
-    }
+    var matchWarning = match ? invoiceMatchCompareHtml_(match, p) : '';
     var counterpartyLabel = kind === 'income' ? 'Recebido de' : 'Pago a';
 
     openModal(
