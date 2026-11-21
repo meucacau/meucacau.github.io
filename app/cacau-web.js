@@ -3454,6 +3454,11 @@ function acceptInvoiceItems(input) {
     if (typeof w.counterparty === 'string' && w.counterparty.trim()) row.Counterparty = w.counterparty.trim().slice(0, 200);
     if (typeof w.description === 'string' && w.description.trim()) row.Description = w.description.trim().slice(0, 200);
     if (w.rememberCategoryForCounterparty && categoryId && row.Counterparty) saveCounterpartyMapping_(row.Counterparty, categoryId);
+    // Vínculo a um lançamento recorrente (escolhido na janela da fila); mês do ciclo só vem quando difere do mês da data.
+    if (typeof w.forecastId === 'string' && w.forecastId && findById_('Forecasts', w.forecastId)) {
+      row.ForecastID = w.forecastId;
+      row.ForecastCycleMonth = /^\d{4}-\d{2}$/.test(w.forecastCycleMonth || '') ? w.forecastCycleMonth : '';
+    }
     // Parcela editada na janela (installmentSeq/installmentTotal presentes): vale no lugar da que veio do documento; vazio nos dois = à vista.
     if (w.installmentSeq !== undefined || w.installmentTotal !== undefined) {
       var editSeq = Number(w.installmentSeq) || 0, editTotal = Number(w.installmentTotal) || 0;

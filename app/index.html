@@ -1237,6 +1237,13 @@
   .sup-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .sup-stats > div { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; }
   .sup-stats .muted { font-size: 11px; }
+  /* aba Categorias: quantidade de lançamentos + minigráfico dos últimos 12 meses embaixo do nome */
+  .cat-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .cat-stats { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+  .cat-spark { display: flex; align-items: flex-end; gap: 2px; width: 82px; height: 16px; flex: none; }
+  .cat-spark-col { flex: 1; min-width: 0; height: 100%; display: flex; align-items: flex-end; }
+  .cat-spark-bar { display: block; width: 100%; min-height: 2px; border-radius: 1px 1px 0 0; background: var(--primary); }
+  .cat-spark-bar.empty { background: var(--border); }
   .sup-months { display: flex; align-items: flex-end; gap: 4px; height: 84px; margin-bottom: 8px; }
   .sup-month { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; }
   .sup-month-bar { display: block; width: 100%; border-radius: 3px 3px 0 0; background: var(--primary); transform-origin: bottom; min-height: 2px; }
@@ -2278,7 +2285,7 @@
 
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=790c39676d"></script>
+  <script src="cacau-web.js?v=ab1de2243b"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -8727,6 +8734,7 @@
       var accountId = accountField.getValue();
       if (!accountId) { errorPopover(submitBtn, 'Selecione uma conta.'); return; }
       var categoryId = categoryField.getValue();
+      if (!categoryId) { errorPopover(submitBtn, 'Escolha uma categoria.'); return; }
       var description = capitalizeFirst_(document.getElementById('e-desc').value);
       if (converting) {
         // Troca de tipo: cria o lançamento novo (já no tipo escolhido) e remove o original.
@@ -8824,6 +8832,7 @@
       var amount = document.getElementById('e-amount').getValue();
       if (!amount || amount <= 0) { errorPopover(copyBtn, 'O valor precisa ser maior que zero.'); return; }
       var categoryId = categoryField.getValue();
+      if (!categoryId) { errorPopover(copyBtn, 'Escolha uma categoria.'); return; }
       var description = capitalizeFirst_(document.getElementById('e-desc').value);
       var date = document.getElementById('e-date').value;
       var time = document.getElementById('e-time').value;
@@ -10265,12 +10274,55 @@
   // ---------- categories ----------
   function byNamePt_(a, b) { return a.name.localeCompare(b.name, 'pt-BR'); }
 
-  function categoryBlockHtml(c) {
+  /** Por categoria: quantos lançamentos tem e o valor mês a mês. A categoria de topo soma as subcategorias dela junto.
+   *  `amountOf(t)` dá o valor líquido do lançamento. Pura (só dados) -- testável. Devolve { [categoryId]: { count, byMonth } }. */
+  function categoryStats_(txs, categories, amountOf) {
+    var own = {};
+    txs.forEach(function (t) {
+      if (!t.categoryId) return;
+      var s = own[t.categoryId] || (own[t.categoryId] = { count: 0, byMonth: {} });
+      var ym = String(t.date).slice(0, 7);
+      s.count++;
+      s.byMonth[ym] = (s.byMonth[ym] || 0) + amountOf(t);
+    });
+    var out = {};
+    categories.forEach(function (c) {
+      var ids = [c.id].concat(categories.filter(function (x) { return x.parentId === c.id; }).map(function (x) { return x.id; }));
+      var agg = { count: 0, byMonth: {} };
+      ids.forEach(function (id) {
+        var s = own[id];
+        if (!s) return;
+        agg.count += s.count;
+        Object.keys(s.byMonth).forEach(function (ym) { agg.byMonth[ym] = (agg.byMonth[ym] || 0) + s.byMonth[ym]; });
+      });
+      out[c.id] = agg;
+    });
+    return out;
+  }
+
+  /** "42 lançamentos" + minigráfico dos últimos 12 meses (até o mês de `endYm`). Barra proporcional ao maior mês da própria categoria. */
+  function categoryStatsHtml_(agg, endYm) {
+    if (!agg || !agg.count) return '<span class="cat-stats muted">Sem lançamentos</span>';
+    var endIdx = monthIndexOfYm_(endYm), months = [], peak = 0;
+    for (var k = 11; k >= 0; k--) {
+      var ym = ymOfMonthIndex_(endIdx - k), v = agg.byMonth[ym] || 0;
+      months.push({ ym: ym, v: v });
+      peak = Math.max(peak, Math.abs(v));
+    }
+    var bars = months.map(function (m) {
+      var h = peak ? Math.round(Math.abs(m.v) / peak * 100) : 0;
+      return '<span class="cat-spark-col" data-tooltip="' + escapeHtml(fmtMonthYear(m.ym) + ': ' + fmtMoney(m.v)) + '"><span class="cat-spark-bar' + (m.v ? '' : ' empty') + '" style="height:' + (m.v ? Math.max(12, h) : 0) + '%"></span></span>';
+    }).join('');
+    return '<span class="cat-stats"><span class="muted">' + agg.count + (agg.count === 1 ? ' lançamento' : ' lançamentos') + '</span>' +
+      '<span class="cat-spark" aria-hidden="true">' + bars + '</span></span>';
+  }
+
+  function categoryBlockHtml(c, stats, endYm) {
     var children = STATE.categories.filter(function (x) { return x.parentId === c.id; }).sort(byNamePt_);
-    return '<div class="row" data-row-cat="' + escapeHtml(c.id) + '"><span>' + categoryIconHtml_(c) + escapeHtml(c.name) + '</span>' +
+    return '<div class="row" data-row-cat="' + escapeHtml(c.id) + '"><span class="cat-main"><span>' + categoryIconHtml_(c) + escapeHtml(c.name) + '</span>' + categoryStatsHtml_(stats[c.id], endYm) + '</span>' +
       '<span class="row-actions">' + rowRemoveButtonHtml_('data-archive', c.id, 'Arquivar') + '</span></div>' +
       children.map(function (ch) {
-        return '<div class="row" style="padding-left:16px" data-row-cat="' + escapeHtml(ch.id) + '"><span class="muted">↳ ' + categoryIconHtml_(ch) + escapeHtml(ch.name) + '</span>' +
+        return '<div class="row" style="padding-left:16px" data-row-cat="' + escapeHtml(ch.id) + '"><span class="cat-main"><span class="muted">↳ ' + categoryIconHtml_(ch) + escapeHtml(ch.name) + '</span>' + categoryStatsHtml_(stats[ch.id], endYm) + '</span>' +
           '<span class="row-actions">' + rowRemoveButtonHtml_('data-archive', ch.id, 'Arquivar') + '</span></div>';
       }).join('');
   }
@@ -10284,8 +10336,10 @@
       return { label: g.label, topCats: STATE.categories.filter(function (c) { return !c.parentId && c.kind === g.kind; }).sort(byNamePt_) };
     }).filter(function (g) { return g.topCats.length > 0; });
 
+    var stats = categoryStats_(STATE.allTransactions || [], STATE.categories, function (t) { return t.kind === 'income' ? netContributionOfActive_(t) : netAmountOfPassive_(t); });
+    var endYm = todayYmd().slice(0, 7);
     var html = groups.map(function (g) {
-      return '<div class="card"><h2>' + g.label + '</h2>' + g.topCats.map(categoryBlockHtml).join('') + '</div>';
+      return '<div class="card"><h2>' + g.label + '</h2>' + g.topCats.map(function (c) { return categoryBlockHtml(c, stats, endYm); }).join('') + '</div>';
     }).join('') || '<div class="card"><div class="empty-state">Nenhuma categoria cadastrada.</div></div>';
 
     root.innerHTML = html +
@@ -10312,6 +10366,7 @@
         if (cat) openCategoryModal(cat);
       });
     });
+    root.querySelectorAll('.cat-spark-col[data-tooltip]').forEach(function (el) { wireTooltipTrigger_(el); });
     document.getElementById('add-category').onclick = function () { openCategoryModal(); };
   }
 
@@ -16124,6 +16179,7 @@
         var accountId = accountField.getValue();
         if (!accountId) { errorPopover(submitBtn, 'Selecione uma conta.'); return; }
         var categoryId = categoryField.getValue();
+        if (!categoryId) { errorPopover(submitBtn, 'Escolha uma categoria.'); return; }
         payload.accountId = accountId;
         payload.categoryId = categoryId;
         payload.counterparty = capitalizeFirst_(document.getElementById('p-counterparty').value);
@@ -17277,21 +17333,49 @@
   }
 
   // ----- janela da fila do documento (mesmo molde de "Lançamentos a confirmar": um item por vez, Fila para confirmar, Confirmar/Ignorar) -----
-  var invoiceReviewSort_ = 'asc'; // asc = compras mais antigas primeiro
+  var invoiceReviewSort_ = 'asc'; // asc = mais antigas primeiro · desc = mais recentes primeiro · merchant = agrupadas por estabelecimento
+  var INVOICE_REVIEW_SORT_LABELS_ = { asc: 'Mais antigas primeiro', desc: 'Mais recentes primeiro', merchant: 'Por estabelecimento' };
+  var INVOICE_REVIEW_SORT_NEXT_ = { asc: 'desc', desc: 'merchant', merchant: 'asc' };
+
+  /** Chave do estabelecimento pra agrupar compras da mesma loja: minúsculas, sem acento, sem pontuação e sem números soltos
+   *  (ex.: "AMAZON BR*2K4" e "Amazon Br" caem juntas). */
+  function invoiceMerchantKey_(name) {
+    var s = String(name || '').toLowerCase();
+    if (s.normalize) s = s.normalize('NFD').replace(/[̀-ͯ]/g, '');
+    return s.replace(/[^a-z0-9]+/g, ' ').split(' ').filter(function (w) { return w && !/^\d+$/.test(w); }).join(' ');
+  }
 
   function invoiceReviewQueue_(invId) {
-    var sign = invoiceReviewSort_ === 'desc' ? -1 : 1;
+    var mode = invoiceReviewSort_;
+    var sign = mode === 'desc' ? -1 : 1;
+    function byDate(a, b) { return a.date < b.date ? -1 : (a.date > b.date ? 1 : a.sortOrder - b.sortOrder); }
     return invoiceUi_.items.filter(function (i) { return i.invoiceId === invId && i.status === 'pending'; })
-      .sort(function (a, b) { return sign * (a.date < b.date ? -1 : (a.date > b.date ? 1 : a.sortOrder - b.sortOrder)); })
+      .sort(function (a, b) {
+        if (mode === 'merchant') {
+          var ka = invoiceMerchantKey_(a.description), kb = invoiceMerchantKey_(b.description);
+          if (ka !== kb) return ka < kb ? -1 : 1; // estabelecimentos em ordem alfabética; dentro de cada um, mais antigas primeiro
+          return byDate(a, b);
+        }
+        return sign * byDate(a, b);
+      })
       .map(function (i) { return i.id; });
   }
 
-  /** Quantas parcelas tem a compra, dado o valor TOTAL dela e o valor de cada parcela (0 se não bate). Tolera 1 centavo por parcela de arredondamento. */
-  function invoiceInstallmentsFromTotal_(totalValue, installmentAmount) {
-    if (!(totalValue > 0) || !(installmentAmount > 0)) return 0;
-    var n = Math.round(totalValue / installmentAmount);
-    if (n < 2 || n > 99) return 0;
-    return Math.abs(n * installmentAmount - totalValue) <= n * 0.01 + 0.005 ? n : 0;
+  /** Lê o campo "Parcela" da janela da fila: vazio = à vista; "2/6" (ou "2 de 6") = parcela 2 de 6. Devolve null (à vista), {seq,total} ou false (inválido). */
+  function invoiceParseInstallmentInput_(text) {
+    var t = String(text || '').trim();
+    if (!t) return null;
+    var m = /^(\d{1,2})\s*(?:\/|de)\s*(\d{1,2})$/i.exec(t);
+    if (!m) return false;
+    var seq = Number(m[1]), total = Number(m[2]);
+    return total >= 2 && seq >= 1 && seq <= total ? { seq: seq, total: total } : false;
+  }
+
+  /** O documento tem sinal claro de que as parcelas vêm preenchidas sozinhas? (alguma compra dele já veio com parcela, ou é fatura Nubank,
+   *  que marca "Parcela x/y" em toda compra parcelada). Se sim, compra sem parcela é à vista e a janela não pede parcela. */
+  function invoiceDocFillsInstallments_(inv) {
+    if (/nubank/i.test(String((inv && inv.issuer) || '') + ' ' + String((inv && inv.fileName) || ''))) return true;
+    return invoiceUi_.items.some(function (i) { return i.invoiceId === inv.id && !!i.installmentSeq && !!i.installmentTotal; });
   }
 
   /** Quadro do aviso de duplicata do "Fatura a confirmar": o item da fatura LADO A LADO com o lançamento que já está no Extrato
@@ -17334,25 +17418,31 @@
     var categoryField = null;
     var categoryTouchedByUser = false;
     var inst = p.installmentSeq ? ' · parcela ' + p.installmentSeq + '/' + p.installmentTotal : '';
-    var sortLabel = invoiceReviewSort_ === 'desc' ? 'Mais recentes primeiro' : 'Mais antigas primeiro';
+    var sortLabel = INVOICE_REVIEW_SORT_LABELS_[invoiceReviewSort_] || INVOICE_REVIEW_SORT_LABELS_.asc;
+    // Ordenando por estabelecimento: avisa quantas compras da mesma loja estão na fila e qual é esta (confirma tudo de uma vez).
+    var merchantNote = '';
+    if (invoiceReviewSort_ === 'merchant') {
+      var mKey = invoiceMerchantKey_(p.description);
+      var mQueue = queue.filter(function (id) { var q = invoiceItemById_(id); return !!q && q.status === 'pending' && invoiceMerchantKey_(q.description) === mKey; });
+      var mPos = mQueue.indexOf(p.id);
+      if (mQueue.length > 1 && mPos !== -1) merchantNote = '<div class="muted" style="margin-bottom:12px"><b>' + (mPos + 1) + ' de ' + mQueue.length + '</b> compras deste estabelecimento na fila.</div>';
+    }
     var matchWarning = match ? invoiceMatchCompareHtml_(match, p) : '';
     var counterpartyLabel = kind === 'income' ? 'Recebido de' : 'Pago a';
-    // Parcela (só despesa de cartão). Documento que já trouxe a parcela (ex.: 2/6): o app tem certeza, então só mostra o valor total
-    // da compra (parcela x quantidade), sem campo. Sem parcela no documento: campos "Parcela" e "Valor total da compra" (R$ 0,00 = à vista);
-    // a quantidade de parcelas sai do total dividido pelo valor da parcela (invoiceInstallmentsFromTotal_).
+    // Parcela (só despesa de cartão). Compra que já veio com a parcela (ex.: 2/6): o app tem certeza, então só mostra o valor total
+    // da compra (parcela x quantidade), sem campo. Documento que preenche as parcelas sozinho (invoiceDocFillsInstallments_): compra sem
+    // parcela é à vista, sem campo. Só quando o documento não dá esse sinal aparece o campo "Parcela" (vazio = à vista; "2/6" = parcela 2 de 6).
     var acctOfInv = (STATE.accounts || []).filter(function (a) { return a.id === inv.accountId; })[0];
     var isCardExpense = !!acctOfInv && acctOfInv.type === 'credit_card' && kind === 'expense';
     var instKnown = isCardExpense && !!p.installmentSeq && !!p.installmentTotal;
-    var showInstallment = isCardExpense && !instKnown;
+    var showInstallment = isCardExpense && !instKnown && !invoiceDocFillsInstallments_(inv);
     var installmentFieldsHtml = '';
     if (instKnown) {
       installmentFieldsHtml = '<div class="muted" style="margin-bottom:12px">Compra parcelada: ' + escapeHtml(fmtMoney(Math.round(p.amount * p.installmentTotal * 100) / 100)) + ' no total (' +
         escapeHtml(String(p.installmentTotal)) + ' parcelas de ' + escapeHtml(fmtMoney(p.amount)) + '), esta é a parcela ' + escapeHtml(String(p.installmentSeq)) + '.</div>';
     } else if (showInstallment) {
-      installmentFieldsHtml = '<div class="field" style="display:flex;gap:8px">' +
-          '<div style="flex:1;min-width:0"><label>Parcela (se for parcelada)</label><input id="i-inst-seq" type="text" inputmode="numeric" maxlength="3" placeholder="À vista"></div>' +
-          '<div style="flex:1;min-width:0"><label>Valor total da compra</label><input id="i-inst-total" type="text"></div>' +
-        '</div><div class="muted" id="i-inst-hint" style="margin:-6px 0 12px"></div>';
+      installmentFieldsHtml = '<div class="field"><label>Parcela (se for parcelada)</label>' +
+          '<input id="i-inst-seq" type="text" maxlength="7" placeholder="À vista (parcelada: 2/6)"></div>';
     }
 
     openModal(
@@ -17364,7 +17454,7 @@
           '<button type="button" class="secondary" id="i-doc" style="padding:4px 10px;font-size:12px">Documento</button>' +
         '</div>' +
       '</div>' +
-      matchWarning +
+      matchWarning + merchantNote +
       '<div class="muted" style="margin-bottom:12px">' + escapeHtml((inv.issuer ? inv.issuer + ' · ' : '') + 'fatura ' + invoiceMonthText_(inv.billMonth)) + ' · ' +
         escapeHtml(invoiceAccountName_(inv.accountId)) + escapeHtml(inst) + '<br>' + escapeHtml(inv.fileName) + ' — ' + escapeHtml(p.description) + '</div>' +
       '<div class="field tx-f-date" style="display:flex;gap:8px">' +
@@ -17379,7 +17469,13 @@
       '</div>' +
       installmentFieldsHtml +
       '<div class="field" style="display:flex;gap:8px">' +
-        '<div style="flex:1;min-width:0"><label>' + counterpartyLabel + '</label><input id="i-counterparty" value="' + escapeHtml(p.description) + '"></div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div class="tx-f-head" style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:nowrap;gap:2px 8px">' +
+            '<label style="margin-bottom:0;white-space:nowrap;flex-shrink:0">' + counterpartyLabel + '</label>' +
+            '<span id="i-forecast-toggle-field" style="min-width:0"></span>' +
+          '</div>' +
+          '<input id="i-counterparty" value="' + escapeHtml(p.description) + '">' +
+        '</div>' +
         '<div style="flex:1;min-width:0"><label>Referente a</label><input id="i-desc" value=""></div>' +
       '</div>' +
       '<div class="field tx-f-category">' +
@@ -17400,22 +17496,6 @@
     var amountEl = document.getElementById('i-amount');
     setupMoneyInput(amountEl, p.amount);
     function currentAmount_() { return amountEl.getValue ? amountEl.getValue() : 0; }
-    var instTotalEl = showInstallment ? document.getElementById('i-inst-total') : null;
-    function instTotalValue_() { return instTotalEl && instTotalEl.getValue ? instTotalEl.getValue() : 0; }
-    function updateInstHint_() {
-      var hintEl = document.getElementById('i-inst-hint');
-      if (!hintEl) return;
-      var tv = instTotalValue_();
-      if (!(tv > 0)) { hintEl.textContent = 'Deixe R$ 0,00 se foi à vista.'; return; }
-      var n = invoiceInstallmentsFromTotal_(tv, currentAmount_());
-      hintEl.textContent = n ? n + ' parcelas de ' + fmtMoney(currentAmount_()) + '.' : 'O total não bate com o valor da parcela (' + fmtMoney(currentAmount_()) + ').';
-    }
-    if (instTotalEl) {
-      setupMoneyInput(instTotalEl, 0);
-      instTotalEl.addEventListener('moneychange', updateInstHint_);
-      amountEl.addEventListener('moneychange', updateInstHint_);
-      updateInstHint_();
-    }
     function updateRemember_() {
       renderRememberCategoryButton_({ fieldId: 'i-remember-cat-field', getKind: function () { return kind; }, getRemember: function () { return rememberCategory; }, setRemember: function (v) { rememberCategory = v; } });
     }
@@ -17426,23 +17506,52 @@
       if (outlierFlagged) return;
       if (isLikelyOutlier_(currentAmount_(), categoryField ? categoryField.getValue() : null, kind)) { outlierFlagged = true; updateOutlier_(); }
     }
+    // Vincular a um lançamento recorrente (mesmo botão e mesma sugestão da janela de pendências).
+    var selectedForecastId = '';
+    function updateForecast_() {
+      renderForecastToggleButton_({
+        fieldId: 'i-forecast-toggle-field', hiddenInputId: 'i-forecast',
+        getKind: function () { return kind; },
+        getCategoryId: function () { return categoryField ? categoryField.getValue() : null; },
+        getSelected: function () { return selectedForecastId; },
+        setSelected: function (v) { selectedForecastId = v; },
+        setCategoryId: function (v) { if (categoryField) { categoryTouchedByUser = true; categoryField.setValue(v); } }
+      });
+    }
+    function maybeSuggestForecastLink_() {
+      if (selectedForecastId) return;
+      var categoryId = categoryField ? categoryField.getValue() : null;
+      var counterpartyEl = document.getElementById('i-counterparty');
+      var candidates = forecastLinkCandidates_(kind, categoryId, selectedForecastId);
+      var match = findForecastLinkSuggestion_(candidates, currentAmount_(), counterpartyEl ? counterpartyEl.value : '');
+      if (!match) return;
+      selectedForecastId = defaultForecastSelection_(match);
+      if (!categoryId && categoryField) {
+        var chosen = candidates.find(function (f) { return f.id === match; });
+        if (chosen) { categoryTouchedByUser = true; categoryField.setValue(chosen.categoryId); }
+      }
+      updateForecast_();
+    }
     categoryField = createCapsuleField(document.getElementById('i-category-field'), {
       allowDeselect: true, collapseUnused: true, items: rankedCategoryItems(kind),
       selectedValue: invoiceSuggestedCategory_(p) || null,
-      onChange: function (v) { categoryTouchedByUser = true; invoiceUi_.cat[p.id] = v || ''; maybeSuggestOutlier_(); }
+      onChange: function (v) { categoryTouchedByUser = true; invoiceUi_.cat[p.id] = v || ''; updateForecast_(); maybeSuggestOutlier_(); maybeSuggestForecastLink_(); }
     });
     updateRemember_();
     updateOutlier_();
+    updateForecast_();
+    maybeSuggestForecastLink_();
     setupCounterpartySuggestions_(document.getElementById('i-counterparty'));
-    amountEl.addEventListener('input', maybeSuggestOutlier_);
+    amountEl.addEventListener('input', function () { maybeSuggestOutlier_(); maybeSuggestForecastLink_(); });
     document.getElementById('i-counterparty').addEventListener('input', function () {
+      maybeSuggestForecastLink_();
       if (categoryTouchedByUser) return;
       var matchId = findCategoryIdForCounterpartyClient_(this.value) || findCategoryIdByKeywordClient_(this.value, kind);
       if (matchId && matchId !== categoryField.getValue()) categoryField.setValue(matchId);
     });
 
     document.getElementById('i-sort-toggle').onclick = function () {
-      invoiceReviewSort_ = invoiceReviewSort_ === 'desc' ? 'asc' : 'desc';
+      invoiceReviewSort_ = INVOICE_REVIEW_SORT_NEXT_[invoiceReviewSort_] || 'asc';
       openInvoiceReviewModal_(invId, 0);
     };
     document.getElementById('i-doc').onclick = function () { openInvoiceModal(invId); };
@@ -17467,17 +17576,12 @@
       if (!amount || amount <= 0) { errorPopover(submitBtn, 'O valor precisa ser maior que zero.'); return; }
       var date = document.getElementById('i-date').value;
       if (!date) { errorPopover(submitBtn, 'Escolha a data.'); return; }
+      if (!categoryField.getValue()) { errorPopover(submitBtn, 'Escolha uma categoria.'); return; }
       var instSeq = '', instTotal = '';
       if (showInstallment) {
-        var seqRaw = document.getElementById('i-inst-seq').value.replace(/[^0-9]/g, ''), totalValue = instTotalValue_();
-        if (seqRaw || totalValue > 0) {
-          var nParcels = totalValue > 0 ? invoiceInstallmentsFromTotal_(totalValue, amount) : 0;
-          if (!seqRaw || !nParcels) {
-            errorPopover(submitBtn, !seqRaw ? 'Informe qual parcela é esta — ou limpe o valor total para lançar à vista.' : 'O valor total da compra precisa ser (valor da parcela × número de parcelas, 2 ou mais) — ou deixe R$ 0,00 para lançar à vista.'); return;
-          }
-          if (Number(seqRaw) < 1 || Number(seqRaw) > nParcels) { errorPopover(submitBtn, 'A parcela precisa ficar entre 1 e ' + nParcels + '.'); return; }
-          instSeq = Number(seqRaw); instTotal = nParcels;
-        }
+        var parsedInst = invoiceParseInstallmentInput_(document.getElementById('i-inst-seq').value);
+        if (parsedInst === false) { errorPopover(submitBtn, 'Escreva a parcela como 2/6 (parcela 2 de 6, o total com 2 ou mais) — ou deixe vazio se foi à vista.'); return; }
+        if (parsedInst) { instSeq = parsedInst.seq; instTotal = parsedInst.total; }
       }
       var payload = {
         itemId: p.id, categoryId: categoryField.getValue() || '', date: date, amount: amount,
@@ -17486,6 +17590,8 @@
         rememberCategoryForCounterparty: rememberCategory, excludeFromAnalysis: outlierFlagged
       };
       if (showInstallment) { payload.installmentSeq = instSeq; payload.installmentTotal = instTotal; }
+      var forecastEl = document.getElementById('i-forecast');
+      Object.assign(payload, forecastFieldsFromSelection_(forecastEl && forecastEl.value ? forecastEl.value : undefined, date));
       invoiceAcceptEdited_(p, payload);
       openInvoiceReviewModal_(invId, index + 1, queue);
     };
@@ -17507,7 +17613,13 @@
   function invoiceAccept_(itemIds) {
     var list = itemIds.map(invoiceItemById_).filter(function (it) { return it && it.status === 'pending'; });
     if (!list.length) return;
-    var payload = list.map(function (it) { return { itemId: it.id, categoryId: invoiceSuggestedCategory_(it) || '' }; });
+    // Lançamento sem categoria não é salvo: aceita só quem tem categoria sugerida; o resto continua pendente pra escolher na janela da fila.
+    var withCategory = list.filter(function (it) { return !!invoiceSuggestedCategory_(it); });
+    var skipped = list.length - withCategory.length;
+    if (skipped) showToast(skipped === 1 ? '1 compra sem categoria ficou pendente: abra a fila e escolha a categoria.' : skipped + ' compras sem categoria ficaram pendentes: abra a fila e escolha a categoria.', true);
+    list = withCategory;
+    if (!list.length) return;
+    var payload = list.map(function (it) { return { itemId: it.id, categoryId: invoiceSuggestedCategory_(it) }; });
     var prev = list.map(function (it) { return { it: it, status: it.status }; });
     list.forEach(function (it) { it.status = 'accepted'; });
     renderInvoiceBody_();
@@ -18169,6 +18281,7 @@
         var accId2 = accountField.getValue();
         if (!accId2) { errorPopover(submitBtn, 'Selecione uma conta.'); return; }
         var catId2 = categoryField.getValue();
+        if (!catId2) { errorPopover(submitBtn, 'Escolha uma categoria.'); return; }
         // Lê o vínculo ANTES de qualquer .then() -- closeModal() (logo abaixo, síncrono)
         // esvazia #modal-root e removeria o hidden input de vínculo do DOM antes desse
         // resolveRealIds_ assíncrono terminar, fazendo resolveForecastSelection_ ler
