@@ -17073,7 +17073,8 @@
   /**
    * Compara os itens ainda pendentes de um documento com os lançamentos da MESMA conta, um a um (cada lançamento só "cobre" um item:
    * duas compras iguais no mesmo dia precisam de dois lançamentos). Devolve { itemId: { level: 'exact' | 'maybe', tx } }.
-   * exact = mesma data e valor (parcela: mesma parcela da mesma compra); maybe = mesmo valor com até 4 dias de diferença.
+   * exact = mesma data e valor (parcela: mesma parcela e mesmo valor, da mesma compra ou com nome parecido); maybe = mesmo valor com até 4 dias de diferença
+   * (parcela: mesmo nome e parcela com valor até 10% diferente).
    * Lançamentos que nasceram de itens aceitos DESTE documento ficam de fora (senão uma compra repetida "se cobriria" com a irmã
    * que acabou de aceitar); os de outros documentos contam como lançamentos existentes.
    */
@@ -17089,12 +17090,23 @@
       var tx = pool.filter(function (t) {
         if (used[t.id] || t.kind !== it.kind) return false;
         if (it.installmentSeq && it.installmentTotal) {
+          // Mesma parcela E mesmo valor da parcela; a data da compra OU o nome parecido completam. Só "mesma parcela no mesmo dia"
+          // não basta: duas compras diferentes em 6x no mesmo dia são parcela 1/6 as duas.
           return t.installmentSeq === it.installmentSeq && t.installmentTotal === it.installmentTotal &&
-            (t.purchaseDate === it.date || (invoiceNamesAlike_(t, it) && Math.abs(t.amount - it.amount) < 0.05));
+            Math.abs(t.amount - it.amount) < 0.05 && (t.purchaseDate === it.date || invoiceNamesAlike_(t, it));
         }
         return t.date === it.date && Math.abs(t.amount - it.amount) < 0.01;
       })[0];
       if (tx) { used[tx.id] = true; out[it.id] = { level: 'exact', tx: tx }; }
+    });
+    // Parcelada com a mesma parcela e o MESMO NOME, mas valor diferente: pode ser a mesma compra lançada com outro valor (juros, arredondamento).
+    pending.forEach(function (it) {
+      if (out[it.id] || !(it.installmentSeq && it.installmentTotal)) return;
+      var alike = pool.filter(function (t) {
+        return !used[t.id] && t.kind === it.kind && t.installmentSeq === it.installmentSeq && t.installmentTotal === it.installmentTotal &&
+          invoiceNamesAlike_(t, it) && Math.abs(t.amount - it.amount) / Math.max(it.amount, 0.01) <= 0.1;
+      })[0];
+      if (alike) { used[alike.id] = true; out[it.id] = { level: 'maybe', tx: alike }; }
     });
     pending.forEach(function (it) {
       if (out[it.id] || (it.installmentSeq && it.installmentTotal)) return;
