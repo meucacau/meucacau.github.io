@@ -952,9 +952,15 @@
     max-width: 720px;
     max-height: 90vh;
     overflow-y: auto;
+    /* Nunca rola pro lado: sem isso, o que transborda por 1 frame (ex.: a coluna Parcelas aparecendo) fazia surgir uma barra horizontal
+       e a janela, ancorada embaixo, subia ~15px e voltava. */
+    overflow-x: hidden;
     border-radius: 16px 16px 0 0;
     padding: 20px;
   }
+  /* Cabeçalho de campo que pode ou não ter links de ação (Despesa recorrente?, Reembolso?...): a mesma altura com ou sem eles, pra a
+     janela não mudar de altura quando um link some/aparece. */
+  .tx-f-head { min-height: 18px; }
 
   /* ---------- Celular (<= 640px): janelas viram "bottom sheets" que acompanham o teclado. O PC não muda. ----------
      --vvh/--vvt (JavaScript.html, setupViewportVars_) = altura/topo da área visível já descontado o teclado. */
@@ -16239,16 +16245,18 @@
         return id && items.some(function (i) { return i.value === id; }) ? id : fallback;
       }
       if (kind === 'transfer') {
+        // Ordem pelo que MAIS precisa ser preenchido: Valor, De, Para (+ fatura, que depende do Para), Descrição e, por último,
+        // Data/Horário (quase sempre ficam como estão: hoje, sem hora).
         container.innerHTML =
+          '<div class="field tx-f-amount"><label>Valor</label><input type="text" id="t-amount"></div>' +
+          '<div class="field tx-f-from"><label>De</label><div id="t-from-field" class="capsule-field"></div></div>' +
+          '<div class="field tx-f-to"><label>Para</label><div id="t-to-field" class="capsule-field"></div></div>' +
+          '<div id="t-bill-field" class="tx-f-bill"></div>' +
+          '<div class="field tx-f-desc"><label>Descrição</label><input id="t-desc" value="' + escapeHtml(preservedDesc) + '"></div>' +
           '<div class="field tx-f-date" style="display:flex;gap:8px">' +
             '<div style="flex:1"><label>Data</label><input type="date" id="t-date" value="' + preservedDate + '"></div>' +
             '<div style="flex:1"><label>Horário</label><input type="time" id="t-time" value="' + preservedTime + '"></div>' +
-          '</div>' +
-          '<div class="field tx-f-from"><label>De</label><div id="t-from-field" class="capsule-field"></div></div>' +
-          '<div class="field tx-f-to"><label>Para</label><div id="t-to-field" class="capsule-field"></div></div>' +
-          '<div class="field tx-f-amount"><label>Valor</label><input type="text" id="t-amount"></div>' +
-          '<div class="field tx-f-desc"><label>Descrição</label><input id="t-desc" value="' + escapeHtml(preservedDesc) + '"></div>' +
-          '<div id="t-bill-field" class="tx-f-bill"></div>';
+          '</div>';
         setupMoneyInput(document.getElementById('t-amount'), preservedAmount);
         var accountItems = rankedAccountItems();
         var firstAcc_ = accountItems[0] ? accountItems[0].value : null;
@@ -16267,22 +16275,12 @@
           ? rankedAccountItems(function (a) { return a.type !== 'investment'; })
           : rankedAccountItems(function (a) { return a.type !== 'credit_card' && a.type !== 'investment'; });
         var counterpartyLabel = kind === 'income' ? 'Recebido de' : 'Pago a';
+        // Ordem pelo que MAIS precisa ser preenchido (o resto o app costuma preencher sozinho): Valor, Conta, Pago a/Referente a (o
+        // "Pago a" sugere a categoria e o recorrente), Categoria e, por último, Data/Horário (quase sempre ficam como estão).
         container.innerHTML =
-          '<div class="field tx-f-date" style="display:flex;gap:8px">' +
-            '<div style="flex:1"><label>Data</label><input type="date" id="t-date" value="' + preservedDate + '"></div>' +
-            '<div style="flex:1"><label>Horário</label><input type="time" id="t-time" value="' + preservedTime + '"></div>' +
-          '</div>' +
-          '<div class="field tx-f-account"><label>Conta</label><div id="t-account-field" class="capsule-field"></div></div>' +
-          '<div class="field tx-f-category">' +
-            '<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:2px 8px">' +
-              '<label style="margin-bottom:0">Categoria</label>' +
-              '<span id="t-remember-cat-field"></span>' +
-            '</div>' +
-            '<div id="t-category-field" class="capsule-field"></div>' +
-          '</div>' +
           '<div class="field tx-f-amount" style="display:flex;gap:8px">' +
             '<div style="flex:1;min-width:0">' +
-              '<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:2px 8px">' +
+              '<div class="tx-f-head" style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:2px 8px">' +
                 '<label style="margin-bottom:0">Valor</label>' +
                 // .field-action-group: mesmo agrupador do modal de Editar lançamento (acima).
                 '<span class="field-action-group">' +
@@ -16295,18 +16293,30 @@
             '</div>' +
             '<div class="tx-inst-col" style="flex:1;min-width:0"><label>Parcelas</label><input type="number" id="t-installments" min="1" value="1"></div>' +
           '</div>' +
+          '<div class="field tx-f-account"><label>Conta</label><div id="t-account-field" class="capsule-field"></div></div>' +
           '<div class="field tx-f-who" style="display:flex;gap:8px">' +
             '<div style="flex:1;min-width:0">' +
-              '<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:nowrap;gap:2px 8px">' +
+              '<div class="tx-f-head" style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:nowrap;gap:2px 8px">' +
                 '<label style="margin-bottom:0;white-space:nowrap;flex-shrink:0">' + counterpartyLabel + '</label>' +
                 '<span id="t-forecast-toggle-field"></span>' +
               '</div>' +
               '<input id="t-counterparty" value="' + escapeHtml(preservedCounterparty) + '">' +
             '</div>' +
             '<div style="flex:1;min-width:0">' +
-              '<div style="display:flex;align-items:baseline"><label style="margin-bottom:0">Referente a</label></div>' +
+              '<div class="tx-f-head" style="display:flex;align-items:baseline"><label style="margin-bottom:0">Referente a</label></div>' +
               '<input id="t-desc" value="' + escapeHtml(preservedDesc) + '">' +
             '</div>' +
+          '</div>' +
+          '<div class="field tx-f-category">' +
+            '<div class="tx-f-head" style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:2px 8px">' +
+              '<label style="margin-bottom:0">Categoria</label>' +
+              '<span id="t-remember-cat-field"></span>' +
+            '</div>' +
+            '<div id="t-category-field" class="capsule-field"></div>' +
+          '</div>' +
+          '<div class="field tx-f-date" style="display:flex;gap:8px">' +
+            '<div style="flex:1"><label>Data</label><input type="date" id="t-date" value="' + preservedDate + '"></div>' +
+            '<div style="flex:1"><label>Horário</label><input type="time" id="t-time" value="' + preservedTime + '"></div>' +
           '</div>';
         setupCounterpartySuggestions_(document.getElementById('t-counterparty'));
         setupMoneyInput(document.getElementById('t-amount'), preservedAmount);
