@@ -1017,12 +1017,12 @@
     .tx-f-amount input { font-size: 24px; font-weight: 600; }
     .tx-f-amount .field-action-group { flex-wrap: wrap; gap: 0 10px; min-width: 0; max-width: 100%; }
     /* Cápsulas: do tamanho do PC (sem sobrescrever padding/fonte/altura no celular). */
-    /* Título do campo bem mais forte que as perguntas de ação ("Lembrar categoria?", "Reembolso?"). */
-    .modal .field label { font-size: 14px; font-weight: 600; color: var(--text); }
-    .modal .field-action-link { font-size: 12px; }
     /* Campos de texto: mesmo padding interno do PC (só a fonte de 16px muda, pra evitar o zoom automático do iOS ao focar). */
     .modal input, .modal select, .modal textarea { font-size: 16px; }
   }
+  /* Título do campo bem mais forte que as perguntas de ação ("Lembrar categoria?", "Reembolso?") -- PC e celular. */
+  .modal .field label { font-size: 14px; font-weight: 600; color: var(--text); }
+  .modal .field-action-link { font-size: 12px; }
   /* Valor e Parcelas (PC e celular): Parcelas só existe -- animada, ao lado do Valor -- quando a conta é cartão de crédito. */
   .tx-f-amount { gap: 0 !important; align-items: flex-end; }
   .tx-f-amount > div:first-child { flex: 1 1 0 !important; }
@@ -1733,6 +1733,28 @@
     .home-card-row { transition: transform .18s cubic-bezier(.2,.8,.2,1), box-shadow .18s ease, scale .18s ease; }
     .home-card-row.dragging { transition: box-shadow .18s ease, scale .18s ease; }
   }
+  /* Caixas de marcar (vínculo de reembolso, "atualizar a conta", filtros...): marrom do app, com o tique "desenhado" ao marcar e um
+     leve "apertar e soltar" no toque. Os interruptores (role="switch") têm o estilo próprio acima. A animação é só por transição, então
+     caixas que já nascem marcadas não se mexem. */
+  input[type="checkbox"]:not([role="switch"]) {
+    -webkit-appearance: none; appearance: none; position: relative; box-sizing: border-box; flex: 0 0 20px;
+    width: 20px; min-width: 20px; max-width: 20px; height: 20px; min-height: 20px; max-height: 20px; margin: 0; padding: 0;
+    border: 2px solid var(--text-muted); border-radius: 6px; background: transparent; cursor: pointer; vertical-align: middle;
+    transition: background-color .16s ease, border-color .16s ease, transform .22s cubic-bezier(.34, 1.56, .64, 1);
+  }
+  input[type="checkbox"]:not([role="switch"])::after {
+    content: ''; position: absolute; left: 3px; top: 3px; width: 10px; height: 10px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 12.5l5 5L20 6.5'/%3E%3C/svg%3E") center / contain no-repeat;
+    clip-path: inset(0 100% 0 0); transition: clip-path .2s ease-out;
+  }
+  input[type="checkbox"]:not([role="switch"]):checked { background: var(--primary); border-color: var(--primary); }
+  input[type="checkbox"]:not([role="switch"]):checked::after { clip-path: inset(0 0 0 0); transition-delay: .05s; }
+  input[type="checkbox"]:not([role="switch"]):active { transform: scale(.86); }
+  input[type="checkbox"]:not([role="switch"]):focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  input[type="checkbox"]:not([role="switch"]):disabled { opacity: .5; cursor: not-allowed; }
+  @media (prefers-reduced-motion: reduce) {
+    input[type="checkbox"]:not([role="switch"]), input[type="checkbox"]:not([role="switch"])::after { transition: none; }
+  }
   .settings-switch { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; cursor: pointer; }
   .settings-switch input { margin-top: 1px; }
   .settings-switch .grow { flex: 1; min-width: 0; }
@@ -2161,7 +2183,7 @@
 
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=319960e9cd"></script>
+  <script src="cacau-web.js?v=3e706cd287"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -2425,10 +2447,10 @@
    */
   function findCategoryIdByKeywordClient_(text, kind) {
     if (!text) return null;
-    var lower = text.toLowerCase();
+    var lower = normalizeForMatch_(text);
     var match = STATE.categories.find(function (c) {
       if (c.kind !== kind || !c.keywords) return false;
-      return c.keywords.split(',').map(function (k) { return k.trim().toLowerCase(); }).filter(function (k) { return k; })
+      return c.keywords.split(',').map(function (k) { return normalizeForMatch_(k.trim()); }).filter(function (k) { return k; })
         .some(function (kw) { return lower.indexOf(kw) !== -1; });
     });
     return match ? match.id : null;
@@ -2443,8 +2465,8 @@
    */
   function findCategoryIdForCounterpartyClient_(text) {
     if (!text) return null;
-    var key = text.trim().toLowerCase();
-    var match = STATE.counterpartyMappings.find(function (m) { return (m.counterparty || '').trim().toLowerCase() === key; });
+    var key = normalizeForMatch_(text.trim());
+    var match = STATE.counterpartyMappings.find(function (m) { return normalizeForMatch_((m.counterparty || '').trim()) === key; });
     return match ? match.categoryId : null;
   }
 
@@ -4484,9 +4506,9 @@
       if (pop && !pop.contains(e.target) && e.target !== inputEl) close();
     }
     function renderList() {
-      var typed = inputEl.value.trim().toLowerCase();
+      var typed = normalizeForMatch_(inputEl.value.trim());
       var matches = (namesFn ? namesFn() : knownCounterpartyNames()).filter(function (n) {
-        return !typed || n.toLowerCase().indexOf(typed) !== -1;
+        return !typed || normalizeForMatch_(n).indexOf(typed) !== -1;
       });
       if (!matches.length) { close(); return; }
       if (!pop) {
@@ -6276,6 +6298,26 @@
     inputEl.dataset.autoCp = next;
     inputEl.dispatchEvent(new Event('input', { bubbles: true }));
   }
+  /** Id da categoria de receita "Reembolso" (a do cadastro inicial, filha de "Outras receitas"), ignorando acento/caixa e arquivadas. */
+  function refundIncomeCategoryId_() {
+    var hit = (STATE.categories || []).find(function (c) {
+      return c.kind === 'income' && !c.archived && normalizeForMatch_((c.name || '').trim()) === 'reembolso';
+    });
+    return hit ? hit.id : null;
+  }
+  /**
+   * Receita vinculada a um reembolso e ainda sem categoria -> marca "Reembolso". Só preenche campo VAZIO (nunca troca uma
+   * categoria que já esteja marcada, nem a que o "Recebido de" acabou de sugerir) e só quando há vínculo; desvincular não mexe.
+   * Devolve true se marcou (quem chama atualiza o que depende da categoria).
+   */
+  function suggestRefundCategory_(categoryField, allocations) {
+    if (!categoryField || !allocations || !allocations.length) return false;
+    if (categoryField.getValue()) return false;
+    var id = refundIncomeCategoryId_();
+    if (!id) return false;
+    categoryField.setValue(id);
+    return categoryField.getValue() === id;
+  }
   /** Compras parceladas, em memória: id de cada parcela -> grupo, e por grupo a parcela âncora (a de menor número, onde
    *  ficam as partes de reembolso -- ver installmentAnchorRow_, Refunds.js) e o valor total. Reconstruído só quando a lista
    *  de lançamentos muda (identidade, tamanho ou primeiro id): sharesOfPassive_ roda por linha. */
@@ -6740,7 +6782,7 @@
     var remaining = remainingForShare_(share);
     return '<div class="row" data-refundlink-row="' + escapeHtml(share.id) + '">' +
       '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1">' +
-        '<input type="checkbox" data-refundlink-check="' + escapeHtml(share.id) + '" style="width:auto;margin:0;flex:0 0 auto"' + (checked ? ' checked' : '') + '>' +
+        '<input type="checkbox" data-refundlink-check="' + escapeHtml(share.id) + '"' + (checked ? ' checked' : '') + '>' +
         '<span>' + labelHtml + '<br><span class="muted" style="font-size:12px">Falta ' + fmtMoney(remaining) + ' de ' + fmtMoney(share.expectedAmount) + '</span></span>' +
       '</label>' +
       '<span class="row-actions"><input type="text" class="input-money" data-refundlink-amount="' + escapeHtml(share.id) + '" style="width:90px;margin-bottom:0"' + (checked ? '' : ' disabled') + '></span>' +
@@ -7181,6 +7223,35 @@
    * "Novo orçamento" pra não deixar escolher uma categoria/sub que já está noutro
    * orçamento.
    */
+  /**
+   * Cápsulas de conta do filtro do Extrato — seleção MÚLTIPLA: "Todas as contas" fica ativa enquanto nenhuma conta estiver marcada
+   * (clicar nela limpa a seleção); clicar numa conta liga/desliga só ela. selectedIds é mutado in-place, como no filtro de categoria.
+   */
+  function buildAccountFilterField_(container, selectedIds, onChange) {
+    var items = rankedAccountItemsInvestmentsLast_();
+    container.innerHTML = '';
+    function rebuild_() { buildAccountFilterField_(container, selectedIds, onChange); onChange(); }
+    var all = document.createElement('button');
+    all.type = 'button';
+    all.className = 'capsule' + (selectedIds.length ? '' : ' active');
+    all.textContent = 'Todas as contas';
+    all.onclick = function () { if (!selectedIds.length) return; selectedIds.length = 0; rebuild_(); };
+    container.appendChild(all);
+    items.forEach(function (item) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'capsule' + (selectedIds.indexOf(item.value) !== -1 ? ' active' : '');
+      if (item.colorIndex !== undefined && item.colorIndex !== null) b.innerHTML = accountNameHtml_(item.label, item.colorIndex);
+      else b.textContent = item.label;
+      b.onclick = function () {
+        var at = selectedIds.indexOf(item.value);
+        if (at === -1) selectedIds.push(item.value); else selectedIds.splice(at, 1);
+        rebuild_();
+      };
+      container.appendChild(b);
+    });
+  }
+
   function buildCategoryFilterField_(container, selectedIds, onChange, options) {
     options = options || {};
     var kinds = options.kinds || ['expense', 'income'];
@@ -7317,12 +7388,10 @@
     wireTxCalendarCard_('extrato');
 
     var categoryIds = (f.categoryIds || []).slice();
-    var accountField = createCapsuleField(document.getElementById('f-account-field'), {
-      pinned: { value: '', label: 'Todas as contas' },
-      items: rankedAccountItemsInvestmentsLast_(),
-      selectedValue: f.accountId || '',
-      onChange: applyTxFilters_
-    });
+    // Várias contas de uma vez (também as que vêm do gráfico de faturas e o accountId único de outros atalhos).
+    var accountIds = (f.accountIds || []).slice();
+    if (f.accountId && accountIds.indexOf(f.accountId) === -1) accountIds.push(f.accountId);
+    buildAccountFilterField_(document.getElementById('f-account-field'), accountIds, applyTxFilters_);
     buildCategoryFilterField_(document.getElementById('f-category-field'), categoryIds, applyTxFilters_, { allOption: true });
 
     // Filtro instantâneo: qualquer interação já refiltra, sem precisar de um botão
@@ -7330,11 +7399,12 @@
     // (ver loadTxList), então não custa uma chamada ao servidor a cada tecla/clique.
     function applyTxFilters_() {
       STATE.txFilters = {
-        accountId: accountField.getValue() || undefined,
+        accountIds: accountIds.length ? accountIds.slice() : undefined,
         categoryIds: categoryIds.slice(),
         text: document.getElementById('f-text').value || undefined,
         dateFrom: document.getElementById('f-from').value || undefined,
         dateTo: document.getElementById('f-to').value || undefined,
+        billMonth: STATE.txFilters.billMonth, // vindo do gráfico de faturas; só o X do cabeçalho limpa
         kind: STATE.txFilters.kind, excludeForecastId: STATE.txFilters.excludeForecastId, onlyAnalyzed: STATE.txFilters.onlyAnalyzed,
         excludeBalanceEntries: STATE.txFilters.excludeBalanceEntries, cycleLabels: STATE.txFilters.cycleLabels, cycleSegmentName: STATE.txFilters.cycleSegmentName // vindos do card Saldo do ciclo; só o X do cabeçalho limpa
       };
@@ -7449,11 +7519,12 @@
     // Filtro vindo da legenda do card Saldo do ciclo: só as despesas (líquidas de reembolso) do grupo clicado.
     if (f.cycleLabels && (!(netAmountOfPassive_(t) > 0.004) || f.cycleLabels.indexOf(cycleSegmentLabelOfTx_(t)) === -1)) return false;
     if (f.text) {
-      var needle = f.text.trim().toLowerCase();
+      var needle = normalizeForMatch_(f.text.trim());
       // (Number||0).toLocaleString('pt-BR') em vez de fmtMoney: fmtMoney usa o formato de
       // moeda do Intl, que insere um espaço NÃO separável entre "R$" e o número — um
       // espaço comum digitado na busca nunca bateria com aquele caractere diferente.
-      var haystack = ((t.counterparty || '') + ' ' + (t.description || '') + ' ' + (Number(t.amount) || 0).toLocaleString('pt-BR')).toLowerCase();
+      var haystack = ((t.counterparty || '') + ' ' + (t.description || '') + ' ' + (Number(t.amount) || 0).toLocaleString('pt-BR'));
+      haystack = normalizeForMatch_(haystack);
       if (needle && haystack.indexOf(needle) === -1) return false;
     }
     // useEffectiveDate (só usado por viewBudgetTransactions_,
@@ -8285,6 +8356,7 @@
           render();
           renderRefundLinkButtonE_();
           autofillCounterpartyFromLinks_(document.getElementById('e-counterparty'), allocations);
+          if (suggestRefundCategory_(categoryField, allocations)) updateForecastFieldE();
           afterMutation_(resolveRealId_(t.id).then(function (realId) {
             // setRefundLinksForActiveTransaction substitui TODOS os vínculos dessa
             // receita: editar pode ter desmarcado uma Share que antes estava vinculada —
@@ -8941,7 +9013,7 @@
   function computeDayBarsTargets_(days, mode) {
     if (mode === 'income') return null;
     var f = calFilters_() || {};
-    if (f.accountId || f.text) return null;
+    if (f.accountId || (f.accountIds && f.accountIds.length) || f.text) return null;
     var filterIds = f.categoryIds || [];
     function hit(ids) { return !filterIds.length || ids.some(function (id) { return filterIds.indexOf(id) !== -1; }); }
     var ymNow = todayYmd().slice(0, 7);
@@ -9529,7 +9601,7 @@
           ' / vencimento dia ' + mm.currentDueDay + ', mas o documento mostra fechamento dia ' + mm.detectedClosingDay +
           ' / vencimento dia ' + mm.detectedDueDay + '.' +
           '<label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:13px">' +
-            '<input type="checkbox" id="doc-fix-account" checked style="width:auto;margin:0"> Atualizar a conta pro que o documento mostra' +
+            '<input type="checkbox" id="doc-fix-account" checked> Atualizar a conta pro que o documento mostra' +
           '</label>' +
         '</div>';
     }
@@ -13411,10 +13483,10 @@
     var field = document.getElementById(opts.fieldId);
     if (!field) return;
     var flagged = opts.getFlag();
-    // Celular: o botão é técnico demais pra ficar sempre à mostra -- só aparece (já ligado) quando o lançamento é pontual
+    // PC e celular: o botão é técnico demais pra ficar sempre à mostra -- só aparece (já ligado) quando o lançamento é pontual
     // (marcado sozinho pelo app ou já salvo assim); depois de aparecer, continua aí pra poder desligar e religar.
     if (flagged) field.dataset.outlierShown = '1';
-    else if (typeof isMobileLayout_ === 'function' && isMobileLayout_() && !field.dataset.outlierShown) { field.innerHTML = ''; return; }
+    else if (!field.dataset.outlierShown) { field.innerHTML = ''; return; }
     var tooltip = 'Marque se esta ' + (opts.getKind() === 'income' ? 'receita' : 'despesa') +
       ' é pontual e não representa um padrão, para não afetar médias/tendências (ex: quitação de dívida, ajuste de saldo)';
     var btnId = opts.fieldId + '-btn';
@@ -15344,18 +15416,13 @@
     // FIFO de mesmo delay) e sobrescrever o foco -- e porque nesse instante síncrono
     // p-counterparty ainda não existe (só é montado dentro de renderCounterpartyField, mais
     // abaixo, mas assim que ela roda de forma síncrona antes de qualquer setTimeout disparar).
-    // Celular: só abre o teclado quando há o que digitar -- categoria E nome já lembrados: "Referente a"; nome não
-    // lembrado (com categoria lembrada): "Pago a"/"Recebido de"; nenhum dos dois lembrados: sem foco automático.
+    // PC e celular: só foca quando há o que digitar -- categoria E nome já lembrados: "Referente a"; nome não lembrado (com
+    // categoria lembrada): "Pago a"/"Recebido de"; nenhum dos dois lembrados: sem foco automático.
     setTimeout(function () {
-      var field;
-      if (isMobileLayout_()) {
-        var catKnown = !!p.suggestedCategoryId, nameKnown = !!p.establishmentName;
-        var focusId = catKnown ? (nameKnown ? 'p-desc' : 'p-counterparty') : null;
-        field = focusId ? document.getElementById(focusId) : null;
-        if (!field && document.activeElement && document.activeElement !== document.body && document.activeElement.blur) document.activeElement.blur();
-      } else {
-        field = document.getElementById('p-counterparty');
-      }
+      var catKnown = !!p.suggestedCategoryId, nameKnown = !!p.establishmentName;
+      var focusId = catKnown ? (nameKnown ? 'p-desc' : 'p-counterparty') : null;
+      var field = focusId ? document.getElementById(focusId) : null;
+      if (!field && document.activeElement && document.activeElement !== document.body && document.activeElement.blur) document.activeElement.blur();
       if (field) field.focus();
     }, 0);
 
@@ -15653,6 +15720,7 @@
           stagedRefundLinks = allocations;
           renderRefundLinkButtonP_();
           autofillCounterpartyFromLinks_(document.getElementById('p-counterparty'), allocations);
+          if (suggestRefundCategory_(categoryField, allocations)) updateForecastFieldP();
         });
       };
     }
@@ -16202,6 +16270,7 @@
           stagedRefundLinks = allocations;
           renderRefundLinkButton_();
           autofillCounterpartyFromLinks_(document.getElementById('t-counterparty'), allocations);
+          if (suggestRefundCategory_(categoryField, allocations)) updateForecastToggleT_();
         });
       };
     }
@@ -16245,18 +16314,17 @@
         return id && items.some(function (i) { return i.value === id; }) ? id : fallback;
       }
       if (kind === 'transfer') {
-        // Ordem pelo que MAIS precisa ser preenchido: Valor, De, Para (+ fatura, que depende do Para), Descrição e, por último,
-        // Data/Horário (quase sempre ficam como estão: hoje, sem hora).
+        // Mesma lógica da despesa/receita: De, Para (+ fatura, que depende do Para), Data/Horário, Valor e Descrição.
         container.innerHTML =
-          '<div class="field tx-f-amount"><label>Valor</label><input type="text" id="t-amount"></div>' +
           '<div class="field tx-f-from"><label>De</label><div id="t-from-field" class="capsule-field"></div></div>' +
           '<div class="field tx-f-to"><label>Para</label><div id="t-to-field" class="capsule-field"></div></div>' +
           '<div id="t-bill-field" class="tx-f-bill"></div>' +
-          '<div class="field tx-f-desc"><label>Descrição</label><input id="t-desc" value="' + escapeHtml(preservedDesc) + '"></div>' +
           '<div class="field tx-f-date" style="display:flex;gap:8px">' +
             '<div style="flex:1"><label>Data</label><input type="date" id="t-date" value="' + preservedDate + '"></div>' +
             '<div style="flex:1"><label>Horário</label><input type="time" id="t-time" value="' + preservedTime + '"></div>' +
-          '</div>';
+          '</div>' +
+          '<div class="field tx-f-amount"><label>Valor</label><input type="text" id="t-amount"></div>' +
+          '<div class="field tx-f-desc"><label>Descrição</label><input id="t-desc" value="' + escapeHtml(preservedDesc) + '"></div>';
         setupMoneyInput(document.getElementById('t-amount'), preservedAmount);
         var accountItems = rankedAccountItems();
         var firstAcc_ = accountItems[0] ? accountItems[0].value : null;
@@ -16275,9 +16343,14 @@
           ? rankedAccountItems(function (a) { return a.type !== 'investment'; })
           : rankedAccountItems(function (a) { return a.type !== 'credit_card' && a.type !== 'investment'; });
         var counterpartyLabel = kind === 'income' ? 'Recebido de' : 'Pago a';
-        // Ordem pelo que MAIS precisa ser preenchido (o resto o app costuma preencher sozinho): Valor, Conta, Pago a/Referente a (o
-        // "Pago a" sugere a categoria e o recorrente), Categoria e, por último, Data/Horário (quase sempre ficam como estão).
+        // Ordem (pedida em 20/11/2026): Conta, Data/Horário, Valor/Parcelas, Pago a/Referente a (o "Pago a" sugere a categoria e o
+        // recorrente) e Categoria.
         container.innerHTML =
+          '<div class="field tx-f-account"><label>Conta</label><div id="t-account-field" class="capsule-field"></div></div>' +
+          '<div class="field tx-f-date" style="display:flex;gap:8px">' +
+            '<div style="flex:1"><label>Data</label><input type="date" id="t-date" value="' + preservedDate + '"></div>' +
+            '<div style="flex:1"><label>Horário</label><input type="time" id="t-time" value="' + preservedTime + '"></div>' +
+          '</div>' +
           '<div class="field tx-f-amount" style="display:flex;gap:8px">' +
             '<div style="flex:1;min-width:0">' +
               '<div class="tx-f-head" style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:2px 8px">' +
@@ -16293,7 +16366,6 @@
             '</div>' +
             '<div class="tx-inst-col" style="flex:1;min-width:0"><label>Parcelas</label><input type="number" id="t-installments" min="1" value="1"></div>' +
           '</div>' +
-          '<div class="field tx-f-account"><label>Conta</label><div id="t-account-field" class="capsule-field"></div></div>' +
           '<div class="field tx-f-who" style="display:flex;gap:8px">' +
             '<div style="flex:1;min-width:0">' +
               '<div class="tx-f-head" style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:nowrap;gap:2px 8px">' +
@@ -16313,10 +16385,6 @@
               '<span id="t-remember-cat-field"></span>' +
             '</div>' +
             '<div id="t-category-field" class="capsule-field"></div>' +
-          '</div>' +
-          '<div class="field tx-f-date" style="display:flex;gap:8px">' +
-            '<div style="flex:1"><label>Data</label><input type="date" id="t-date" value="' + preservedDate + '"></div>' +
-            '<div style="flex:1"><label>Horário</label><input type="time" id="t-time" value="' + preservedTime + '"></div>' +
           '</div>';
         setupCounterpartySuggestions_(document.getElementById('t-counterparty'));
         setupMoneyInput(document.getElementById('t-amount'), preservedAmount);
@@ -17609,7 +17677,8 @@
         // Celular: foca o Valor quando existe; senão o primeiro campo de TEXTO (data/hora/lista não devem abrir o teclado).
         field = document.querySelector('.modal #t-amount') || Array.prototype.filter.call(document.querySelectorAll('.modal input, .modal textarea'), isTextEntryEl_)[0];
       } else {
-        field = document.querySelector('.modal input, .modal select, .modal textarea');
+        // No Novo lançamento o Valor ganha o foco mesmo não sendo o primeiro campo (Conta e Data/Horário vêm antes).
+        field = document.querySelector('.modal #t-amount') || document.querySelector('.modal input, .modal select, .modal textarea');
       }
       if (field) field.focus();
     }, 0);

@@ -1619,7 +1619,12 @@ function normalizeKeywordsInput_(raw) {
 
 /** "airbnb, Booking.com" -> ["airbnb", "booking.com"] (minúsculo, pronto pra comparar). */
 function parseKeywords_(raw) {
-  return (raw || '').split(',').map(function (k) { return k.trim().toLowerCase(); }).filter(function (k) { return k; });
+  return (raw || '').split(',').map(function (k) { return foldText_(k); }).filter(function (k) { return k; });
+}
+
+/** minúsculo e sem acento ("Açaí" == "acai"), pra buscas/sugestões automáticas ignorarem acentuação. */
+function foldText_(s) {
+  return String(s == null ? '' : s).trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
 /**
@@ -1631,7 +1636,7 @@ function parseKeywords_(raw) {
  */
 function findCategoryIdByKeyword_(text, categories) {
   if (!text) return null;
-  var lower = text.toLowerCase();
+  var lower = foldText_(text);
   var match = categories.filter(function (c) { return !isArchived_(c.Archived) && c.Keywords; }).find(function (c) {
     return parseKeywords_(c.Keywords).some(function (kw) { return lower.indexOf(kw) !== -1; });
   });
