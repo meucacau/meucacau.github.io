@@ -785,6 +785,8 @@ function listAccounts(includeArchived, allTransactions) {
       maturityDate: a.MaturityDate || null,
       archived: isArchived_(a.Archived),
       colorIndex: colorIndex,
+      balanceCheckedAt: a.BalanceCheckedAt ? String(a.BalanceCheckedAt).slice(0, 10) : null,
+      invoiceCheckFrom: a.InvoiceCheckFrom ? String(a.InvoiceCheckFrom).slice(0, 10) : null,
       balance: computeAccountBalance_(a, txs),
       hasTransactions: txs.some(function (t) { return t.AccountID === a.ID; })
     };
@@ -878,6 +880,11 @@ function updateAccount(input) {
     var closingDayForBill = updates.ClosingDay !== undefined ? updates.ClosingDay : current.ClosingDay;
     consolidationRow = appendConsolidation_(current, resultingType, closingDayForBill, target);
   }
+
+  // Lembrete de consolidação (ver SCHEMA.Accounts): conferir pelo aviso sem diferença (balanceChecked) ou consolidar de fato
+  // zera o "aguardando conferir o limite depois da fatura" do cartão; o primeiro também marca o dia da conferência.
+  if (input.balanceChecked === true) updates.BalanceCheckedAt = todayYmd_();
+  if (resultingType === 'credit_card' && (input.balanceChecked === true || consolidationRow)) updates.InvoiceCheckFrom = '';
 
   var updated = updateRowById_('Accounts', input.id, updates);
   if (!updated) throw new Error('Conta não encontrada.');
@@ -3361,6 +3368,8 @@ function createInvoice(input) {
     };
   });
   var saved = appendRowsBatch_('InvoiceItems', rows);
+  // fatura nova de cartão: o Início passa a lembrar de conferir o limite restante (vale em qualquer aparelho)
+  if (account.Type === 'credit_card') updateRowById_('Accounts', input.accountId, { InvoiceCheckFrom: todayYmd_() });
   return { invoice: mapInvoiceRow_(invoice), items: saved.map(mapInvoiceItemRow_) };
 }
 
@@ -4455,7 +4464,11 @@ var SCHEMA = {
   // em Accounts.js/JavaScript.html), não mais um matiz livre — renomeado de ColorHue.
   Accounts: [
     'ID', 'Name', 'Type', 'InitialBalance', 'ClosingDay', 'DueDay', 'Archived', 'CreatedAt',
-    'Description', 'InvestmentDate', 'MaturityDate', 'ColorIndex'
+    'Description', 'InvestmentDate', 'MaturityDate', 'ColorIndex',
+    // Lembrete de consolidação (Início): BalanceCheckedAt = dia em que o saldo/limite foi conferido pelo aviso SEM diferença
+    // (não cria lançamento); InvoiceCheckFrom = dia da última fatura subida num cartão cujo limite ainda não foi conferido.
+    // Ficam no servidor pra valer entre aparelhos.
+    'BalanceCheckedAt', 'InvoiceCheckFrom'
   ],
   // Keywords (ver Categories.js): lista separada por vírgula, comparada como substring
   // (case-insensitive) contra o texto de um lançamento/pendência pra sugerir essa
@@ -4674,7 +4687,7 @@ var SCHEMA = {
 // avisar ninguém. Com a coluna aqui, normalizeTextColumns_ desfaz a autoconversão na
 // leitura, não importa como a célula foi escrita.
 var TEXT_COLUMNS = {
-  Accounts: ['InvestmentDate', 'MaturityDate'],
+  Accounts: ['InvestmentDate', 'MaturityDate', 'BalanceCheckedAt', 'InvoiceCheckFrom'],
   Transactions: ['Date', 'BillMonth', 'Time'],
   RecurringRules: ['LastCreatedYm'],
   PendingEntries: ['CreatedAt'],
@@ -4698,7 +4711,9 @@ var TEXT_COLUMN_DATE_PATTERNS = {
   Month: 'yyyy-MM',
   CycleStart: 'yyyy-MM-dd',
   DueDate: 'yyyy-MM-dd',
-  RecoveryDismissedFrom: 'yyyy-MM-dd'
+  RecoveryDismissedFrom: 'yyyy-MM-dd',
+  BalanceCheckedAt: 'yyyy-MM-dd',
+  InvoiceCheckFrom: 'yyyy-MM-dd'
 };
 
 /**
