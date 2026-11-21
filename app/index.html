@@ -14308,28 +14308,28 @@
     var kind = isEdit ? existing.kind : 'expense';
     var categoryField;
 
-    // Nome/Valor esperado existem nas 2 modalidades com o mesmo sentido — preserva ao
-    // trocar Despesa/Receita (só a Categoria reresetando faz sentido, já que categorias
-    // de despesa/receita são conjuntos diferentes) — mesmo padrão de openTransactionModal.
-    // Categoria é editável nos dois modos (kind em si continua fixo após criar — só a
-    // categoria DENTRO desse kind pode mudar, evita órfão tipo despesa virando receita).
+    // Ordem (mesma lógica conceitual do Novo lançamento e do Novo orçamento): Valor, Período, Nome e, por último, Categoria
+    // (categoria no fim, como no Novo lançamento: o Nome já sugere o resto). Valor e Período não dependem do kind e ficam fora de
+    // #f-fields; só Nome + Categoria são refeitos ao trocar Despesa/Receita (Nome é preservado; a Categoria reseta, já que
+    // categorias de despesa/receita são conjuntos diferentes). Categoria é editável nos dois modos (kind em si continua fixo
+    // após criar — só a categoria DENTRO desse kind pode mudar, evita órfão tipo despesa virando receita).
     function fieldsHtml(preservedLabel) {
-      return '<div class="field"><label>Categoria</label><div id="f-category-field" class="capsule-field"></div></div>' +
-      '<div class="field"><label>Nome</label><input id="f-label" value="' + escapeHtml(preservedLabel) + '"></div>' +
-      '<div class="field"><label>Valor esperado</label><input id="f-amount" type="text"></div>';
+      return '<div class="field"><label>Nome</label><input id="f-label" value="' + escapeHtml(preservedLabel) + '"></div>' +
+      '<div class="field tx-f-category"><label>Categoria</label><div id="f-category-field" class="capsule-field"></div></div>';
     }
 
-    function wireFields(preservedAmount) {
-      setupMoneyInput(document.getElementById('f-amount'), preservedAmount);
+    function wireFields() {
       var catItems = rankedCategoryItems(kind);
       function prefillLabelFromCategory() {
         var cat = STATE.categories.find(function (c) { return c.id === categoryField.getValue(); });
         var labelInput = document.getElementById('f-label');
         if (cat && !labelInput.value) labelInput.value = cat.name;
       }
+      // Mesmo formato do Novo lançamento: lista plana de categorias/subcategorias (sem "Outro..."), nada pré-selecionado ao criar.
       categoryField = createCapsuleField(document.getElementById('f-category-field'), {
+        allowDeselect: true, collapseUnused: true,
         items: catItems,
-        selectedValue: isEdit ? existing.categoryId : undefined,
+        selectedValue: isEdit ? (existing.categoryId || null) : null,
         onChange: prefillLabelFromCategory
       });
       prefillLabelFromCategory();
@@ -14350,7 +14350,7 @@
           '<button type="button" data-k="expense" class="active">Despesa</button>' +
           '<button type="button" data-k="income">Receita</button>' +
         '</div>') +
-      '<div id="f-fields">' + fieldsHtml(isEdit ? existing.label : '') + '</div>' +
+      '<div class="field tx-f-amount"><label>Valor esperado</label><input id="f-amount" type="text"></div>' +
       // Período fica FORA de #f-fields de propósito: não depende do kind, então não
       // precisa (e não deveria) resetar quando o toggle Despesa/Receita reconstrói o
       // resto dos campos. Dia do mês fica ao lado das cápsulas (mesma linha, quebra se
@@ -14367,9 +14367,11 @@
           '</div>' +
         '</div>' +
       '</div>' +
+      '<div id="f-fields">' + fieldsHtml(isEdit ? existing.label : '') + '</div>' +
       '<button id="m-submit">Salvar</button>'
     );
-    wireFields(isEdit ? existing.expectedAmount : 0);
+    setupMoneyInput(document.getElementById('f-amount'), isEdit ? existing.expectedAmount : 0);
+    wireFields();
     var dayOfMonthInput_ = document.getElementById('f-day-of-month');
     // Máscara em tempo real: só dígitos, nunca mais que 31 (maior dia possível). Não
     // barra um "0" isolado -- ainda pode virar um "0X" válido (05, 09) com mais um
@@ -14393,11 +14395,9 @@
         b.onclick = function () {
           kind = b.dataset.k;
           document.querySelectorAll('#f-kind-toggle button').forEach(function (x) { x.classList.toggle('active', x === b); });
-          var prevAmountEl = document.getElementById('f-amount');
           var preservedLabel = (document.getElementById('f-label') || {}).value || '';
-          var preservedAmount = (prevAmountEl && prevAmountEl.getValue) ? prevAmountEl.getValue() : 0;
           document.getElementById('f-fields').innerHTML = fieldsHtml(preservedLabel);
-          wireFields(preservedAmount);
+          wireFields();
         };
       });
     }
