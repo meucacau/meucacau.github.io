@@ -17286,6 +17286,14 @@
       .map(function (i) { return i.id; });
   }
 
+  /** Quantas parcelas tem a compra, dado o valor TOTAL dela e o valor de cada parcela (0 se não bate). Tolera 1 centavo por parcela de arredondamento. */
+  function invoiceInstallmentsFromTotal_(totalValue, installmentAmount) {
+    if (!(totalValue > 0) || !(installmentAmount > 0)) return 0;
+    var n = Math.round(totalValue / installmentAmount);
+    if (n < 2 || n > 99) return 0;
+    return Math.abs(n * installmentAmount - totalValue) <= n * 0.01 + 0.005 ? n : 0;
+  }
+
   /** Quadro do aviso de duplicata do "Fatura a confirmar": o item da fatura LADO A LADO com o lançamento que já está no Extrato
    *  (data, nome, valor, parcela e, só do Extrato, "referente a" e categoria), pra comparar sem sair da janela. Campo diferente fica sublinhado. */
   function invoiceMatchCompareHtml_(match, it) {
@@ -17329,16 +17337,23 @@
     var sortLabel = invoiceReviewSort_ === 'desc' ? 'Mais recentes primeiro' : 'Mais antigas primeiro';
     var matchWarning = match ? invoiceMatchCompareHtml_(match, p) : '';
     var counterpartyLabel = kind === 'income' ? 'Recebido de' : 'Pago a';
-    // Parcela editável (só despesa de cartão): o leitor do documento pode errar ou deixar de ver "2/6"; vazio nos dois = compra à vista.
+    // Parcela (só despesa de cartão). Documento que já trouxe a parcela (ex.: 2/6): o app tem certeza, então só mostra o valor total
+    // da compra (parcela x quantidade), sem campo. Sem parcela no documento: campos "Parcela" e "Valor total da compra" (R$ 0,00 = à vista);
+    // a quantidade de parcelas sai do total dividido pelo valor da parcela (invoiceInstallmentsFromTotal_).
     var acctOfInv = (STATE.accounts || []).filter(function (a) { return a.id === inv.accountId; })[0];
-    var showInstallment = !!acctOfInv && acctOfInv.type === 'credit_card' && kind === 'expense';
-    var installmentFieldsHtml = showInstallment
-      ? '<div class="field" style="display:flex;gap:8px;align-items:flex-end">' +
-          '<div style="flex:1;min-width:0"><label>Parcela</label><input id="i-inst-seq" type="text" inputmode="numeric" maxlength="3" placeholder="À vista" value="' + escapeHtml(p.installmentSeq ? String(p.installmentSeq) : '') + '"></div>' +
-          '<div style="padding-bottom:10px">de</div>' +
-          '<div style="flex:1;min-width:0"><label>Total de parcelas</label><input id="i-inst-total" type="text" inputmode="numeric" maxlength="3" placeholder="À vista" value="' + escapeHtml(p.installmentTotal ? String(p.installmentTotal) : '') + '"></div>' +
-        '</div>'
-      : '';
+    var isCardExpense = !!acctOfInv && acctOfInv.type === 'credit_card' && kind === 'expense';
+    var instKnown = isCardExpense && !!p.installmentSeq && !!p.installmentTotal;
+    var showInstallment = isCardExpense && !instKnown;
+    var installmentFieldsHtml = '';
+    if (instKnown) {
+      installmentFieldsHtml = '<div class="muted" style="margin-bottom:12px">Compra parcelada: ' + escapeHtml(fmtMoney(Math.round(p.amount * p.installmentTotal * 100) / 100)) + ' no total (' +
+        escapeHtml(String(p.installmentTotal)) + ' parcelas de ' + escapeHtml(fmtMoney(p.amount)) + '), esta é a parcela ' + escapeHtml(String(p.installmentSeq)) + '.</div>';
+    } else if (showInstallment) {
+      installmentFieldsHtml = '<div class="field" style="display:flex;gap:8px">' +
+          '<div style="flex:1;min-width:0"><label>Parcela (se for parcelada)</label><input id="i-inst-seq" type="text" inputmode="numeric" maxlength="3" placeholder="À vista"></div>' +
+          '<div style="flex:1;min-width:0"><label>Valor total da compra</label><input id="i-inst-total" type="text"></div>' +
+        '</div><div class="muted" id="i-inst-hint" style="margin:-6px 0 12px"></div>';
+    }
 
     openModal(
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap">' +
@@ -17385,6 +17400,22 @@
     var amountEl = document.getElementById('i-amount');
     setupMoneyInput(amountEl, p.amount);
     function currentAmount_() { return amountEl.getValue ? amountEl.getValue() : 0; }
+    var instTotalEl = showInstallment ? document.getElementById('i-inst-total') : null;
+    function instTotalValue_() { return instTotalEl && instTotalEl.getValue ? instTotalEl.getValue() : 0; }
+    function updateInstHint_() {
+      var hintEl = document.getElementById('i-inst-hint');
+      if (!hintEl) return;
+      var tv = instTotalValue_();
+      if (!(tv > 0)) { hintEl.textContent = 'Deixe R$ 0,00 se foi à vista.'; return; }
+      var n = invoiceInstallmentsFromTotal_(tv, currentAmount_());
+      hintEl.textContent = n ? n + ' parcelas de ' + fmtMoney(currentAmount_()) + '.' : 'O total não bate com o valor da parcela (' + fmtMoney(currentAmount_()) + ').';
+    }
+    if (instTotalEl) {
+      setupMoneyInput(instTotalEl, 0);
+      instTotalEl.addEventListener('moneychange', updateInstHint_);
+      amountEl.addEventListener('moneychange', updateInstHint_);
+      updateInstHint_();
+    }
     function updateRemember_() {
       renderRememberCategoryButton_({ fieldId: 'i-remember-cat-field', getKind: function () { return kind; }, getRemember: function () { return rememberCategory; }, setRemember: function (v) { rememberCategory = v; } });
     }
@@ -17438,12 +17469,14 @@
       if (!date) { errorPopover(submitBtn, 'Escolha a data.'); return; }
       var instSeq = '', instTotal = '';
       if (showInstallment) {
-        var seqRaw = document.getElementById('i-inst-seq').value.replace(/[^0-9]/g, ''), totalRaw = document.getElementById('i-inst-total').value.replace(/[^0-9]/g, '');
-        if (seqRaw || totalRaw) {
-          if (!seqRaw || !totalRaw || Number(totalRaw) < 2 || Number(seqRaw) < 1 || Number(seqRaw) > Number(totalRaw)) {
-            errorPopover(submitBtn, 'Parcela: informe a parcela e o total (2 ou mais, com a parcela de 1 até o total) — ou deixe os dois vazios para compra à vista.'); return;
+        var seqRaw = document.getElementById('i-inst-seq').value.replace(/[^0-9]/g, ''), totalValue = instTotalValue_();
+        if (seqRaw || totalValue > 0) {
+          var nParcels = totalValue > 0 ? invoiceInstallmentsFromTotal_(totalValue, amount) : 0;
+          if (!seqRaw || !nParcels) {
+            errorPopover(submitBtn, !seqRaw ? 'Informe qual parcela é esta — ou limpe o valor total para lançar à vista.' : 'O valor total da compra precisa ser (valor da parcela × número de parcelas, 2 ou mais) — ou deixe R$ 0,00 para lançar à vista.'); return;
           }
-          instSeq = Number(seqRaw); instTotal = Number(totalRaw);
+          if (Number(seqRaw) < 1 || Number(seqRaw) > nParcels) { errorPopover(submitBtn, 'A parcela precisa ficar entre 1 e ' + nParcels + '.'); return; }
+          instSeq = Number(seqRaw); instTotal = nParcels;
         }
       }
       var payload = {
