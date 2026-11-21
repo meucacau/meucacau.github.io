@@ -3497,6 +3497,56 @@ function acceptInvoiceItems(input) {
   return { created: saved.map(mapTransactionRow_), accepted: accepted };
 }
 
+/**
+ * Corrige as parcelas de um lançamento que JÁ EXISTE (ex.: o da notificação do cartão, que não traz o número de parcelas) a partir
+ * de um item parcelado da fatura. O lançamento vira essa parcela: entra no grupo de parcelas da mesma compra (ou abre um novo),
+ * ganha "(N/M)", o VALOR DA PARCELA da fatura e a fatura (BillMonth) do documento; o item vira 'accepted' apontando pra ele.
+ * Data, nome e categoria não mudam. Só roda quando o usuário confirma na janela da fila (nunca sozinho).
+ * Se o valor muda e o lançamento tem reembolso (partes de pessoas), recusa: o total esperado era da compra inteira com o valor antigo.
+ * input: { itemId, transactionId }. Devolve { transaction, accepted: [itemId] }.
+ */
+function correctInvoiceItemInstallments(input) {
+  var item = input && input.itemId ? findById_('InvoiceItems', input.itemId) : null;
+  if (!item || item.Status !== 'pending') throw new Error('Este item da fatura já foi aceito ou ignorado.');
+  var seq = Number(item.InstallmentSeq) || 0, total = Number(item.InstallmentTotal) || 0;
+  if (total < 2 || seq < 1 || seq > total) throw new Error('Este item da fatura não tem parcelas.');
+  var inv = findById_('Invoices', item.InvoiceID);
+  var account = inv && findById_('Accounts', inv.AccountID);
+  if (!inv || !account) throw new Error('A conta deste documento não existe mais.');
+  if (account.Type !== 'credit_card' || item.Kind === 'income') throw new Error('Parcelas só valem para despesa de cartão de crédito.');
+  var tx = input.transactionId ? findById_('Transactions', input.transactionId) : null;
+  if (!tx) throw new Error('Lançamento não encontrado.');
+  if (tx.AccountID !== inv.AccountID || tx.Kind !== 'expense' || tx.TransferGroupID) throw new Error('Este lançamento não é uma despesa da conta da fatura.');
+  if (isBalanceAnchorRow_(tx)) throw new Error('Consolidação de saldo não pode virar parcela.');
+  if (tx.InstallmentGroupID) throw new Error('Este lançamento já é parcelado.');
+  var newAmount = Math.round(Number(item.Amount) * 100) / 100;
+  var amountChanges = Math.round(Number(tx.Amount) * 100) !== Math.round(newAmount * 100);
+  if (amountChanges && readAll_('RefundShares').some(function (s) { return s.PassiveTransactionID === tx.ID; })) {
+    throw new Error('Este lançamento tem reembolso cadastrado com o valor de ' + Number(tx.Amount).toFixed(2).replace('.', ',') +
+      '. Ajuste o reembolso (ou o valor) antes de transformar em parcela.');
+  }
+  var nameKey = invoiceNameKey_(item.Description);
+  var sameGroup = readAll_('Transactions').filter(function (t) {
+    return t.ID !== tx.ID && t.AccountID === inv.AccountID && t.InstallmentGroupID && Number(t.InstallmentTotal) === total &&
+      (invoiceNameKey_(t.Counterparty) === nameKey || invoiceNameKey_(stripInstallmentSuffix_(t.Description)) === nameKey);
+  });
+  if (sameGroup.some(function (t) { return Number(t.InstallmentSeq) === seq; })) {
+    throw new Error('A parcela ' + seq + '/' + total + ' dessa compra já está lançada.');
+  }
+  var base = stripInstallmentSuffix_(tx.Description);
+  var updated = updateRowById_('Transactions', tx.ID, {
+    Amount: newAmount,
+    InstallmentGroupID: sameGroup.length ? sameGroup[0].InstallmentGroupID : generateId_(),
+    InstallmentSeq: seq, InstallmentTotal: total,
+    Description: (base ? base + ' ' : '') + '(' + seq + '/' + total + ')',
+    BillMonth: inv.BillMonth || billMonthForDate_(tx.Date, Number(account.ClosingDay))
+  });
+  var updates = {};
+  updates[item.ID] = { Status: 'accepted', TransactionID: tx.ID };
+  updateInvoiceItemsBulk_(updates);
+  return { transaction: mapTransactionRow_(updated), accepted: [item.ID] };
+}
+
 /** Apaga o documento e a fila dele. Os lançamentos já aceitos continuam (são lançamentos de verdade). */
 function deleteInvoice(id) {
   if (!id) throw new Error('ID do documento é obrigatório.');
@@ -5660,6 +5710,7 @@ return {
   archiveCategory: (typeof archiveCategory === 'function' ? archiveCategory : function () { throw new Error('"archiveCategory" não existe na versão web.'); }),
   confirmDocumentImportBatch: (typeof confirmDocumentImportBatch === 'function' ? confirmDocumentImportBatch : function () { throw new Error('"confirmDocumentImportBatch" não existe na versão web.'); }),
   confirmPendingEntry: (typeof confirmPendingEntry === 'function' ? confirmPendingEntry : function () { throw new Error('"confirmPendingEntry" não existe na versão web.'); }),
+  correctInvoiceItemInstallments: (typeof correctInvoiceItemInstallments === 'function' ? correctInvoiceItemInstallments : function () { throw new Error('"correctInvoiceItemInstallments" não existe na versão web.'); }),
   createAccount: (typeof createAccount === 'function' ? createAccount : function () { throw new Error('"createAccount" não existe na versão web.'); }),
   createBudget: (typeof createBudget === 'function' ? createBudget : function () { throw new Error('"createBudget" não existe na versão web.'); }),
   createCategory: (typeof createCategory === 'function' ? createCategory : function () { throw new Error('"createCategory" não existe na versão web.'); }),

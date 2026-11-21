@@ -2288,7 +2288,7 @@
 
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=ab1de2243b"></script>
+  <script src="cacau-web.js?v=0e614a6ece"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -17130,6 +17130,23 @@
       });
       if (best) { used[best.tx.id] = true; out[it.id] = { level: 'maybe', tx: best.tx }; }
     });
+    // Item PARCELADO da fatura (N/M) que bate com um lançamento À VISTA do Extrato (a notificação do cartão não traz as parcelas): é a mesma
+    // compra sem o número de parcelas. O valor do Extrato pode ser o da parcela ou o total da compra (parcela x M); a data da compra ou, com
+    // até 4 dias de diferença, o nome parecido completam. Nível 'installment' = a janela oferece "Corrigir parcelas" (só com clique do usuário).
+    pending.forEach(function (it) {
+      if (out[it.id] || !(it.installmentSeq && it.installmentTotal) || it.kind !== 'expense') return;
+      var tol = 0.01 * it.installmentTotal + 0.05;
+      var best = null;
+      pool.forEach(function (t) {
+        if (used[t.id] || t.kind !== 'expense' || t.installmentGroupId || t.installmentSeq || t.balanceAnchor) return;
+        if (!(Math.abs(t.amount - it.amount) < 0.05 || Math.abs(t.amount - it.amount * it.installmentTotal) <= tol)) return;
+        var d = invoiceDayDiff_(t.date, it.date);
+        if (!(d === 0 || (d <= 4 && invoiceNamesAlike_(t, it)))) return;
+        var score = d * 10 - (invoiceNamesAlike_(t, it) ? 5 : 0);
+        if (!best || score < best.score) best = { tx: t, score: score };
+      });
+      if (best) { used[best.tx.id] = true; out[it.id] = { level: 'installment', tx: best.tx }; }
+    });
     return out;
   }
 
@@ -17317,7 +17334,7 @@
     var matchTxt = '';
     if (match) {
       var t = match.tx;
-      matchTxt = '<div class="inv-match">' + (match.level === 'exact' ? 'Já lançado: ' : 'Parecido: ') + escapeHtml(fmtDate(t.date)) + ' · ' + escapeHtml(t.counterparty || t.description || 'sem nome') + ' · ' + escapeHtml(fmtMoney(t.amount)) + '</div>';
+      matchTxt = '<div class="inv-match">' + (match.level === 'exact' ? 'Já lançado: ' : (match.level === 'installment' ? 'Lançado sem parcelas: ' : 'Parecido: ')) +escapeHtml(fmtDate(t.date)) + ' · ' + escapeHtml(t.counterparty || t.description || 'sem nome') + ' · ' + escapeHtml(fmtMoney(t.amount)) + '</div>';
     }
     return '<div class="inv-row" data-item="' + escapeHtml(it.id) + '"><div class="inv-main"><span class="inv-date">' + escapeHtml(fmtDate(it.date).slice(0, 5)) + '</span>' +
       '<span class="inv-desc">' + escapeHtml(it.description) + inst + '</span><span class="inv-amt' + amountCls + '">' + (it.kind === 'income' ? '+ ' : '') + escapeHtml(fmtMoney(it.amount)) + '</span></div>' +
@@ -17421,6 +17438,17 @@
     var extra = '';
     if (tRef) extra += '<tr><th>Referente a</th><td></td>' + cell(tRef, false) + '</tr>';
     extra += '<tr><th>Categoria</th><td></td><td>' + categoryLabelHtml(t.categoryId) + '</td></tr>';
+    if (match.level === 'installment') {
+      // Mesma compra lançada sem parcelas (ex.: pela notificação): o botão corrige o lançamento do Extrato, só com o clique.
+      var amountNote = Math.abs(it.amount - t.amount) >= 0.01 ? ' O valor muda de ' + fmtMoney(t.amount) + ' para ' + fmtMoney(it.amount) + ' (o da parcela na fatura).' : '';
+      return '<div class="inv-dup">' +
+        '<div class="inv-dup-head">' + UI_ICON_WARN_ + ' Este lançamento do Extrato parece ser esta compra, mas está sem o número de parcelas.</div>' +
+        '<table class="inv-dup-table"><thead><tr><th></th><th>Na fatura</th><th>No Extrato</th></tr></thead><tbody>' + rows + extra + '</tbody></table>' +
+        '<div style="margin:8px 0 6px">Corrigir parcelas: o lançamento do Extrato vira a parcela ' + escapeHtml(iInst) + ' de ' + escapeHtml(fmtMoney(it.amount)) + '.' + escapeHtml(amountNote) +
+          ' Data, nome e categoria não mudam.</div>' +
+        '<button type="button" class="inv-act" id="i-fix-installments" style="color:#fff;border-color:#fff">Corrigir parcelas do lançamento</button>' +
+        '</div>';
+    }
     return '<div class="inv-dup">' +
       '<div class="inv-dup-head">' + UI_ICON_WARN_ + ' ' + (exact ? 'Parece já lançado no Extrato' : 'Possível duplicata de um lançamento do Extrato') +
         ' — confira antes de confirmar' + (exact ? ' (se for o mesmo, ignore).' : '.') + '</div>' +
@@ -17625,6 +17653,14 @@
       openInvoiceReviewModal_(invId, index + 1, queue);
     };
 
+    var fixInstallmentsBtn = document.getElementById('i-fix-installments');
+    if (fixInstallmentsBtn && match) {
+      fixInstallmentsBtn.onclick = function () {
+        invoiceFixInstallments_(p, match.tx);
+        openInvoiceReviewModal_(invId, index + 1, queue);
+      };
+    }
+
     document.getElementById('m-submit').onclick = function () {
       var submitBtn = document.getElementById('m-submit');
       var amount = currentAmount_();
@@ -17697,6 +17733,21 @@
       }) : null;
     })).catch(function (err) {
       item.status = prevStatus;
+      showToast(err.message, true);
+    });
+  }
+
+  /** "Corrigir parcelas do lançamento": o lançamento do Extrato (à vista, sem parcelas) vira a parcela N/M deste item da fatura e o item
+   *  conta como aceito. Marca na hora e desfaz se o servidor recusar (ex.: lançamento com reembolso e valor diferente). */
+  function invoiceFixInstallments_(item, tx) {
+    var prevStatus = item.status, prevTxId = item.transactionId;
+    item.status = 'accepted'; item.transactionId = tx.id;
+    afterMutation_(resolveRealId_(tx.id).then(function (realId) {
+      return run('correctInvoiceItemInstallments', { itemId: item.id, transactionId: realId });
+    }).then(function () {
+      showToast('Parcelas corrigidas: o lançamento do Extrato agora é a parcela ' + item.installmentSeq + '/' + item.installmentTotal + '.');
+    })).catch(function (err) {
+      item.status = prevStatus; item.transactionId = prevTxId;
       showToast(err.message, true);
     });
   }
