@@ -5457,7 +5457,7 @@
       if (a.type !== 'credit_card') return;
       byCard[a.id] = 0; laterOf[a.id] = 0;
       if (upToOpenBill && a.closingDay) openOf[a.id] = openBillMonthOfCard_(a, ymd);
-      if (a.limitTotal > 0) { limitOf[a.id] = a.limitTotal; remaining[a.id] = 0; }
+      if (a.limitTotal > 0) { limitOf[a.id] = a.limitTotal; remaining[a.id] = a.initialBalance || 0; } // saldo = inicial (conta antiga) + lançamentos
     });
     STATE.allTransactions.forEach(function (t) {
       if (limitOf[t.accountId] === undefined || !t.date) return;
