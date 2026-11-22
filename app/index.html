@@ -156,6 +156,7 @@
   html::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
   html::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
+  html { overflow-x: clip; } /* cards balançando para o lado (inércia) não criam rolagem horizontal */
   html, body {
     margin: 0;
     padding: 0;
@@ -2129,7 +2130,7 @@
     @keyframes dd-pop-below { from { opacity: 0; transform: translateY(-8px) scale(.94); } }
     @keyframes dd-pop-above { from { opacity: 0; transform: translateY(8px) scale(.94); } }
     /* Troca de aba D · cascata: cada bloco da tela sobe, um depois do outro. */
-    .view-enter > * { animation: view-rise .3s cubic-bezier(.2,.8,.2,1) backwards; }
+    .view-enter > * { animation: view-fade .3s cubic-bezier(.2,.8,.2,1) backwards; } /* o deslocamento é horizontal e vem da mola dos cards (cardInertiaKick_) */
     .view-enter > *:nth-child(2) { animation-delay: .04s; }
     .view-enter > *:nth-child(3) { animation-delay: .08s; }
     .view-enter > *:nth-child(4) { animation-delay: .12s; }
@@ -2137,6 +2138,7 @@
     .view-enter > *:nth-child(6) { animation-delay: .20s; }
     .view-enter > *:nth-child(n+7) { animation-delay: .24s; }
     @keyframes view-rise { from { opacity: 0; transform: translateY(16px); } }
+    @keyframes view-fade { from { opacity: 0; } }
     /* A mensagem do Início tem animação própria (com atraso): sem esta regra a cascata acima a sobrescrevia, a mensagem
        aparecia na hora, e quando a classe view-enter saía (1,1 s) a própria animação recomeçava -- sumia e reaparecia. */
     .view-enter > .home-msg.home-msg-in { animation: home-msg-fade .65s cubic-bezier(.2,.8,.2,1) 0.08s both; }
@@ -2329,7 +2331,7 @@
 
   <div id="modal-root"></div>
 
-  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-22","id":"9f2852a"};</script>
+  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-22","id":"a81a9f4"};</script>
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="cacau-web.js?v=b02af4b05e"></script>
@@ -2791,21 +2793,23 @@
     }
   }
   // ---------- inércia dos cards (22/11/2026) ----------
-  // Ao rolar, os cards visíveis ficam um instante pra trás (como se fossem puxados) e, quando a rolagem para, voltam ao lugar com um
-  // vai-e-volta curto (mola). Na troca de aba, os cards chegam com o mesmo balanço, em cascata. Técnica: uma mola amortecida por card,
+  // Ao rolar, os cards visíveis ficam um instante pra trás (como se fossem puxados), com força proporcional à velocidade da rolagem, e
+  // quando ela para voltam ao lugar com 3 movimentos (vai, volta, vai de novo; cada um menor que o anterior). Na troca de aba os cards
+  // chegam de lado (as abas ficam uma ao lado da outra), com o mesmo balanço, em cascata. Técnica: uma mola amortecida por card,
   // movida pela propriedade CSS `translate` (não pelo `transform`: compõe com a cascata view-rise, o swipe e o zoom dos botões) e
   // escrita só nos cards que estão na tela. Sem rolagem nem balanço, o loop de quadros PARA e o `translate` é removido (cards em
   // repouso ficam sem camada própria). Não toca na rolagem nativa; cards sticky/fixed ficam de fora; some com "reduzir movimento".
-  var INERTIA_MAX_PX_ = 7;          // deslocamento máximo pela rolagem
-  var INERTIA_KICK_PX_ = 9;         // deslocamento inicial ao trocar de aba
+  var INERTIA_MAX_PX_ = 16;         // teto do deslocamento pela rolagem (abaixo dele é proporcional à velocidade)
+  var INERTIA_GAIN_ = 5;            // px de deslocamento por px/ms de velocidade de rolagem
+  var INERTIA_KICK_PX_ = 26;        // deslocamento horizontal inicial ao trocar de aba
   var INERTIA_STIFFNESS_ = 230;     // rigidez da mola (período ~0,4 s)
-  var INERTIA_DAMPING_ = 15;        // amortecimento (< 2*raiz(rigidez) = 30: subamortecida, dá um pequeno vai-e-volta)
+  var INERTIA_DAMPING_ = 7.5;       // amortecimento (taxa 0,25 de 1: subamortecida; a cada ida o desvio cai a ~45%: passa, volta e passa de novo, visíveis)
   var INERTIA_JUMP_PX_ = 500;       // salto de rolagem maior que isso num quadro é programático (troca de aba): não vira velocidade
   var INERTIA_SETTLE_ = 0.04;       // abaixo disso (px e px/s) a mola é considerada parada
-  /** Velocidade de rolagem (px/ms, + = descendo) -> deslocamento-alvo em px (+ = card atrasado, mais embaixo). Satura suave. */
+  /** Velocidade de rolagem (px/ms, + = descendo) -> deslocamento-alvo em px (+ = card atrasado, mais embaixo). Proporcional à
+   *  velocidade; só perto do teto (rolagem muito rápida) satura suave. */
   function cardInertiaTarget_(vel) {
-    var a = Math.abs(vel);
-    return (vel < 0 ? -1 : 1) * INERTIA_MAX_PX_ * a / (a + 0.9);
+    return INERTIA_MAX_PX_ * Math.tanh(vel * INERTIA_GAIN_ / INERTIA_MAX_PX_);
   }
   /** Um passo da mola de um card: s = {x, v}; k = fator de rigidez do card; dt em segundos. Euler semi-implícito em subpassos. */
   function cardInertiaStep_(s, target, k, dt) {
@@ -2835,7 +2839,7 @@
       if (r.bottom < -40 || r.top > vh + 40 || r.height === 0) continue;
       var pos = getComputedStyle(el).position;
       if (pos === 'sticky' || pos === 'fixed') continue;
-      list.push({ el: el, s: { x: 0, v: 0 }, k: 1 - 0.05 * Math.min(list.length, 5), delay: 0 });
+      list.push({ el: el, s: { x: 0, v: 0 }, h: { x: 0, v: 0 }, k: 1 - 0.05 * Math.min(list.length, 5), delay: 0 });
     }
     return list;
   }
@@ -2844,7 +2848,7 @@
     var c = cardInertia_, fresh = cardInertiaCollect_(), i, j;
     c.collectedAt = now;
     for (i = 0; i < fresh.length; i++) {
-      for (j = 0; j < c.cards.length; j++) if (c.cards[j].el === fresh[i].el) { fresh[i].s = c.cards[j].s; fresh[i].delay = c.cards[j].delay; break; }
+      for (j = 0; j < c.cards.length; j++) if (c.cards[j].el === fresh[i].el) { fresh[i].s = c.cards[j].s; fresh[i].h = c.cards[j].h; fresh[i].delay = c.cards[j].delay; break; }
     }
     for (j = 0; j < c.cards.length; j++) {
       var kept = false;
@@ -2874,10 +2878,12 @@
     for (var i = 0; i < c.cards.length; i++) {
       var it = c.cards[i];
       if (it.delay > 0) { it.delay -= dtMs; moving = true; continue; }
-      cardInertiaStep_(it.s, target, it.k, dtMs / 1000);
-      var still = Math.abs(it.s.x) < INERTIA_SETTLE_ && Math.abs(it.s.v) < INERTIA_SETTLE_ * 10;
-      if (still && c.vel === 0) { it.s.x = 0; it.s.v = 0; it.el.style.translate = ''; }
-      else { moving = true; it.el.style.translate = '0 ' + it.s.x.toFixed(2) + 'px'; }
+      cardInertiaStep_(it.s, target, it.k, dtMs / 1000);   // vertical: puxado pela rolagem
+      cardInertiaStep_(it.h, 0, it.k, dtMs / 1000);        // horizontal: balanço da troca de aba
+      var still = Math.abs(it.s.x) < INERTIA_SETTLE_ && Math.abs(it.s.v) < INERTIA_SETTLE_ * 10 &&
+        Math.abs(it.h.x) < INERTIA_SETTLE_ && Math.abs(it.h.v) < INERTIA_SETTLE_ * 10;
+      if (still && c.vel === 0) { it.s.x = 0; it.s.v = 0; it.h.x = 0; it.h.v = 0; it.el.style.translate = ''; }
+      else { moving = true; it.el.style.translate = it.h.x.toFixed(2) + 'px ' + it.s.x.toFixed(2) + 'px'; }
     }
     if (moving || c.vel !== 0 || now - c.lastScrollT < 100) c.raf = requestAnimationFrame(cardInertiaFrame_); // 100 ms de folga: o 1º quadro pode ler dy = 0
     else { cardInertiaClear_(c.cards); c.cards = []; }
@@ -2901,16 +2907,17 @@
       cardInertiaWake_(now);
     }
   }
-  /** Troca de aba: os cards visíveis começam um pouco abaixo e voltam com a mola, um depois do outro (cascata de 38 ms). */
-  function cardInertiaKick_() {
+  /** Troca de aba: os cards visíveis começam deslocados para o lado de onde a aba nova "vem" (dir = +1: aba à direita da anterior,
+   *  a tela nova chega da direita) e voltam com a mola, um depois do outro (cascata de 38 ms). */
+  function cardInertiaKick_(dir) {
     if (!cardInertiaOn_()) return;
     var c = cardInertia_;
     cardInertiaClear_(c.cards);
     c.cards = cardInertiaCollect_();
     for (var i = 0; i < c.cards.length; i++) {
-      c.cards[i].s.x = INERTIA_KICK_PX_ * (1 - 0.06 * Math.min(i, 6));
+      c.cards[i].h.x = (dir < 0 ? -1 : 1) * INERTIA_KICK_PX_ * (1 - 0.06 * Math.min(i, 6));
       c.cards[i].delay = i * 38;
-      c.cards[i].el.style.translate = '0 ' + c.cards[i].s.x.toFixed(2) + 'px';
+      c.cards[i].el.style.translate = c.cards[i].h.x.toFixed(2) + 'px 0';
     }
     c.lastY = window.pageYOffset || 0;
     c.vel = 0;
@@ -2923,7 +2930,7 @@
     if (!motionOk_ || swipeRendering_) return;
     var root = document.getElementById('view-root');
     if (!root) return;
-    if (!sameView) cardInertiaKick_();
+    if (!sameView) cardInertiaKick_(viewSwitchDir_);
     if (!sameView) {
       root.classList.add('view-enter');
       clearTimeout(viewEnterTimer_);
@@ -5538,6 +5545,7 @@
   // quando é um RE-render da MESMA aba (uma mutação); trocar de aba deve mesmo voltar ao
   // topo do conteúdo novo.
   var lastRenderedView_ = null;
+  var viewSwitchDir_ = 1;
   var scrollPositions_ = {};
   function render() {
     var sameView = STATE.currentView === lastRenderedView_;
@@ -5545,6 +5553,9 @@
     var scrollX = window.scrollX, scrollY = window.scrollY;
     if (!sameView && lastRenderedView_ !== null) {
       scrollPositions_[lastRenderedView_] = { x: scrollX, y: scrollY };
+    }
+    if (!sameView && lastRenderedView_ !== null) { // de que lado a aba nova "vem": pela ordem da barra (+1 = à direita da anterior)
+      viewSwitchDir_ = SWIPE_TAB_ORDER_.indexOf(STATE.currentView) < SWIPE_TAB_ORDER_.indexOf(lastRenderedView_) ? -1 : 1;
     }
     lastRenderedView_ = STATE.currentView;
 
