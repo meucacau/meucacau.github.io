@@ -21469,6 +21469,10 @@
     var COLLECTOR_URL = 'https://script.google.com/macros/s/AKfycbzx7u1F-_c0_26KzHx2Uy6k1j-IG6kHpyhybDaE_5OHnq3UQPmpXlmfOPd84SJsrOs2eA/exec';
     var SCHEMA = 'cacau1';
     var VERSION = 'web-3ec750c4f1';
+    // Build web público: sem aviso nem chave para os usuários; só coleta no aparelho do dono, que liga
+    // abrindo o site com ?coleta=1 (e desliga com ?coleta=0). O build web troca esta linha para true.
+    var OWNER_ONLY = true;
+    var OWNER_KEY = 'cacau-analytics-owner';
     var FLUSH_MS = 30000;
     var IDLE_MS = 60000;      // sem toque/tecla por mais que isso, o tempo para de contar
     var MAX_TICK_MS = 2000;   // um tick atrasado (aba dormindo) não vira minutos de uso
@@ -21516,7 +21520,9 @@
         try { if (value === null) env.storage.removeItem(key); else env.storage.setItem(key, value); } catch (e) { /* segue */ }
       }
       function optedOut() { return readFlag_(OFF_KEY) === '1'; }
-      function active() { return !!env.url && !!env.multiuser && !optedOut(); }
+      function ownerOn() { return readFlag_(OWNER_KEY) === '1'; }
+      function setOwner(on) { writeFlag_(OWNER_KEY, on ? '1' : null); }
+      function active() { return !!env.url && !!env.multiuser && !optedOut() && (!env.ownerOnly || ownerOn()); }
 
       var uid = readFlag_(UID_KEY);
       if (!uid) { uid = randomId_(env); writeFlag_(UID_KEY, uid); }
@@ -21612,7 +21618,7 @@
       }
 
       return {
-        start: start, tick: tick, flush: flush, active: active, optedOut: optedOut, setOptOut: setOptOut,
+        start: start, tick: tick, flush: flush, active: active, optedOut: optedOut, setOptOut: setOptOut, setOwner: setOwner, ownerOn: ownerOn,
         noticeSeen: function () { return readFlag_(NOTICE_KEY) === '1'; },
         markNoticeSeen: function () { writeFlag_(NOTICE_KEY, '1'); },
         _state: state, _ids: function () { return { uid: uid, sid: sid }; }
@@ -21623,6 +21629,7 @@
       var w = window;
       return {
         url: COLLECTOR_URL,
+        ownerOnly: OWNER_ONLY,
         multiuser: typeof FINANCAS_MULTIUSER !== 'undefined' && FINANCAS_MULTIUSER,
         platform: (w.FinancasApp ? 'android' : 'web'),
         doc: document,
@@ -21671,6 +21678,13 @@
       var env = realEnv_();
       instance = create(env);
       if (!env.multiuser || !env.url) return instance;
+      if (env.ownerOnly) {
+        // Só o dono: ?coleta=1 liga neste aparelho, ?coleta=0 desliga; sem isso, nada é coletado nem avisado.
+        var m = /[?&]coleta=([01])/.exec(window.location.search || '');
+        if (m) instance.setOwner(m[1] === '1');
+        if (instance.ownerOn()) instance.start();
+        return instance;
+      }
       if (!instance.noticeSeen()) {
         showNotice_(instance);
         instance.markNoticeSeen(); // visto = exibido; "Desligar" grava a recusa
@@ -21679,7 +21693,7 @@
       return instance;
     }
 
-    return { init: init, create: create, targetKey_: targetKey_, modalKey_: modalKey_, optedOut: function () { return init().optedOut(); }, setOptOut: function (off) { init().setOptOut(off); }, enabled: function () { return !!(COLLECTOR_URL && typeof FINANCAS_MULTIUSER !== 'undefined' && FINANCAS_MULTIUSER); } };
+    return { init: init, create: create, targetKey_: targetKey_, modalKey_: modalKey_, optedOut: function () { return init().optedOut(); }, setOptOut: function (off) { init().setOptOut(off); }, enabled: function () { return !!(!OWNER_ONLY && COLLECTOR_URL && typeof FINANCAS_MULTIUSER !== 'undefined' && FINANCAS_MULTIUSER); } };
   })();
   document.addEventListener('DOMContentLoaded', function () { CacauAnalytics.init(); });
 </script>
