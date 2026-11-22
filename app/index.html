@@ -1820,6 +1820,15 @@
   .budget-start-step svg { display: block; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
   .budget-first-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 34px; }
   .budget-first-head > label { margin-bottom: 0; }
+  /* Limite total do cartão: o botão-texto "Pagamento de fatura com limite garantido?" aparece (animado) só ao baixar o limite. */
+  .gl-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; margin-bottom: var(--field-title-gap); }
+  .modal .field .gl-head > label { margin-bottom: 0; }
+  .gl-toggle { flex: 0 1 auto; width: auto; margin: 0; padding: 0 4px; background: none; border: 0; box-shadow: none; font: inherit; font-size: 12px; font-weight: 600; text-align: right; line-height: 1.2; color: var(--text-muted); cursor: pointer; opacity: 0; transform: translateY(4px); max-width: 0; overflow: hidden; white-space: nowrap; pointer-events: none; transition: opacity .2s, transform .2s, max-width .25s, color .15s; }
+  .gl-toggle.show { opacity: 1; transform: none; max-width: 100%; white-space: normal; pointer-events: auto; }
+  .gl-toggle .gl-box { display: inline-block; width: 12px; height: 12px; border: 1.5px solid currentColor; border-radius: 3px; margin-right: 5px; vertical-align: -1px; position: relative; }
+  .gl-toggle.on { color: var(--accent, var(--text)); }
+  .gl-toggle.on .gl-box { background: currentColor; }
+  .gl-toggle.on .gl-box::after { content: ''; position: absolute; left: 3px; top: 0px; width: 3px; height: 6px; border: solid var(--bg, #fff); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
   .budget-from-start { flex: 0 0 auto; padding: 4px 12px; font-size: 12px; white-space: nowrap; }
   .budget-start-date { position: relative; flex: 1 1 auto; display: flex; align-items: center; justify-content: center; height: 48px; padding: 0 12px; box-sizing: border-box; border: 1px solid var(--border); border-radius: 24px; font-size: 13px; line-height: 1.25; text-align: center; color: var(--text); }
   .budget-start-date input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; opacity: 0; cursor: pointer; }
@@ -2288,7 +2297,7 @@
 
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=617acf16c0"></script>
+  <script src="cacau-web.js?v=8712f5a250"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -10062,18 +10071,60 @@
       if (a.description) parts.push(escapeHtml(a.description));
       investInfo = ' · ' + parts.join(' · ');
     }
-    return '<div class="row" data-row-account="' + escapeHtml(a.id) + '"><span>' + accountTypeIconHtml_(a.type) + accountNameHtml_(a.name, a.colorIndex) + '<br><span class="muted">' + fmtMoney(a.balance) + investInfo + '</span></span>' +
+    var infoHtml = a.type === 'credit_card' ? cardInfoHtml_(a) : fmtMoney(a.balance) + investInfo;
+    return '<div class="row" data-row-account="' + escapeHtml(a.id) + '"><span>' + accountTypeIconHtml_(a.type) + accountNameHtml_(a.name, a.colorIndex) + '<br><span class="muted">' + infoHtml + '</span></span>' +
       '<span class="row-actions">' + rowRemoveButtonHtml_('data-archive', a.id, 'Arquivar') + '</span></div>';
+  }
+
+  /** Dados da fatura aberta de um cartão (aba Contas): quanto já foi gasto nela (sem o que já foi pago) e quando vence. */
+  function cardOpenBillInfo_(a, today) {
+    if (!a.closingDay) return null;
+    var billMonth = openBillMonthOfCard_(a, today);
+    var spent = 0, paid = 0;
+    STATE.allTransactions.forEach(function (t) {
+      if (t.accountId !== a.id || t.billMonth !== billMonth || t.balanceAnchor) return;
+      if (t.kind === 'expense') spent += t.amount;
+      else if (t.kind === 'transfer_in') paid += t.amount;
+    });
+    var dueDate = null;
+    if (a.dueDay) {
+      var dueYm = a.dueDay < a.closingDay ? shiftYm_(billMonth, 1) : billMonth;
+      var lastDay = new Date(Number(dueYm.slice(0, 4)), Number(dueYm.slice(5, 7)), 0).getDate();
+      dueDate = (Math.min(a.dueDay, lastDay) < 10 ? '0' : '') + Math.min(a.dueDay, lastDay) + '/' + dueYm.slice(5, 7);
+    }
+    return { billMonth: billMonth, open: Math.max(0, Math.round((spent - paid) * 100) / 100), dueDate: dueDate };
+  }
+  /** Linhas de baixo do cartão na aba Contas: limite restante de/total + dívida, depois fatura aberta e fechamento/vencimento. */
+  function cardInfoHtml_(a) {
+    var hasLimit = a.limitTotal > 0;
+    var line1 = 'Limite restante ' + fmtMoney(a.balance) + (hasLimit ? ' de ' + fmtMoney(a.limitTotal) : '');
+    if (hasLimit) line1 += ' · Dívida ' + fmtMoney(Math.max(0, a.limitTotal - a.balance));
+    var bill = cardOpenBillInfo_(a, todayYmd());
+    var parts = [];
+    if (bill) parts.push('Fatura aberta ' + fmtMoney(bill.open) + (bill.dueDate ? ' (vence ' + bill.dueDate + ')' : ''));
+    if (a.closingDay && a.dueDay) parts.push('Fecha dia ' + a.closingDay + ' · vence dia ' + a.dueDay);
+    return line1 + (parts.length ? '<br>' + parts.join(' · ') : '');
+  }
+  /** Total do cabeçalho de cada card da aba Contas (mesmo padrão do "Receitas / Despesas" dos recorrentes): neutro; cartões mostram
+   *  o limite restante somado e a dívida somada, o resto mostra o saldo somado. */
+  function accountsGroupTotalHtml_(type, accounts) {
+    var style = 'font-size:13px;line-height:16px;color:var(--text-muted)';
+    var sum = accounts.reduce(function (t, a) { return t + (Number(a.balance) || 0); }, 0);
+    var strong = function (v) { return '<span style="color:var(--text)">' + escapeHtml(fmtMoney(v)) + '</span>'; };
+    if (type !== 'credit_card') return '<div style="' + style + '">Total ' + strong(sum) + '</div>';
+    var withLimit = accounts.filter(function (a) { return a.limitTotal > 0; });
+    var debt = withLimit.reduce(function (t, a) { return t + Math.max(0, a.limitTotal - a.balance); }, 0);
+    return '<div style="' + style + '">Limite restante ' + strong(sum) + (withLimit.length ? '<span style="margin:0 6px">·</span>Dívida ' + strong(debt) : '') + '</div>';
   }
 
   function renderAccounts() {
     var root = document.getElementById('view-root');
     var groups = Object.keys(ACCOUNT_TYPE_LABELS).map(function (type) {
-      return { label: ACCOUNT_TYPE_LABELS[type], accounts: STATE.accounts.filter(function (a) { return a.type === type; }) };
+      return { type: type, label: ACCOUNT_TYPE_LABELS[type], accounts: STATE.accounts.filter(function (a) { return a.type === type; }) };
     }).filter(function (g) { return g.accounts.length > 0; });
 
     var html = groups.map(function (g) {
-      return '<div class="card"><h2>' + g.label + '</h2>' + g.accounts.map(accountRowHtml).join('') + '</div>';
+      return '<div class="card"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px"><h2 style="margin:0">' + g.label + '</h2>' + accountsGroupTotalHtml_(g.type, g.accounts) + '</div>' + g.accounts.map(accountRowHtml).join('') + '</div>';
     }).join('') || '<div class="card"><div class="empty-state">Nenhuma conta cadastrada.</div></div>';
 
     root.innerHTML = html + '<div style="text-align:left;margin-bottom:16px"><button id="add-account">Nova conta</button></div>';
@@ -10139,10 +10190,10 @@
       '<div class="field"><label>Tipo</label><div id="m-type-field" class="capsule-field"></div>' +
         (isEdit && existing.hasTransactions ? '<div class="muted">Essa conta já tem lançamentos, por isso o tipo não pode mais ser alterado.</div>' : '') +
       '</div>' +
-      '<div class="field" id="m-limit-total-field" style="display:none"><label>Limite total</label><input id="m-limit-total" type="text"></div>' +
+      '<div class="field" id="m-limit-total-field" style="display:none"><div class="gl-head"><label>Limite total</label><button type="button" class="gl-toggle" id="m-gl-btn" aria-pressed="false"><span class="gl-box"></span>Pagamento de fatura com limite garantido?</button></div><input id="m-limit-total" type="text"></div>' +
       '<div class="field"><label id="m-balance-label">' + (editingCurrentBalance ? 'Saldo atual' : 'Saldo inicial') + '</label><input id="m-balance" type="text"></div>' +
       (editingCurrentBalance ? '<div class="muted" id="m-balance-note" style="font-size:12px;margin-top:-18px;margin-bottom:22px">Mudar esse valor cria um lançamento de ajuste na data de hoje, cobrindo a diferença.</div>' : '') +
-      '<div class="muted" id="m-limit-note" style="display:none;font-size:12px;margin-top:-18px;margin-bottom:22px">O saldo do cartão é o limite que ainda sobra: cada compra reduz e cada pagamento de fatura devolve. A dívida do cartão é o limite total menos o limite restante: informe os dois como aparecem no app do banco. Limite garantido: ao resgatar parte do garantido, abaixe o limite total do mesmo valor (o app não sabe quando uma transferência é resgate).' +
+      '<div class="muted" id="m-limit-note" style="display:none;font-size:12px;margin-top:-18px;margin-bottom:22px">O saldo do cartão é o limite que ainda sobra: cada compra reduz e cada pagamento de fatura devolve. A dívida do cartão é o limite total menos o limite restante: informe os dois como aparecem no app do banco. Limite garantido: ao resgatar parte do garantido pra pagar a fatura, abaixe o limite total do mesmo valor e marque "Pagamento de fatura com limite garantido?" (as faturas mais antigas em aberto são pagas com a redução).' +
         (isEdit && !existing.limitTotal ? ' <b>Este cartão ainda não tem limite total: preencha pra dívida ficar certa.</b>' : '') + '</div>' +
       '<div id="m-cc-fields" style="display:none">' +
         '<div class="field"><label>Dia de fechamento</label><input id="m-closing" type="number" min="1" max="31" value="' + (isEdit && existing.closingDay ? existing.closingDay : '') + '"></div>' +
@@ -10167,6 +10218,21 @@
         if (!availableTouched_) document.getElementById('m-balance').setValue(limitTotalInput_.getValue());
       });
     }
+
+    // Ao editar um cartão e digitar um limite total MENOR que o anterior, aparece (animado) o botão-texto "Pagamento de fatura com
+    // limite garantido?" (desmarcado por padrão): marcado, a redução paga as faturas mais velhas em aberto. Volta a sumir e
+    // desmarca se o valor deixar de ser menor.
+    var guaranteedPay_ = false;
+    var glBtn_ = document.getElementById('m-gl-btn');
+    function syncGuaranteedBtn_() {
+      var lowered = isEdit && existing.limitTotal > 0 && limitTotalInput_.getValue() < existing.limitTotal;
+      if (!lowered) guaranteedPay_ = false;
+      glBtn_.classList.toggle('show', !!lowered);
+      glBtn_.classList.toggle('on', guaranteedPay_);
+      glBtn_.setAttribute('aria-pressed', guaranteedPay_ ? 'true' : 'false');
+    }
+    glBtn_.addEventListener('click', function () { guaranteedPay_ = !guaranteedPay_; syncGuaranteedBtn_(); });
+    limitTotalInput_.addEventListener('moneychange', syncGuaranteedBtn_);
 
     var colorBtn = document.getElementById('m-color-btn');
     function updateColorBtn_() {
@@ -10263,6 +10329,7 @@
         maturityDate: type === 'investment' ? (document.getElementById('m-inv-maturity').value || null) : null
       };
       if (type === 'credit_card') payload.limitTotal = limitTotalValue;
+      if (type === 'credit_card' && isEdit && guaranteedPay_ && existing.limitTotal > 0 && limitTotalValue < existing.limitTotal) payload.guaranteedLimitPayment = true;
       if (editingCurrentBalance) payload.currentBalance = balanceValue;
       else payload.initialBalance = balanceValue;
       if (fromReminder_) payload.balanceChecked = true; // salvar pelo lembrete conta como conferência (o servidor guarda a data)

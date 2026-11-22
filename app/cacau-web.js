@@ -906,9 +906,47 @@ function updateAccount(input) {
   if (input.balanceChecked === true) updates.BalanceCheckedAt = todayYmd_();
   if (resultingType === 'credit_card' && (input.balanceChecked === true || consolidationRow)) updates.InvoiceCheckFrom = '';
 
+  // Pagamento de fatura com limite garantido: a redução do limite total vale como pagamento das faturas em aberto, da mais
+  // velha pra mais nova (fechadas/atrasadas primeiro, depois a aberta). Cada fatura recebe um par saída/entrada NO MESMO cartão
+  // (o limite restante não muda: o pagamento devolve o que o resgate tira; só a dívida cai).
+  var guaranteedPaid = 0;
+  if (input.guaranteedLimitPayment === true && resultingType === 'credit_card' && updates.LimitTotal !== undefined) {
+    var oldLimit = Number(current.LimitTotal) || 0;
+    var newLimitValue = Number(updates.LimitTotal) || 0;
+    var toPay = Math.round((oldLimit - newLimitValue) * 100);
+    if (toPay > 0) guaranteedPaid = payBillsWithGuaranteedLimit_(current.ID, toPay) / 100;
+  }
+
   var updated = updateRowById_('Accounts', input.id, updates);
   if (!updated) throw new Error('Conta não encontrada.');
-  return { account: updated, transaction: consolidationRow ? mapTransactionRow_(consolidationRow) : null };
+  return { account: updated, transaction: consolidationRow ? mapTransactionRow_(consolidationRow) : null, guaranteedPaid: guaranteedPaid };
+}
+
+/** Aloca `cents` (centavos) nas faturas não pagas do cartão, da mais antiga pra mais nova; devolve quanto foi pago (centavos). */
+function payBillsWithGuaranteedLimit_(accountId, cents) {
+  var bills = getCreditCardBillSummary(accountId).filter(function (b) {
+    return (b.status === 'fechada' || b.status === 'atrasada' || b.status === 'aberta') && b.remaining > 0;
+  });
+  var rank = function (b) { return b.status === 'aberta' ? 1 : 0; };
+  bills.sort(function (a, b) { return rank(a) - rank(b) || (a.billMonth < b.billMonth ? -1 : (a.billMonth > b.billMonth ? 1 : 0)); });
+  var left = cents, paid = 0, today = todayYmd_(), time = nowHm_();
+  for (var i = 0; i < bills.length && left > 0; i++) {
+    var part = Math.min(left, Math.round(bills[i].remaining * 100));
+    if (part <= 0) continue;
+    var groupId = generateId_(), amount = part / 100;
+    appendRow_('Transactions', {
+      Date: today, Time: time, AccountID: accountId, CategoryID: '', Kind: 'transfer_out', Amount: amount,
+      Description: 'Resgate de limite garantido', BillMonth: '', InstallmentGroupID: '', InstallmentSeq: '', InstallmentTotal: '',
+      TransferGroupID: groupId
+    });
+    appendRow_('Transactions', {
+      Date: today, Time: time, AccountID: accountId, CategoryID: '', Kind: 'transfer_in', Amount: amount,
+      Description: 'Pagamento da fatura (limite garantido)', BillMonth: bills[i].billMonth, InstallmentGroupID: '', InstallmentSeq: '', InstallmentTotal: '',
+      TransferGroupID: groupId
+    });
+    left -= part; paid += part;
+  }
+  return paid;
 }
 
 /**
