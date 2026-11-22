@@ -2329,7 +2329,7 @@
 
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=254ee9d2ac"></script>
+  <script src="cacau-web.js?v=b02af4b05e"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -2787,11 +2787,140 @@
       })(el, text, value);
     }
   }
+  // ---------- inércia dos cards (22/11/2026) ----------
+  // Ao rolar, os cards visíveis ficam um instante pra trás (como se fossem puxados) e, quando a rolagem para, voltam ao lugar com um
+  // vai-e-volta curto (mola). Na troca de aba, os cards chegam com o mesmo balanço, em cascata. Técnica: uma mola amortecida por card,
+  // movida pela propriedade CSS `translate` (não pelo `transform`: compõe com a cascata view-rise, o swipe e o zoom dos botões) e
+  // escrita só nos cards que estão na tela. Sem rolagem nem balanço, o loop de quadros PARA e o `translate` é removido (cards em
+  // repouso ficam sem camada própria). Não toca na rolagem nativa; cards sticky/fixed ficam de fora; some com "reduzir movimento".
+  var INERTIA_MAX_PX_ = 7;          // deslocamento máximo pela rolagem
+  var INERTIA_KICK_PX_ = 9;         // deslocamento inicial ao trocar de aba
+  var INERTIA_STIFFNESS_ = 230;     // rigidez da mola (período ~0,4 s)
+  var INERTIA_DAMPING_ = 15;        // amortecimento (< 2*raiz(rigidez) = 30: subamortecida, dá um pequeno vai-e-volta)
+  var INERTIA_JUMP_PX_ = 500;       // salto de rolagem maior que isso num quadro é programático (troca de aba): não vira velocidade
+  var INERTIA_SETTLE_ = 0.04;       // abaixo disso (px e px/s) a mola é considerada parada
+  /** Velocidade de rolagem (px/ms, + = descendo) -> deslocamento-alvo em px (+ = card atrasado, mais embaixo). Satura suave. */
+  function cardInertiaTarget_(vel) {
+    var a = Math.abs(vel);
+    return (vel < 0 ? -1 : 1) * INERTIA_MAX_PX_ * a / (a + 0.9);
+  }
+  /** Um passo da mola de um card: s = {x, v}; k = fator de rigidez do card; dt em segundos. Euler semi-implícito em subpassos. */
+  function cardInertiaStep_(s, target, k, dt) {
+    var n = Math.max(1, Math.ceil(dt / 0.008)), h = dt / n;
+    for (var i = 0; i < n; i++) {
+      var a = INERTIA_STIFFNESS_ * k * (target - s.x) - INERTIA_DAMPING_ * Math.sqrt(k) * s.v;
+      s.v += a * h;
+      s.x += s.v * h;
+    }
+    return s;
+  }
+  var cardInertia_ = { cards: [], collectedAt: 0, raf: 0, lastY: 0, lastT: 0, vel: 0, lastScrollT: 0, supported: null };
+  function cardInertiaOn_() {
+    if (cardInertia_.supported === null) {
+      cardInertia_.supported = !!(window.CSS && CSS.supports && CSS.supports('translate', '0 1px'));
+    }
+    return cardInertia_.supported && !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }
+  /** Só os cards que aparecem na tela (com folga) e que não são sticky/fixed; lista de milhares de linhas não entra: as linhas
+   *  ficam dentro de poucos cards. Relida a cada começo de rolagem/troca de aba (o render recria todos os elementos). */
+  function cardInertiaCollect_() {
+    var list = [], vh = window.innerHeight || 800;
+    var els = document.querySelectorAll('#view-root .card');
+    for (var i = 0; i < els.length && list.length < 24; i++) {
+      var el = els[i];
+      var r = el.getBoundingClientRect();
+      if (r.bottom < -40 || r.top > vh + 40 || r.height === 0) continue;
+      var pos = getComputedStyle(el).position;
+      if (pos === 'sticky' || pos === 'fixed') continue;
+      list.push({ el: el, s: { x: 0, v: 0 }, k: 1 - 0.05 * Math.min(list.length, 5), delay: 0 });
+    }
+    return list;
+  }
+  /** Relê os cards da tela mantendo o estado da mola dos que já estavam; os que saíram da tela perdem o translate. */
+  function cardInertiaRefresh_(now) {
+    var c = cardInertia_, fresh = cardInertiaCollect_(), i, j;
+    c.collectedAt = now;
+    for (i = 0; i < fresh.length; i++) {
+      for (j = 0; j < c.cards.length; j++) if (c.cards[j].el === fresh[i].el) { fresh[i].s = c.cards[j].s; fresh[i].delay = c.cards[j].delay; break; }
+    }
+    for (j = 0; j < c.cards.length; j++) {
+      var kept = false;
+      for (i = 0; i < fresh.length; i++) if (fresh[i].el === c.cards[j].el) { kept = true; break; }
+      if (!kept) c.cards[j].el.style.translate = '';
+    }
+    c.cards = fresh;
+  }
+  function cardInertiaClear_(list) {
+    for (var i = 0; i < list.length; i++) list[i].el.style.translate = '';
+  }
+  function cardInertiaFrame_(now) {
+    var c = cardInertia_;
+    c.raf = 0;
+    var dtMs = Math.min(64, Math.max(1, now - c.lastT));
+    c.lastT = now;
+    var y = window.pageYOffset || 0, dy = y - c.lastY;
+    c.lastY = y;
+    // salto programático (troca de aba restaura outra posição): ignora; senão velocidade = deslocamento / tempo, suavizada
+    var inst = Math.abs(dy) > INERTIA_JUMP_PX_ ? 0 : dy / dtMs;
+    c.vel += (inst - c.vel) * Math.min(1, dtMs / 45);
+    if (Math.abs(c.vel) < 0.01 && now - c.lastScrollT > 90) c.vel = 0;
+    var target = cardInertiaTarget_(c.vel);
+    var moving = false;
+    // rolagem longa (arremesso): os cards que entram na tela depois do começo também participam; relê a lista de tempos em tempos
+    if (c.vel !== 0 && now - c.collectedAt > 180) cardInertiaRefresh_(now);
+    for (var i = 0; i < c.cards.length; i++) {
+      var it = c.cards[i];
+      if (it.delay > 0) { it.delay -= dtMs; moving = true; continue; }
+      cardInertiaStep_(it.s, target, it.k, dtMs / 1000);
+      var still = Math.abs(it.s.x) < INERTIA_SETTLE_ && Math.abs(it.s.v) < INERTIA_SETTLE_ * 10;
+      if (still && c.vel === 0) { it.s.x = 0; it.s.v = 0; it.el.style.translate = ''; }
+      else { moving = true; it.el.style.translate = '0 ' + it.s.x.toFixed(2) + 'px'; }
+    }
+    if (moving || c.vel !== 0 || now - c.lastScrollT < 100) c.raf = requestAnimationFrame(cardInertiaFrame_); // 100 ms de folga: o 1º quadro pode ler dy = 0
+    else { cardInertiaClear_(c.cards); c.cards = []; }
+  }
+  function cardInertiaWake_(now) {
+    var c = cardInertia_;
+    if (c.raf) return;
+    c.lastT = now || performance.now();
+    c.raf = requestAnimationFrame(cardInertiaFrame_);
+  }
+  function cardInertiaOnScroll_() {
+    if (!cardInertiaOn_()) return;
+    var c = cardInertia_, now = performance.now();
+    c.lastScrollT = now;
+    if (!c.raf) { // começo de um gesto: relê os cards da tela e parte da posição atual (sem contar o que rolou antes)
+      cardInertiaClear_(c.cards);
+      c.cards = cardInertiaCollect_();
+      c.collectedAt = now;
+      c.lastY = window.pageYOffset || 0;
+      c.vel = 0;
+      cardInertiaWake_(now);
+    }
+  }
+  /** Troca de aba: os cards visíveis começam um pouco abaixo e voltam com a mola, um depois do outro (cascata de 38 ms). */
+  function cardInertiaKick_() {
+    if (!cardInertiaOn_()) return;
+    var c = cardInertia_;
+    cardInertiaClear_(c.cards);
+    c.cards = cardInertiaCollect_();
+    for (var i = 0; i < c.cards.length; i++) {
+      c.cards[i].s.x = INERTIA_KICK_PX_ * (1 - 0.06 * Math.min(i, 6));
+      c.cards[i].delay = i * 38;
+      c.cards[i].el.style.translate = '0 ' + c.cards[i].s.x.toFixed(2) + 'px';
+    }
+    c.lastY = window.pageYOffset || 0;
+    c.vel = 0;
+    if (c.cards.length) { if (c.raf) cancelAnimationFrame(c.raf); c.raf = 0; cardInertiaWake_(); }
+  }
+  window.addEventListener('scroll', cardInertiaOnScroll_, { passive: true });
+
   var swipeRendering_ = false; // true só no render() que fecha a troca de aba por deslize (finishSwipeTransition_)
   function motionAfterRender_(sameView) {
     if (!motionOk_ || swipeRendering_) return;
     var root = document.getElementById('view-root');
     if (!root) return;
+    if (!sameView) cardInertiaKick_();
     if (!sameView) {
       root.classList.add('view-enter');
       clearTimeout(viewEnterTimer_);
@@ -21550,7 +21679,7 @@
   var CacauAnalytics = (function () {
     var COLLECTOR_URL = 'https://script.google.com/macros/s/AKfycbzx7u1F-_c0_26KzHx2Uy6k1j-IG6kHpyhybDaE_5OHnq3UQPmpXlmfOPd84SJsrOs2eA/exec';
     var SCHEMA = 'cacau1';
-    var VERSION = 'web-254ee9d2ac';
+    var VERSION = 'web-b02af4b05e';
     // Build web público: sem aviso nem chave para os usuários; só coleta no aparelho do dono, que liga
     // abrindo o site com ?coleta=1 (e desliga com ?coleta=0). O build web troca esta linha para true.
     var OWNER_ONLY = true;

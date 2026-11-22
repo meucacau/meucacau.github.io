@@ -6100,6 +6100,7 @@ var CacauBackend = (function () {
     var raw = JSON.stringify(token);
     try { sessionStorage.setItem(TOKEN_KEY, raw); } catch (e) { /* segue */ }
     try { localStorage.setItem(TOKEN_KEY, raw); } catch (e) { /* segue */ }
+    if (typeof licenseRecheck_ === 'function') setTimeout(function () { licenseRecheck_(); }, 0);
   }
   function forgetToken_() {
     try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) { /* segue */ }
@@ -6209,8 +6210,11 @@ var CacauBackend = (function () {
     document.getElementById('cacau-license-out').onclick = signOut;
   }
   /** Resolve se pode usar; se estiver bloqueado, mostra a tela de bloqueio e NÃO resolve (o app não carrega). */
+  var licenseEverChecked_ = false, licenseLastCheck_ = 0, licenseBlocked_ = false;
+  var LICENSE_RECHECK_MS = 15 * 60 * 1000, LICENSE_MIN_GAP_MS = 60 * 1000;
   function licenseGate_() {
     if (!cfg.licenseUrl || !token.value) return Promise.resolve();
+    licenseEverChecked_ = true; licenseLastCheck_ = Date.now();
     var cached = null;
     try { cached = JSON.parse(localStorage.getItem(LICENSE_CACHE_KEY) || 'null'); } catch (e) { cached = null; }
     var timer;
@@ -6225,9 +6229,24 @@ var CacauBackend = (function () {
         try { localStorage.setItem(LICENSE_CACHE_KEY, JSON.stringify(resp)); } catch (e) { /* segue */ }
       }
       window.CacauLicenseInfo = v.info;
+      licenseBlocked_ = v.block;
       if (v.block) { showLicenseBlock_(v.info); return new Promise(function () {}); }
+      var old = document.getElementById('cacau-license-block');
+      if (old) old.remove(); // o dono liberou: some a tela de bloqueio sem precisar recarregar
     });
   }
+  /**
+   * Reconfere a licença com o app já aberto, para quem nunca fecha o app não continuar usando depois de bloqueado.
+   * Roda a cada 15 min, ao voltar para a aba/app e depois de cada token novo; só com token válido (não pede login)
+   * e no máximo 1 vez por minuto. Se o servidor não responder, vale o último veredito (mesma regra do login).
+   */
+  function licenseRecheck_() {
+    if (!cfg.licenseUrl || !licenseEverChecked_ || !tokenValid_()) return;
+    if (Date.now() - licenseLastCheck_ < LICENSE_MIN_GAP_MS) return;
+    licenseGate_();
+  }
+  setInterval(licenseRecheck_, LICENSE_RECHECK_MS);
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') licenseRecheck_(); });
 
   function signOut() {
     if (nativeLogin_() && typeof window.FinancasApp.signOut === 'function') { window.FinancasApp.signOut(); return; }
@@ -6596,6 +6615,7 @@ var CacauBackend = (function () {
 
   /** Uma chamada por vez (o papel do LockService no Apps Script). */
   function call(fnName, args) {
+    if (licenseBlocked_) return Promise.reject(new Error('Acesso suspenso. Fale com quem te convidou.'));
     var run = function () { return runCall_(fnName, args); };
     var next = queue.then(run, run);
     queue = next.then(function () {}, function () {});
