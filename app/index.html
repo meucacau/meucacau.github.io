@@ -21455,6 +21455,234 @@
   });
 </script>
 
-  
+  <script>
+  /**
+   * Métricas de uso do beta (só multiusuário): tempo ativo por tela/janela e cliques por alvo.
+   * Agregado e anônimo: um ID aleatório por aparelho, nada de e-mail, e NUNCA texto digitado,
+   * valores, nomes ou descrições (o alvo do clique é só id/classe do elemento, com números
+   * longos mascarados). Enviado em lotes a cada ~30 s para o coletor central (ver collector/).
+   *
+   * Ligado por padrão depois que o aviso aparece; a chave "Ajudar a melhorar o Meu Cacau" em
+   * Configurações desliga (localStorage "cacau-analytics-off"). Sem COLLECTOR_URL, não faz nada.
+   */
+  var CacauAnalytics = (function () {
+    var COLLECTOR_URL = 'https://script.google.com/macros/s/AKfycbzx7u1F-_c0_26KzHx2Uy6k1j-IG6kHpyhybDaE_5OHnq3UQPmpXlmfOPd84SJsrOs2eA/exec';
+    var SCHEMA = 'cacau1';
+    var VERSION = 'web-3ec750c4f1';
+    var FLUSH_MS = 30000;
+    var IDLE_MS = 60000;      // sem toque/tecla por mais que isso, o tempo para de contar
+    var MAX_TICK_MS = 2000;   // um tick atrasado (aba dormindo) não vira minutos de uso
+    var OFF_KEY = 'cacau-analytics-off';
+    var UID_KEY = 'cacau-uid';
+    var NOTICE_KEY = 'cacau-analytics-notice';
+
+    function randomId_(env) {
+      var bytes = new Uint8Array(8);
+      if (env.crypto && env.crypto.getRandomValues) env.crypto.getRandomValues(bytes);
+      else for (var i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+      return Array.prototype.map.call(bytes, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+    }
+
+    /** Alvo do clique sem conteúdo do usuário: id > aba > tag + até 2 classes sem dígitos. */
+    function targetKey_(el) {
+      if (!el || !el.tagName) return '?';
+      var id = el.id ? String(el.id) : '';
+      if (id) return id.replace(/[0-9a-f]{8,}|\d{3,}/gi, '#').slice(0, 40);
+      if (el.dataset && el.dataset.view) return 'tab:' + el.dataset.view;
+      var classes = String(el.getAttribute('class') || '').split(/\s+/).filter(function (c) {
+        return c && !/\d/.test(c);
+      }).slice(0, 2).join('.');
+      return el.tagName.toLowerCase() + (classes ? '.' + classes : '');
+    }
+
+    /** Janela aberta: prefixo do 1º id dentro dela (ex.: "st-close" -> "st"), nunca o título. */
+    function modalKey_(doc) {
+      var modal = doc.querySelector('#refund-modal-root .modal, #modal-root .modal') || doc.querySelector('#refund-modal-root > *');
+      if (!modal) return '';
+      var withId = modal.querySelector('[id]');
+      var prefix = withId ? String(withId.id).split('-')[0].replace(/\d+/g, '').slice(0, 20) : '';
+      return 'modal:' + (prefix || 'sem-id');
+    }
+
+    function create(env) {
+      var state = { timeMs: {}, clicks: {}, errs: {}, first: true };
+      var lastTick = env.now();
+      var lastInput = lastTick;
+      var timers = [];
+      var started = false;
+
+      function readFlag_(key) { try { return env.storage.getItem(key); } catch (e) { return null; } }
+      function writeFlag_(key, value) {
+        try { if (value === null) env.storage.removeItem(key); else env.storage.setItem(key, value); } catch (e) { /* segue */ }
+      }
+      function optedOut() { return readFlag_(OFF_KEY) === '1'; }
+      function active() { return !!env.url && !!env.multiuser && !optedOut(); }
+
+      var uid = readFlag_(UID_KEY);
+      if (!uid) { uid = randomId_(env); writeFlag_(UID_KEY, uid); }
+      var sid = randomId_(env).slice(0, 12);
+
+      function currentKey() { return modalKey_(env.doc) || env.view(); }
+
+      function tick() {
+        var now = env.now();
+        var dt = Math.min(now - lastTick, MAX_TICK_MS);
+        lastTick = now;
+        if (!active() || !env.visible() || now - lastInput > IDLE_MS || dt <= 0) return;
+        var key = currentKey();
+        state.timeMs[key] = (state.timeMs[key] || 0) + dt;
+      }
+
+      function onInput() { lastInput = env.now(); }
+
+      function onClick(e) {
+        onInput();
+        if (!active()) return;
+        var el = e.target && e.target.closest ? (e.target.closest('button, a, input, select, textarea, summary, label, [data-view], [id]') || e.target) : null;
+        var composite = currentKey() + '|' + targetKey_(el);
+        state.clicks[composite] = (state.clicks[composite] || 0) + 1;
+      }
+
+      function onError(site) {
+        if (!active()) return;
+        state.errs[site] = (state.errs[site] || 0) + 1;
+      }
+
+      function buildBatch_() {
+        var time = {}, any = false;
+        Object.keys(state.timeMs).forEach(function (key) {
+          var seconds = Math.floor(state.timeMs[key] / 1000);
+          if (seconds > 0) { time[key] = seconds; any = true; }
+        });
+        var hasClicks = Object.keys(state.clicks).length > 0;
+        var hasErrs = Object.keys(state.errs).length > 0;
+        if (!any && !hasClicks && !hasErrs && !state.first) return null;
+        return {
+          k: SCHEMA, uid: uid, sid: sid, plat: env.platform, ver: VERSION, w: env.widthClass(),
+          first: state.first || undefined, time: time, clicks: state.clicks, errs: state.errs
+        };
+      }
+
+      /** Envia o acumulado. Em falha de rede o lote volta pro acumulado (somando). */
+      function flush() {
+        tick();
+        if (!active()) return null;
+        var batch = buildBatch_();
+        if (!batch) return null;
+        var consumedMs = {};
+        Object.keys(batch.time).forEach(function (key) { consumedMs[key] = batch.time[key] * 1000; });
+        var snapshot = { clicks: state.clicks, errs: state.errs, first: state.first };
+        Object.keys(consumedMs).forEach(function (key) {
+          state.timeMs[key] -= consumedMs[key];
+          if (state.timeMs[key] <= 0) delete state.timeMs[key];
+        });
+        state.clicks = {}; state.errs = {}; state.first = false;
+        var restore = function () {
+          Object.keys(consumedMs).forEach(function (key) { state.timeMs[key] = (state.timeMs[key] || 0) + consumedMs[key]; });
+          Object.keys(snapshot.clicks).forEach(function (k) { state.clicks[k] = (state.clicks[k] || 0) + snapshot.clicks[k]; });
+          Object.keys(snapshot.errs).forEach(function (k) { state.errs[k] = (state.errs[k] || 0) + snapshot.errs[k]; });
+          if (snapshot.first) state.first = true;
+        };
+        try {
+          var result = env.send(env.url, JSON.stringify(batch));
+          if (result && typeof result.catch === 'function') result.catch(restore);
+        } catch (e) { restore(); }
+        return batch;
+      }
+
+      function start() {
+        if (started) return;
+        started = true;
+        env.addListener('click', onClick, true);
+        ['keydown', 'touchstart', 'scroll', 'input'].forEach(function (name) { env.addListener(name, onInput, true); });
+        env.addListener('visibilitychange', function () { if (!env.visible()) flush(); }, false);
+        env.addListener('pagehide', flush, false);
+        env.addListener('error', function (e) {
+          onError('L' + (e && e.lineno ? e.lineno : 0));
+        }, false);
+        env.addListener('unhandledrejection', function () { onError('promise'); }, false);
+        timers.push(env.setInterval(tick, 1000));
+        timers.push(env.setInterval(flush, FLUSH_MS));
+      }
+
+      function setOptOut(off) {
+        if (off) { flush(); writeFlag_(OFF_KEY, '1'); state.timeMs = {}; state.clicks = {}; state.errs = {}; }
+        else writeFlag_(OFF_KEY, null);
+        lastTick = env.now();
+      }
+
+      return {
+        start: start, tick: tick, flush: flush, active: active, optedOut: optedOut, setOptOut: setOptOut,
+        noticeSeen: function () { return readFlag_(NOTICE_KEY) === '1'; },
+        markNoticeSeen: function () { writeFlag_(NOTICE_KEY, '1'); },
+        _state: state, _ids: function () { return { uid: uid, sid: sid }; }
+      };
+    }
+
+    function realEnv_() {
+      var w = window;
+      return {
+        url: COLLECTOR_URL,
+        multiuser: typeof FINANCAS_MULTIUSER !== 'undefined' && FINANCAS_MULTIUSER,
+        platform: (w.FinancasApp ? 'android' : 'web'),
+        doc: document,
+        crypto: w.crypto,
+        storage: (function () { try { return w.localStorage; } catch (e) { return null; } })() || { getItem: function () { return null; }, setItem: function () {}, removeItem: function () {} },
+        now: function () { return Date.now(); },
+        visible: function () { return document.visibilityState !== 'hidden'; },
+        view: function () { return (typeof STATE !== 'undefined' && STATE.currentView) || 'dashboard'; },
+        widthClass: function () { var x = w.innerWidth || 0; return x < 600 ? 'S' : (x < 1000 ? 'M' : 'L'); },
+        addListener: function (name, fn, capture) {
+          var target = (name === 'pagehide' || name === 'error' || name === 'unhandledrejection') ? w : document;
+          target.addEventListener(name, fn, !!capture);
+        },
+        setInterval: function (fn, ms) { return w.setInterval(fn, ms); },
+        send: function (url, body) {
+          // no-cors + text/plain: o Apps Script aceita sem preflight; a resposta é opaca (ignorada).
+          return w.fetch(url, { method: 'POST', mode: 'no-cors', keepalive: body.length < 60000, headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, body: body });
+        }
+      };
+    }
+
+    /** Aviso único (faixa discreta) e início da coleta; a coleta só começa depois do aviso. */
+    function showNotice_(tracker) {
+      var bar = document.createElement('div');
+      bar.id = 'analytics-notice';
+      bar.setAttribute('style', 'position:fixed;left:12px;right:12px;bottom:68px;z-index:60;background:var(--surface);color:var(--text);' +
+        'border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13px;box-shadow:var(--shadow)');
+      bar.innerHTML = '<div style="margin-bottom:8px"><b>Ajude a melhorar o Meu Cacau.</b> Registramos, de forma anônima, quais telas você usa e por quanto tempo. ' +
+        'Nunca enviamos valores, nomes ou descrições dos seus lançamentos. Dá para desligar em Configurações.</div>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end">' +
+        '<button type="button" class="secondary" id="analytics-off" style="padding:6px 12px;font-size:13px">Desligar</button>' +
+        '<button type="button" id="analytics-ok" style="padding:6px 12px;font-size:13px">Entendi</button></div>';
+      document.body.appendChild(bar);
+      function done(off) {
+        tracker.setOptOut(off);
+        tracker.markNoticeSeen();
+        bar.remove();
+      }
+      document.getElementById('analytics-ok').onclick = function () { done(false); };
+      document.getElementById('analytics-off').onclick = function () { done(true); };
+    }
+
+    var instance = null;
+    function init() {
+      if (instance) return instance;
+      var env = realEnv_();
+      instance = create(env);
+      if (!env.multiuser || !env.url) return instance;
+      if (!instance.noticeSeen()) {
+        showNotice_(instance);
+        instance.markNoticeSeen(); // visto = exibido; "Desligar" grava a recusa
+      }
+      instance.start();
+      return instance;
+    }
+
+    return { init: init, create: create, targetKey_: targetKey_, modalKey_: modalKey_, optedOut: function () { return init().optedOut(); }, setOptOut: function (off) { init().setOptOut(off); }, enabled: function () { return !!(COLLECTOR_URL && typeof FINANCAS_MULTIUSER !== 'undefined' && FINANCAS_MULTIUSER); } };
+  })();
+  document.addEventListener('DOMContentLoaded', function () { CacauAnalytics.init(); });
+</script>
+
 </body>
 </html>
