@@ -690,11 +690,11 @@ function defaultColorIndexForId_(id) {
  * computeAccountBalance_ (InitialBalance + soma dos lançamentos) contaria o valor duas
  * vezes.
  */
-function appendBalanceTransaction_(accountId, accountType, closingDay, amountSigned, description) {
+function appendBalanceTransaction_(accountId, accountType, closingDay, amountSigned, description, balanceTarget) {
   var cents = Math.round(amountSigned * 100);
   if (cents === 0) return null;
   var date = todayYmd_();
-  return appendRow_('Transactions', {
+  var row = {
     Date: date,
     Time: nowHm_(),
     AccountID: accountId,
@@ -709,7 +709,11 @@ function appendBalanceTransaction_(accountId, accountType, closingDay, amountSig
     InstallmentTotal: '',
     TransferGroupID: '',
     ForecastID: ''
-  });
+  };
+  // Cartão novo: o "limite disponível hoje" é um PONTO FIXO (como uma consolidação), pra compra anterior a esse dia que vier
+  // depois (ex: fatura importada com compras de antes de começar a usar o app) ser absorvida em vez de aumentar a dívida.
+  if (balanceTarget !== undefined) row.BalanceTarget = balanceTarget;
+  return appendRow_('Transactions', row);
 }
 
 /**
@@ -787,6 +791,7 @@ function listAccounts(includeArchived, allTransactions) {
       colorIndex: colorIndex,
       balanceCheckedAt: a.BalanceCheckedAt ? String(a.BalanceCheckedAt).slice(0, 10) : null,
       invoiceCheckFrom: a.InvoiceCheckFrom ? String(a.InvoiceCheckFrom).slice(0, 10) : null,
+      limitTotal: a.Type === 'credit_card' && Number(a.LimitTotal) > 0 ? Number(a.LimitTotal) : null,
       balance: computeAccountBalance_(a, txs),
       hasTransactions: txs.some(function (t) { return t.AccountID === a.ID; })
     };
@@ -809,6 +814,14 @@ function createAccount(input) {
     }
   }
   var openingBalance = Number(input.initialBalance || 0);
+  // Cartão: initialBalance = limite DISPONÍVEL hoje; limitTotal = limite total. Sem limitTotal (chamada antiga), o limite total
+  // é o próprio valor de abertura -- cartão novo sem nada usado.
+  var limitTotal = '';
+  if (input.type === 'credit_card') {
+    limitTotal = input.limitTotal === undefined || input.limitTotal === null ? openingBalance : Number(input.limitTotal);
+    if (!(limitTotal >= 0)) throw new Error('O limite total do cartão não pode ser negativo.');
+    if (limitTotal === 0) limitTotal = '';
+  }
   var saved = appendRow_('Accounts', {
     Name: input.name,
     Type: input.type,
@@ -821,9 +834,11 @@ function createAccount(input) {
     InvestmentDate: input.type === 'investment' ? (input.investmentDate || '') : '',
     MaturityDate: input.type === 'investment' ? (input.maturityDate || '') : '',
     Archived: false,
-    ColorIndex: input.colorIndex === undefined ? randomColorIndex_() : (input.colorIndex === null ? -1 : Number(input.colorIndex))
+    ColorIndex: input.colorIndex === undefined ? randomColorIndex_() : (input.colorIndex === null ? -1 : Number(input.colorIndex)),
+    LimitTotal: limitTotal
   });
-  var openingRow = appendBalanceTransaction_(saved.ID, input.type, saved.ClosingDay, openingBalance, ACCOUNT_OPENING_DESCRIPTION);
+  var openingRow = appendBalanceTransaction_(saved.ID, input.type, saved.ClosingDay, openingBalance, ACCOUNT_OPENING_DESCRIPTION,
+    input.type === 'credit_card' ? openingBalance : undefined);
   // O cliente adota esse lançamento na hora (troca a prévia otimista por ele — ver
   // adoptRealId_/resolveCreatedTransactions_ em openAccountModal, JavaScript.html) em vez
   // de esperar o refresh coalescido; sem devolvê-lo aqui não haveria como fazer isso.
@@ -858,6 +873,11 @@ function updateAccount(input) {
   if (input.investmentDate !== undefined) updates.InvestmentDate = input.investmentDate || '';
   if (input.maturityDate !== undefined) updates.MaturityDate = input.maturityDate || '';
   if (input.colorIndex !== undefined) updates.ColorIndex = input.colorIndex === null ? -1 : Number(input.colorIndex);
+  if (input.limitTotal !== undefined) {
+    var newLimit = input.limitTotal === null || input.limitTotal === '' ? 0 : Number(input.limitTotal);
+    if (!(newLimit >= 0)) throw new Error('O limite total do cartão não pode ser negativo.');
+    updates.LimitTotal = newLimit > 0 ? newLimit : '';
+  }
 
   var resultingType = updates.Type !== undefined ? updates.Type : current.Type;
   if (resultingType === 'credit_card') {
@@ -4532,7 +4552,10 @@ var SCHEMA = {
     // Lembrete de consolidação (Início): BalanceCheckedAt = dia em que o saldo/limite foi conferido pelo aviso SEM diferença
     // (não cria lançamento); InvoiceCheckFrom = dia da última fatura subida num cartão cujo limite ainda não foi conferido.
     // Ficam no servidor pra valer entre aparelhos.
-    'BalanceCheckedAt', 'InvoiceCheckFrom'
+    'BalanceCheckedAt', 'InvoiceCheckFrom',
+    // Cartão: limite TOTAL (o que o app do banco mostra). A dívida do cartão (Faturas) = LimitTotal - limite restante (o saldo
+    // do cartão); vazio = cartão antigo, que continua com a conta por compras e pagamentos até o usuário informar o limite.
+    'LimitTotal'
   ],
   // Keywords (ver Categories.js): lista separada por vírgula, comparada como substring
   // (case-insensitive) contra o texto de um lançamento/pendência pra sugerir essa

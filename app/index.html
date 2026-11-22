@@ -2288,7 +2288,7 @@
 
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=0e614a6ece"></script>
+  <script src="cacau-web.js?v=d1561c7a87"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -5440,20 +5440,35 @@
     var debt = Number(cardDebt) || 0;
     return { cash: cash, credit: credit, debt: debt, total: cash - debt, hasCards: cards > 0 };
   }
-  /** Dívida em aberto dos cartões em `ymd`: compras (pela data GRAVADA -- o limite some inteiro na compra, parcelas
-   *  futuras incluídas) menos pagamentos de fatura (transferências pro cartão) até o dia; nunca negativa por cartão. Não
-   *  conta ajustes de saldo (consolidação do limite). */
+  /** Dívida em aberto dos cartões em `ymd` (pela data GRAVADA -- o limite some inteiro na compra, parcelas futuras incluídas);
+   *  nunca negativa por cartão. Cartão com LIMITE TOTAL informado: dívida = limite total − limite restante (o saldo do cartão
+   *  naquele dia, pontos fixos incluídos -- consolidar o limite restante corrige a dívida, e compra de antes do ponto fixo é
+   *  absorvida por ele). Cartão sem limite total (antigo): compras menos pagamentos de fatura (transferências pro cartão),
+   *  sem contar ajustes de saldo. */
   function cardDebtAsOfYmd_(ymd) {
-    var byCard = {};
-    STATE.accounts.forEach(function (a) { if (a.type === 'credit_card') byCard[a.id] = 0; });
+    var byCard = {}, limitOf = {}, remaining = {};
+    STATE.accounts.forEach(function (a) {
+      if (a.type !== 'credit_card') return;
+      byCard[a.id] = 0;
+      if (a.limitTotal > 0) { limitOf[a.id] = a.limitTotal; remaining[a.id] = 0; }
+    });
     STATE.allTransactions.forEach(function (t) {
-      if (byCard[t.accountId] === undefined || t.balanceAnchor) return;
+      if (byCard[t.accountId] === undefined) return;
       var d = t.purchaseDate || t.date;
       if (!d || d > ymd) return;
+      // Cartão com limite total informado: o limite restante (saldo do cartão, já com os pontos fixos) diz a dívida.
+      if (limitOf[t.accountId] !== undefined) {
+        remaining[t.accountId] += (t.kind === 'income' || t.kind === 'transfer_in' ? 1 : -1) * t.amount;
+        return;
+      }
+      if (t.balanceAnchor) return;
       if (t.kind === 'expense') byCard[t.accountId] += t.amount;
       else if (t.kind === 'transfer_in') byCard[t.accountId] -= t.amount;
     });
-    return Object.keys(byCard).reduce(function (sum, id) { return sum + Math.max(0, byCard[id]); }, 0);
+    return Object.keys(byCard).reduce(function (sum, id) {
+      var debt = limitOf[id] !== undefined ? limitOf[id] - remaining[id] : byCard[id];
+      return sum + Math.max(0, debt);
+    }, 0);
   }
   /** Ordem das contas no card Contas do Início: não-cartões antes dos cartões de crédito; dentro de cada grupo, saldo decrescente
    *  (empate = ordem original, o sort é estável). Não mexe na lista original. */
@@ -5719,7 +5734,26 @@
     return out;
   }
   var CONSOL_REMINDER_ICON_ = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>';
+  /** Cartões com lançamentos mas sem limite total (cartão antigo): a dívida em Faturas continua pela conta de compras e
+   *  pagamentos até a pessoa informar o limite total -- o aviso leva pro formulário do cartão. Dispensável até o mês que vem. */
+  function limitTotalRemindersDue_() {
+    var thisMonth = todayYmd().slice(0, 7), dismissed = lsJsonObject_(CONSOL_DISMISSED_KEY_);
+    return (STATE.accounts || []).filter(function (a) {
+      return a.type === 'credit_card' && !a.archived && String(a.id).indexOf('tmp-') !== 0 && !a.limitTotal && a.hasTransactions &&
+        dismissed['limit:' + a.id] !== thisMonth;
+    });
+  }
   function consolidationReminderHtml_() {
+    var limitHtml = limitTotalRemindersDue_().map(function (a) {
+      return '<div class="home-reminder" role="button" tabindex="0" data-consol-acc="' + escapeHtml(a.id) + '" data-limit-reminder="1">' +
+        '<span class="home-reminder-ico">' + CONSOL_REMINDER_ICON_ + '</span>' +
+        '<span class="home-reminder-txt">Informe o <b>limite total</b> do cartão <b>' + escapeHtml(a.name) + '</b>. Com ele, a dívida em Faturas passa a ser o limite total menos o limite restante (os dois como aparecem no app do banco), e fica certa mesmo que faturas antigas não tenham sido lançadas.</span>' +
+        '<button type="button" class="home-reminder-x" data-consol-dismiss="limit:' + escapeHtml(a.id) + '" aria-label="Dispensar até o mês que vem" data-tooltip="Dispensar até o mês que vem">×</button>' +
+      '</div>';
+    }).join('');
+    return limitHtml + consolidationReminderHtmlBase_();
+  }
+  function consolidationReminderHtmlBase_() {
     return consolidationRemindersDue_().map(function (r) {
       var ago = r.months === 1 ? 'há mais de um mês' : 'há ' + r.months + ' meses';
       var isCard = r.account.type === 'credit_card';
@@ -5740,7 +5774,7 @@
       var id = el.getAttribute('data-consol-acc');
       function open() {
         var acc = (STATE.accounts || []).filter(function (a) { return a.id === id; })[0];
-        if (acc) openAccountModal(acc, { fromReminder: true });
+        if (acc) openAccountModal(acc, el.getAttribute('data-limit-reminder') ? undefined : { fromReminder: true });
       }
       el.onclick = function (e) {
         if (e.target.closest && e.target.closest('.home-reminder-x')) return;
@@ -10055,7 +10089,7 @@
 
   /** Rótulo do campo de saldo do formulário de conta: cartão = limite (novo) / limite restante (editando). */
   function accountBalanceLabel_(type, editing) {
-    if (type === 'credit_card') return editing ? 'Limite restante' : 'Limite do cartão';
+    if (type === 'credit_card') return editing ? 'Limite restante' : 'Limite disponível hoje';
     return editing ? 'Saldo atual' : 'Saldo inicial';
   }
 
@@ -10083,9 +10117,11 @@
       '<div class="field"><label>Tipo</label><div id="m-type-field" class="capsule-field"></div>' +
         (isEdit && existing.hasTransactions ? '<div class="muted">Essa conta já tem lançamentos, por isso o tipo não pode mais ser alterado.</div>' : '') +
       '</div>' +
+      '<div class="field" id="m-limit-total-field" style="display:none"><label>Limite total</label><input id="m-limit-total" type="text"></div>' +
       '<div class="field"><label id="m-balance-label">' + (editingCurrentBalance ? 'Saldo atual' : 'Saldo inicial') + '</label><input id="m-balance" type="text"></div>' +
       (editingCurrentBalance ? '<div class="muted" id="m-balance-note" style="font-size:12px;margin-top:-18px;margin-bottom:22px">Mudar esse valor cria um lançamento de ajuste na data de hoje, cobrindo a diferença.</div>' : '') +
-      '<div class="muted" id="m-limit-note" style="display:none;font-size:12px;margin-top:-18px;margin-bottom:22px">O saldo do cartão é o limite que ainda sobra: cada compra reduz e cada pagamento de fatura devolve.</div>' +
+      '<div class="muted" id="m-limit-note" style="display:none;font-size:12px;margin-top:-18px;margin-bottom:22px">O saldo do cartão é o limite que ainda sobra: cada compra reduz e cada pagamento de fatura devolve. A dívida do cartão (Faturas) é o limite total menos o limite restante: informe os dois como aparecem no app do banco.' +
+        (isEdit && !existing.limitTotal ? ' <b>Este cartão ainda não tem limite total: preencha pra dívida ficar certa.</b>' : '') + '</div>' +
       '<div id="m-cc-fields" style="display:none">' +
         '<div class="field"><label>Dia de fechamento</label><input id="m-closing" type="number" min="1" max="31" value="' + (isEdit && existing.closingDay ? existing.closingDay : '') + '"></div>' +
         '<div class="field"><label>Dia de vencimento</label><input id="m-due" type="number" min="1" max="31" value="' + (isEdit && existing.dueDay ? existing.dueDay : '') + '"></div>' +
@@ -10099,6 +10135,16 @@
     );
 
     setupMoneyInput(document.getElementById('m-balance'), isEdit ? existing.balance : 0);
+    var limitTotalInput_ = document.getElementById('m-limit-total');
+    setupMoneyInput(limitTotalInput_, isEdit && existing.limitTotal ? existing.limitTotal : 0);
+    if (!isEdit) {
+      // Cartão novo: o limite disponível acompanha o total até a pessoa mexer nele (cartão sem nada usado).
+      var availableTouched_ = false;
+      document.getElementById('m-balance').addEventListener('moneychange', function () { availableTouched_ = true; });
+      limitTotalInput_.addEventListener('moneychange', function () {
+        if (!availableTouched_) document.getElementById('m-balance').setValue(limitTotalInput_.getValue());
+      });
+    }
 
     var colorBtn = document.getElementById('m-color-btn');
     function updateColorBtn_() {
@@ -10135,6 +10181,7 @@
       // Cartão: o "saldo inicial" é o LIMITE do cartão; ao editar, o saldo atual é o limite restante.
       document.getElementById('m-balance-label').textContent = accountBalanceLabel_(type, editingCurrentBalance);
       document.getElementById('m-limit-note').style.display = type === 'credit_card' ? 'block' : 'none';
+      document.getElementById('m-limit-total-field').style.display = type === 'credit_card' ? 'block' : 'none';
       document.getElementById('m-inv-fields').style.display = type === 'investment' ? 'block' : 'none';
     }
     var typeField = createCapsuleField(document.getElementById('m-type-field'), {
@@ -10158,6 +10205,15 @@
       }
       if (isEdit && type !== 'credit_card' && balanceValue < 0) {
         errorPopover(document.getElementById('m-submit'), 'Saldo não pode ser negativo nesse tipo de conta.');
+        return;
+      }
+      var limitTotalValue = type === 'credit_card' ? limitTotalInput_.getValue() : 0;
+      if (type === 'credit_card' && limitTotalValue > 0 && balanceValue > limitTotalValue) {
+        errorPopover(document.getElementById('m-submit'), (isEdit ? 'O limite restante' : 'O limite disponível') + ' não pode ser maior que o limite total.');
+        return;
+      }
+      if (!isEdit && type === 'credit_card' && !(limitTotalValue > 0)) {
+        errorPopover(document.getElementById('m-submit'), 'Informe o limite total do cartão.');
         return;
       }
       // Cartão precisa de fechamento e vencimento (o servidor recusa sem eles, mas só DEPOIS
@@ -10184,6 +10240,7 @@
         investmentDate: type === 'investment' ? (document.getElementById('m-inv-date').value || null) : null,
         maturityDate: type === 'investment' ? (document.getElementById('m-inv-maturity').value || null) : null
       };
+      if (type === 'credit_card') payload.limitTotal = limitTotalValue;
       if (editingCurrentBalance) payload.currentBalance = balanceValue;
       else payload.initialBalance = balanceValue;
       if (fromReminder_) payload.balanceChecked = true; // salvar pelo lembrete conta como conferência (o servidor guarda a data)
@@ -10205,6 +10262,7 @@
           acc.description = payload.description;
           acc.investmentDate = payload.investmentDate;
           acc.maturityDate = payload.maturityDate;
+          acc.limitTotal = payload.limitTotal > 0 ? payload.limitTotal : null;
         }
         // Prévia do lançamento de consolidação no Extrato — mesma ideia do saldo inicial
         // de conta nova (applyBalanceTxPreview_) — sem isso, só aparecia depois do
@@ -10230,7 +10288,8 @@
             name: payload.name, type: payload.type, colorIndex: payload.colorIndex,
             closingDay: payload.closingDay ? Number(payload.closingDay) : null,
             dueDay: payload.dueDay ? Number(payload.dueDay) : null,
-            description: payload.description, investmentDate: payload.investmentDate, maturityDate: payload.maturityDate
+            description: payload.description, investmentDate: payload.investmentDate, maturityDate: payload.maturityDate,
+            limitTotal: payload.limitTotal > 0 ? payload.limitTotal : null
           };
           if (fromReminder_) pendingAccountEdits_[existing.id].balanceCheckedAt = todayYmd();
           if (existing.type === 'credit_card' && (fromReminder_ || diffCents !== 0)) pendingAccountEdits_[existing.id].invoiceCheckFrom = null;
@@ -10252,6 +10311,7 @@
           closingDay: payload.closingDay ? Number(payload.closingDay) : null,
           dueDay: payload.dueDay ? Number(payload.dueDay) : null,
           description: payload.description, investmentDate: payload.investmentDate, maturityDate: payload.maturityDate,
+          limitTotal: payload.limitTotal > 0 ? payload.limitTotal : null,
           // Já nasce com lançamento (o de saldo inicial) sempre que o saldo não é zero.
           archived: false, hasTransactions: (Number(payload.initialBalance) || 0) !== 0
         });
