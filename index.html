@@ -4,15 +4,30 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Meu Cacau</title>
+  <meta name="description" content="Suas finanças numa planilha só sua, no seu Google Drive.">
   <link rel="icon" type="image/png" href="favicon.png">
   <style>
-    body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; font-family: system-ui, sans-serif; background: #FFF4DC; color: #3b2314; }
+    :root { --bg: #FFF4DC; --text: #3b2314; --muted: #7a6150; --link: #8a4b1f; --btn: #8a4b1f; --btn-text: #fff8ea; --line: #e6d3ad; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #211710; --text: #f3e6d0; --muted: #b9a58d; --link: #e0a76b; --btn: #b8672a; --btn-text: #fff8ea; --line: #4a3626; } }
+    body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px 16px; box-sizing: border-box; text-align: center; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
     img { width: 96px; height: 96px; }
+    h1 { margin: 0; }
+    p { margin: 0; max-width: 28em; }
+    .muted { color: var(--muted); font-size: 14px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 8px; }
+    .btn { display: inline-block; background: var(--btn); color: var(--btn-text); text-decoration: none; font-weight: 600; padding: 12px 20px; border-radius: 10px; }
+    .btn.secondary { background: transparent; color: var(--link); border: 1px solid var(--line); }
+    a { color: var(--link); }
   </style>
 </head>
 <body>
   <img src="img/cacau-192.png" alt="Meu Cacau">
   <h1>Meu Cacau</h1>
-  <p>Em construção.</p>
+  <p>Suas finanças numa planilha só sua, no seu Google Drive.</p>
+  <div class="actions">
+    <a class="btn" href="comecar/">Como começar</a>
+    <a class="btn secondary" href="app/">Abrir o app</a>
+  </div>
+  <p class="muted">Versão beta · <a href="privacidade/">Privacidade</a></p>
 </body>
 </html>

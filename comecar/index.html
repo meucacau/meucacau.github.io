@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Como começar · Meu Cacau</title>
+  <meta name="description" content="Instale o Meu Cacau no Android, iPhone ou computador e comece a controlar suas finanças numa planilha sua.">
+  <link rel="icon" type="image/png" href="../favicon.png">
+  <style>
+    :root { --bg: #FFF4DC; --text: #3b2314; --muted: #7a6150; --card: #fffaf0; --line: #e6d3ad; --link: #8a4b1f; --btn: #8a4b1f; --btn-text: #fff8ea; --warn: #fff0c2; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #211710; --text: #f3e6d0; --muted: #b9a58d; --card: #2b1e15; --line: #4a3626; --link: #e0a76b; --btn: #b8672a; --btn-text: #fff8ea; --warn: #3d2f12; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.6; }
+    main { max-width: 720px; margin: 0 auto; padding: 24px 16px 64px; }
+    header { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+    header img { width: 56px; height: 56px; }
+    h1 { font-size: 28px; margin: 0; line-height: 1.2; }
+    h2 { font-size: 20px; margin: 36px 0 8px; }
+    h3 { font-size: 17px; margin: 20px 0 6px; }
+    p, li { font-size: 16px; }
+    .lead { font-size: 18px; margin: 8px 0 20px; }
+    .muted { color: var(--muted); font-size: 14px; }
+    a { color: var(--link); }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 14px 0; }
+    .btn { display: inline-block; background: var(--btn); color: var(--btn-text); text-decoration: none; font-weight: 600; padding: 12px 20px; border-radius: 10px; }
+    .note { background: var(--warn); border-radius: 10px; padding: 10px 14px; font-size: 15px; margin: 12px 0; }
+    ol, ul { padding-left: 22px; }
+    li { margin: 6px 0; }
+    nav.toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
+    nav.toc a { border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; text-decoration: none; background: var(--card); font-size: 15px; }
+    footer { margin-top: 40px; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="../img/cacau-192.png" alt="">
+    <h1>Como começar</h1>
+  </header>
+  <p class="lead">
+    O Meu Cacau é um app de finanças pessoais: você registra gastos e receitas, acompanha orçamentos e revisa o mês.
+    Tudo fica numa planilha do Google que é <b>sua</b>, no seu Drive.
+  </p>
+
+  <nav class="toc" aria-label="Escolha seu aparelho">
+    <a href="#android">Android</a>
+    <a href="#iphone">iPhone</a>
+    <a href="#computador">Computador</a>
+    <a href="#primeiros-passos">Primeiros passos</a>
+    <a href="#duvidas">Dúvidas</a>
+  </nav>
+
+  <h2 id="android">Android (aplicativo)</h2>
+  <p>No Android você instala o aplicativo, que também lê as notificações dos seus apps de banco para sugerir lançamentos.</p>
+
+  <div class="card">
+    <p style="margin-top:0"><a class="btn" href="../baixar/MeuCacau.apk" download>Baixar o aplicativo (APK)</a></p>
+    <p class="muted" style="margin-bottom:0">Versão 0.9 beta · cerca de 6 MB. O app atualiza o conteúdo sozinho: só é preciso baixar de novo quando avisarmos.</p>
+  </div>
+
+  <h3>Instalando</h3>
+  <ol>
+    <li>Abra esta página <b>no celular</b> e toque em <b>Baixar o aplicativo</b>. Se o navegador avisar que o arquivo pode ser perigoso, toque em <b>Baixar mesmo assim</b>: o app ainda não está na Play Store.</li>
+    <li>Abra o arquivo baixado. O Android vai pedir para permitir a instalação de apps <b>deste navegador</b>: toque em <b>Configurações</b>, ative a chave e volte.</li>
+    <li>Toque em <b>Instalar</b>. Se o Google Play Protect mostrar um aviso, toque em <b>Mais detalhes</b> e depois em <b>Instalar mesmo assim</b>.</li>
+    <li>Abra o <b>Meu Cacau</b>.</li>
+  </ol>
+
+  <h3>Primeiro acesso</h3>
+  <ol>
+    <li>Toque em <b>Entrar e criar minha planilha</b> e escolha sua conta Google.</li>
+    <li>Autorize o acesso. O app só enxerga a planilha que ele cria para você, nunca o resto do seu Drive.</li>
+    <li>O assistente mostra um passo por vez: <b>permitir gravar na planilha</b>, <b>dar acesso às notificações</b> (ative a chave do "Meu Cacau" na tela que abrir), <b>bateria sem restrição</b> (recomendado, para o Android não parar o app) e o <b>alerta diário</b> (opcional).</li>
+    <li>Em Configurações, escolha de quais apps de banco o Meu Cacau lê as notificações.</li>
+  </ol>
+  <div class="note">Se aparecer um aviso de "app não verificado", toque em <b>Avançado</b> e continue: o app está em fase de testes.</div>
+
+  <h2 id="iphone">iPhone</h2>
+  <p>No iPhone o Meu Cacau funciona como site, sem leitura automática de notificações.</p>
+  <ol>
+    <li>Abra <a href="https://meucacau.github.io/app/">meucacau.github.io/app</a> no <b>Safari</b>.</li>
+    <li>Toque no botão de <b>Compartilhar</b> e em <b>Adicionar à Tela de Início</b>. O Meu Cacau passa a abrir como um app.</li>
+    <li>Toque em <b>Entrar e criar minha planilha</b> e entre com sua conta Google.</li>
+  </ol>
+
+  <h2 id="computador">Computador</h2>
+  <ol>
+    <li>Abra <a href="https://meucacau.github.io/app/">meucacau.github.io/app</a> no Chrome, Edge ou Firefox.</li>
+    <li>Entre com sua conta Google e escolha <b>Entrar e criar minha planilha</b>.</li>
+    <li>Use o mesmo login no celular e no computador: os dois mostram a mesma planilha.</li>
+  </ol>
+
+  <h2 id="primeiros-passos">Primeiros passos no app</h2>
+  <ol>
+    <li><b>Cadastre suas contas</b> (corrente, cartão, dinheiro) com o saldo de hoje.</li>
+    <li><b>Registre o primeiro gasto.</b> As categorias já vêm prontas e você pode mudar depois.</li>
+    <li><b>Crie um orçamento</b> para uma categoria que você quer controlar.</li>
+    <li>Volte ao <b>Início</b> no fim do dia: o app mostra o que falta revisar.</li>
+  </ol>
+
+  <h2 id="duvidas">Dúvidas e sugestões</h2>
+  <ul>
+    <li>Use o <b>botão de sugestão dentro do app</b> para contar o que travou, o que confundiu ou o que falta. Ele chega direto até quem faz o app.</li>
+    <li>Seus dados ficam na sua planilha: para apagar tudo, basta excluir a planilha do seu Drive.</li>
+    <li>Leia a <a href="../privacidade/">política de privacidade</a>.</li>
+  </ul>
+
+  <footer class="muted">Meu Cacau · versão beta</footer>
+</main>
+</body>
+</html>
