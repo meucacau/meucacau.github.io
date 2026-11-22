@@ -221,6 +221,22 @@
   }
   .home-reminder-x:hover { background: color-mix(in srgb, var(--text-muted) 15%, transparent); color: var(--text); }
 
+  /* Primeiros passos (Início): checklist de quem acabou de começar. */
+  .first-steps-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .first-steps-head h2 { margin: 0; }
+  .first-step { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; }
+  .first-step-mark {
+    flex: 0 0 auto; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--text-muted);
+    display: inline-flex; align-items: center; justify-content: center; font-size: 13px; line-height: 1; color: var(--surface); box-sizing: border-box;
+  }
+  .first-step.current .first-step-mark { border-color: var(--accent, var(--text)); }
+  .first-step.done .first-step-mark { background: var(--income, #2e7d32); border-color: var(--income, #2e7d32); }
+  .first-step.done .first-step-label { color: var(--text-muted); text-decoration: line-through; }
+  .first-step-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .first-step-label { font-weight: 600; }
+  .first-step-hint { font-size: 13px; line-height: 1.35; }
+  .first-step-go { flex: 0 0 auto; align-self: center; }
+
   .balance-total {
     font-size: 32px;
     font-weight: 700;
@@ -6020,6 +6036,55 @@
     };
   }
 
+  // ---------- primeiros passos (Início, 22/11/2026) ----------
+  // Checklist para quem acabou de criar a planilha: ajustar a conta inicial, lançar o primeiro gasto, criar um orçamento.
+  // Cada passo vira "feito" sozinho olhando os dados (não depende de clique), então quem já usa o app nunca vê o cartão.
+  // Some quando os três estão feitos (guarda isso por aparelho) ou no X ("Dispensar"). Por aparelho, como o tema.
+  var FIRST_STEPS_OFF_KEY_ = 'financas-first-steps-off';
+  function firstStepsList_(accounts, hasTransaction, hasBudget) {
+    accounts = accounts || [];
+    var accountDone = accounts.length > 1 || accounts.some(function (a) { return Number(a.balance) !== 0; });
+    return [
+      { id: 'account', done: accountDone, label: 'Informe o saldo de hoje da sua conta', hint: 'A planilha nova já traz a conta "Carteira". Ajuste o saldo ou cadastre sua conta corrente.' },
+      { id: 'tx', done: !!hasTransaction, label: 'Registre seu primeiro gasto', hint: 'Pode ser o café de hoje. As categorias já vêm prontas.' },
+      { id: 'budget', done: !!hasBudget, label: 'Crie um orçamento', hint: 'Escolha uma categoria que você quer controlar e um valor por mês.' }
+    ];
+  }
+  function firstStepsOff_() { try { return localStorage.getItem(FIRST_STEPS_OFF_KEY_) === '1'; } catch (e) { return false; } }
+  function firstStepsSetOff_() { try { localStorage.setItem(FIRST_STEPS_OFF_KEY_, '1'); } catch (e) { /* vale só até recarregar */ } }
+  function firstStepsHtml_(d) {
+    if (firstStepsOff_() || !d) return '';
+    var hasBudget = (STATE.budgets || []).some(function (b) { return !b.archived && !b.isUnbudgetedCatchAll; });
+    var steps = firstStepsList_(d.accounts, (d.recentTransactions || []).length > 0, hasBudget);
+    if (steps.every(function (s) { return s.done; })) { firstStepsSetOff_(); return ''; }
+    var current = steps.filter(function (s) { return !s.done; })[0];
+    var doneCount = steps.filter(function (s) { return s.done; }).length;
+    var rows = steps.map(function (s) {
+      var isCurrent = s === current;
+      return '<div class="first-step' + (s.done ? ' done' : '') + (isCurrent ? ' current' : '') + '">' +
+        '<span class="first-step-mark" aria-hidden="true">' + (s.done ? '✓' : '') + '</span>' +
+        '<span class="first-step-body"><span class="first-step-label">' + escapeHtml(s.label) + '</span>' +
+        (isCurrent ? '<span class="first-step-hint muted">' + escapeHtml(s.hint) + '</span>' : '') + '</span>' +
+        (isCurrent ? '<button type="button" class="first-step-go" data-first-step="' + s.id + '">Fazer agora</button>' : '') +
+        '</div>';
+    }).join('');
+    return '<div class="card first-steps"><div class="first-steps-head"><h2>Primeiros passos <span class="muted">' + doneCount + ' de ' + steps.length + '</span></h2>' +
+      '<button type="button" class="home-reminder-x" data-first-steps-dismiss="1" aria-label="Dispensar" data-tooltip="Dispensar">×</button></div>' + rows + '</div>';
+  }
+  function wireFirstSteps_(root) {
+    var go = root.querySelector('[data-first-step]');
+    if (go) go.onclick = function () {
+      var id = go.getAttribute('data-first-step');
+      if (id === 'account') {
+        var acc = (STATE.accounts || []).filter(function (a) { return !a.archived; })[0];
+        openAccountModal(acc || null);
+      } else if (id === 'tx') openTransactionModal();
+      else openBudgetModal();
+    };
+    var x = root.querySelector('[data-first-steps-dismiss]');
+    if (x) x.onclick = function () { firstStepsSetOff_(); render(); };
+  }
+
   // ---------- cards do Início: quais aparecem e em que ordem ----------
   var HOME_CARDS_ = [
     { id: 'cycle', label: 'Saldo do ciclo' },
@@ -6229,11 +6294,12 @@
       recent: function () { return '<div class="card"><h2>Últimos lançamentos</h2>' + recentHtml + '</div>'; }
     };
 
-    root.innerHTML = homeMessageHtml_() + consolidationReminderHtml_() +
+    root.innerHTML = firstStepsHtml_(d) + homeMessageHtml_() + consolidationReminderHtml_() +
       shown.map(function (id) { return cardHtml[id](); }).join('') +
       (shown.length ? '' : '<div class="card"><div class="empty-state">Nenhum card ativo. Use o botão de editar (lápis, ao lado) pra escolher o que aparece aqui.</div></div>');
     if (shown.indexOf('summary') !== -1) wireTxCalendarCard_('home');
     wireConsolidationReminders_(root);
+    wireFirstSteps_(root);
 
     // wireTooltipTrigger_ também dá suporte a toque, que esse pino não tinha antes
     // (só mouseenter — no celular, tocar um pino não mostrava nada).
