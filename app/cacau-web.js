@@ -5,7 +5,9 @@ window.CACAU_WEB_CONFIG = {
   clientId: '423371820715-put6v1djqjsgp42dlhnkc7ogcbns13mg.apps.googleusercontent.com',
   // Seletor de planilhas (Google Picker), usado na permissão mínima (drive.file):
   projectNumber: '423371820715', // número do projeto no Google Cloud (prefixo do ID do cliente)
-  apiKey: 'AIzaSyCv8a8qGtNf09fEz0RoJkNAvjyd1deMWT8' // chave de API do navegador (pública por natureza; restrita ao site no Google Cloud)
+  apiKey: 'AIzaSyCv8a8qGtNf09fEz0RoJkNAvjyd1deMWT8', // chave de API do navegador (pública por natureza; restrita ao site no Google Cloud)
+  // Servidor de licenças (Apps Script do dono): diz se o teste/acesso de quem entrou está ok, expirado ou bloqueado.
+  licenseUrl: 'https://script.google.com/macros/s/AKfycbwfqBO4YH2ikuQr78SSuatvVS_aVgxeI5QmQ2OlODVkMb1g2F_sPFFfbcRsRpnI87dWug/exec'
 };
 
 /**
@@ -6146,7 +6148,62 @@ var CacauBackend = (function () {
     return fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: 'Bearer ' + token.value } })
       .then(function (r) { return r.json(); })
       .then(function (info) { CacauGAS.setEmail(info.email || ''); rememberEmail_(info.email); return info.email || ''; })
-      .catch(function () { return ''; });
+      .catch(function () { return ''; })
+      .then(function (email) { return licenseGate_().then(function () { return email; }); });
+  }
+
+  // ---------- licença (teste grátis / bloqueio manual) ----------
+  // O servidor de licenças (Apps Script do dono) responde ok / expirado / bloqueado para a conta do token. Sem resposta
+  // (offline, Google fora do ar) o app abre normalmente, EXCETO se a última resposta conhecida foi um bloqueio.
+  // Obs.: o código é público, então isto é um bloqueio "leve" (suficiente para o beta entre conhecidos), não à prova de burla.
+  var LICENSE_CACHE_KEY = 'cacau-license-last';
+  /** Decisão pura: resposta do servidor (ou null se não houve) + última resposta guardada -> { block, info }. */
+  function licenseVerdict_(resp, cached) {
+    var st = resp && resp.status;
+    if (st === 'expirado' || st === 'bloqueado') return { block: true, info: resp };
+    if (st === 'ok') return { block: false, info: resp };
+    if (cached && (cached.status === 'expirado' || cached.status === 'bloqueado')) return { block: true, info: cached };
+    return { block: false, info: cached && cached.status === 'ok' ? cached : null };
+  }
+  function licenseFmtDate_(ymd) { var p = String(ymd || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : ''; }
+  function showLicenseBlock_(info) {
+    var expired = info && info.status === 'expirado';
+    var gate = document.getElementById('cacau-license-block');
+    if (gate) gate.remove();
+    gate = document.createElement('div');
+    gate.id = 'cacau-license-block';
+    gate.setAttribute('style', 'position:fixed;inset:0;z-index:200;overflow:auto;background:var(--bg,#FFF4DC);color:var(--text,#3b2314);display:flex;align-items:center;justify-content:center;padding:16px');
+    var title = expired ? 'Seu período de teste terminou' : 'Acesso suspenso';
+    var text = expired
+      ? 'O teste do Meu Cacau terminou' + (info.fim ? ' em ' + licenseFmtDate_(info.fim) : '') + '. Para continuar usando, fale com quem te convidou.'
+      : 'O acesso desta conta ao Meu Cacau está suspenso. Fale com quem te convidou.';
+    gate.innerHTML = '<div style="max-width:380px;width:100%;display:flex;flex-direction:column;gap:12px;font-family:system-ui,sans-serif">' +
+      '<h1 style="margin:0;font-size:26px">' + title + '</h1>' +
+      '<p style="margin:0">' + text + '</p>' +
+      '<p style="margin:0;opacity:.8;font-size:14px">Seus dados continuam na sua planilha do Google Drive; nada foi apagado.</p>' +
+      '<button id="cacau-license-out" style="font-size:16px;padding:12px;border-radius:10px;cursor:pointer;background:transparent;color:inherit;border:1px solid rgba(0,0,0,.25)">Sair desta conta</button></div>';
+    document.body.appendChild(gate);
+    document.getElementById('cacau-license-out').onclick = signOut;
+  }
+  /** Resolve se pode usar; se estiver bloqueado, mostra a tela de bloqueio e NÃO resolve (o app não carrega). */
+  function licenseGate_() {
+    if (!cfg.licenseUrl || !token.value) return Promise.resolve();
+    var cached = null;
+    try { cached = JSON.parse(localStorage.getItem(LICENSE_CACHE_KEY) || 'null'); } catch (e) { cached = null; }
+    var timer;
+    var req = fetch(cfg.licenseUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ token: token.value }) })
+      .then(function (r) { return r.json(); })
+      .catch(function () { return null; });
+    var timeout = new Promise(function (resolve) { timer = setTimeout(function () { resolve(null); }, 8000); });
+    return Promise.race([req, timeout]).then(function (resp) {
+      clearTimeout(timer);
+      var v = licenseVerdict_(resp, cached);
+      if (resp && (resp.status === 'ok' || resp.status === 'expirado' || resp.status === 'bloqueado')) {
+        try { localStorage.setItem(LICENSE_CACHE_KEY, JSON.stringify(resp)); } catch (e) { /* segue */ }
+      }
+      window.CacauLicenseInfo = v.info;
+      if (v.block) { showLicenseBlock_(v.info); return new Promise(function () {}); }
+    });
   }
 
   function signOut() {

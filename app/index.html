@@ -2329,7 +2329,7 @@
 
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=3ec750c4f1"></script>
+  <script src="cacau-web.js?v=5939b13a18"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -6085,6 +6085,16 @@
     if (x) x.onclick = function () { firstStepsSetOff_(); render(); };
   }
 
+  // ---------- aviso do fim do teste (Início, 22/11/2026) ----------
+  // O servidor de licenças (web/backend.js, licenseGate_) deixa a resposta em window.CacauLicenseInfo. Faltando 14 dias ou menos, avisa.
+  function licenseNoticeHtml_() {
+    var i = window.CacauLicenseInfo;
+    if (!i || i.status !== 'ok' || i.diasRestantes == null || i.diasRestantes > 14) return '';
+    var when = i.diasRestantes <= 0 ? 'termina hoje' : (i.diasRestantes === 1 ? 'termina amanhã' : 'termina em ' + i.diasRestantes + ' dias');
+    return '<div class="home-reminder" style="cursor:default"><span class="home-reminder-ico">' + CONSOL_REMINDER_ICON_ + '</span>' +
+      '<span class="home-reminder-txt">Seu período de teste ' + when + '. Para continuar usando o Meu Cacau, fale com quem te convidou.</span></div>';
+  }
+
   // ---------- cards do Início: quais aparecem e em que ordem ----------
   var HOME_CARDS_ = [
     { id: 'cycle', label: 'Saldo do ciclo' },
@@ -6294,7 +6304,7 @@
       recent: function () { return '<div class="card"><h2>Últimos lançamentos</h2>' + recentHtml + '</div>'; }
     };
 
-    root.innerHTML = firstStepsHtml_(d) + homeMessageHtml_() + consolidationReminderHtml_() +
+    root.innerHTML = licenseNoticeHtml_() + firstStepsHtml_(d) + homeMessageHtml_() + consolidationReminderHtml_() +
       shown.map(function (id) { return cardHtml[id](); }).join('') +
       (shown.length ? '' : '<div class="card"><div class="empty-state">Nenhum card ativo. Use o botão de editar (lápis, ao lado) pra escolher o que aparece aqui.</div></div>');
     if (shown.indexOf('summary') !== -1) wireTxCalendarCard_('home');
@@ -21540,7 +21550,7 @@
   var CacauAnalytics = (function () {
     var COLLECTOR_URL = 'https://script.google.com/macros/s/AKfycbzx7u1F-_c0_26KzHx2Uy6k1j-IG6kHpyhybDaE_5OHnq3UQPmpXlmfOPd84SJsrOs2eA/exec';
     var SCHEMA = 'cacau1';
-    var VERSION = 'web-3ec750c4f1';
+    var VERSION = 'web-5939b13a18';
     // Build web público: sem aviso nem chave para os usuários; só coleta no aparelho do dono, que liga
     // abrindo o site com ?coleta=1 (e desliga com ?coleta=0). O build web troca esta linha para true.
     var OWNER_ONLY = true;
