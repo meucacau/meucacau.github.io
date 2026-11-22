@@ -10142,7 +10142,7 @@
       '<div class="field" id="m-limit-total-field" style="display:none"><label>Limite total</label><input id="m-limit-total" type="text"></div>' +
       '<div class="field"><label id="m-balance-label">' + (editingCurrentBalance ? 'Saldo atual' : 'Saldo inicial') + '</label><input id="m-balance" type="text"></div>' +
       (editingCurrentBalance ? '<div class="muted" id="m-balance-note" style="font-size:12px;margin-top:-18px;margin-bottom:22px">Mudar esse valor cria um lançamento de ajuste na data de hoje, cobrindo a diferença.</div>' : '') +
-      '<div class="muted" id="m-limit-note" style="display:none;font-size:12px;margin-top:-18px;margin-bottom:22px">O saldo do cartão é o limite que ainda sobra: cada compra reduz e cada pagamento de fatura devolve. A dívida do cartão (Faturas) é o limite total menos o limite restante: informe os dois como aparecem no app do banco.' +
+      '<div class="muted" id="m-limit-note" style="display:none;font-size:12px;margin-top:-18px;margin-bottom:22px">O saldo do cartão é o limite que ainda sobra: cada compra reduz e cada pagamento de fatura devolve. A dívida do cartão é o limite total menos o limite restante: informe os dois como aparecem no app do banco. Limite garantido: ao resgatar parte do garantido, abaixe o limite total do mesmo valor (o app não sabe quando uma transferência é resgate).' +
         (isEdit && !existing.limitTotal ? ' <b>Este cartão ainda não tem limite total: preencha pra dívida ficar certa.</b>' : '') + '</div>' +
       '<div id="m-cc-fields" style="display:none">' +
         '<div class="field"><label>Dia de fechamento</label><input id="m-closing" type="number" min="1" max="31" value="' + (isEdit && existing.closingDay ? existing.closingDay : '') + '"></div>' +
