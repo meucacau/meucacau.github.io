@@ -5974,8 +5974,10 @@ var CacauBackend = (function () {
     stats.events.slice(0, 5).forEach(function (e) { lines.push(hhmmss_(e.at) + ' ' + e.message); });
     box.querySelector('.d-body').innerHTML = lines.join('<br>');
   }
-  /** Painel de diagnóstico + um botão discreto (sempre presente) que mostra/oculta o painel; a escolha fica guardada. */
+  /** Painel de diagnóstico + botão que mostra/oculta o painel (só com ?diag=1 na URL); a escolha fica guardada. */
   function mountDiag_() {
+    // Sem o botão "i" para os testers: o painel só existe se o dono abrir o app com ?diag=1.
+    if (!/[?&]diag=1(&|$)/.test(location.search || '')) return;
     var hidden = false;
     hidden = true;
     try { hidden = localStorage.getItem(DIAG_KEY) !== '0'; } catch (e) { /* segue */ }
