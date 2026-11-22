@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com https://apis.google.com https://*.gstatic.com https://*.google.com https://*.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://accounts.google.com https://*.gstatic.com https://*.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://*.gstatic.com; connect-src 'self' blob: data: https://*.google.com https://*.googleapis.com https://*.gstatic.com https://*.googleusercontent.com https://cdnjs.cloudflare.com; frame-src https://*.google.com https://*.googleapis.com https://*.googleusercontent.com https://*.gstatic.com; worker-src 'self' blob: https://cdnjs.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>Meu Cacau</title>
   <link rel="icon" type="image/png" href="../favicon.png">
   <script>
@@ -2223,7 +2224,7 @@
   }
 </style>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.6.1/dist/chart.umd.min.js" integrity="sha384-Emf5ZVIUiarAdhkgtqK+5/Z5qIvM6QoVrS+qAVtfyZVuD5lIHrac0me485+Antp0" crossorigin="anonymous"></script>
 </head>
 <body>
   <!-- Tela de carregamento: só a silhueta do cacaueiro (último estágio) enchendo de baixo pra cima. O tempo esperado vem dos
@@ -17489,6 +17490,10 @@
   var INVOICE_PDFJS_URL_ = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
   var INVOICE_PDFJS_WORKER_URL_ = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   var INVOICE_SHEETJS_URL_ = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  // Hashes de integridade (SRI): se a CDN entregar qualquer byte diferente, o navegador recusa a biblioteca.
+  var INVOICE_SCRIPT_SRI_ = {};
+  INVOICE_SCRIPT_SRI_[INVOICE_PDFJS_URL_] = 'sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e';
+  INVOICE_SCRIPT_SRI_[INVOICE_SHEETJS_URL_] = 'sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw';
   var invoiceScriptPromises_ = {};
 
   /** Carrega uma biblioteca externa só na primeira vez que alguém sobe um documento (o app não paga esse peso no uso normal). */
@@ -17497,6 +17502,7 @@
       invoiceScriptPromises_[url] = new Promise(function (resolve, reject) {
         var s = document.createElement('script');
         s.src = url;
+        if (INVOICE_SCRIPT_SRI_[url]) { s.integrity = INVOICE_SCRIPT_SRI_[url]; s.crossOrigin = 'anonymous'; }
         s.onload = resolve;
         s.onerror = function () { delete invoiceScriptPromises_[url]; reject(new Error('Não consegui carregar o leitor de documentos. Confira a conexão e tente de novo.')); };
         document.head.appendChild(s);
