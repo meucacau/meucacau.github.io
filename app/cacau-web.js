@@ -3,9 +3,8 @@
 // com a origem https://luishfilho.github.io autorizada.
 window.CACAU_WEB_CONFIG = {
   clientId: '423371820715-put6v1djqjsgp42dlhnkc7ogcbns13mg.apps.googleusercontent.com',
-  // Seletor de planilhas (Google Picker), usado na permissão mínima (drive.file):
-  projectNumber: '423371820715', // número do projeto no Google Cloud (prefixo do ID do cliente)
-  apiKey: 'AIzaSyCv8a8qGtNf09fEz0RoJkNAvjyd1deMWT8', // chave de API do navegador (pública por natureza; restrita ao site no Google Cloud)
+  // Número do projeto no Google Cloud (a planilha do app é achada pelo Drive, na permissão mínima drive.file):
+  projectNumber: '423371820715', // prefixo do ID do cliente
   // Servidor de licenças (Apps Script do dono): diz se o teste/acesso de quem entrou está ok, expirado ou bloqueado.
   licenseUrl: 'https://script.google.com/macros/s/AKfycbwfqBO4YH2ikuQr78SSuatvVS_aVgxeI5QmQ2OlODVkMb1g2F_sPFFfbcRsRpnI87dWug/exec'
 };
@@ -5982,7 +5981,7 @@ var CacauBackend = (function () {
     box.querySelector('.d-sheet').onclick = function (e) {
       e.preventDefault();
       if (!confirm('Trocar de planilha? Você vai escolher ou criar outra na próxima tela (a atual não é apagada).')) return;
-      try { localStorage.removeItem(SHEET_KEY); } catch (err) { /* segue */ }
+      try { localStorage.removeItem(SHEET_KEY); sessionStorage.setItem('cacau-switching', '1'); } catch (err) { /* segue */ }
       location.reload();
     };
     box.querySelector('.d-x').onclick = function (e) { e.preventDefault(); show_(false); };
@@ -6233,25 +6232,18 @@ var CacauBackend = (function () {
     });
   }
 
-  /** Seletor de planilhas do Google (Picker): é ele que dá ao app acesso a uma planilha existente no modo mínimo. */
-  function pickSheet_() {
-    if (!cfg.apiKey) return Promise.reject(new Error('Falta a chave de API do seletor (apiKey em web/config.js).'));
-    return (window.gapi ? Promise.resolve() : loadScript_('https://apis.google.com/js/api.js')).then(function () {
-      return new Promise(function (resolve) { gapi.load('picker', resolve); });
-    }).then(function () {
-      return new Promise(function (resolve) {
-        var view = new google.picker.DocsView(google.picker.ViewId.SPREADSHEETS).setMode(google.picker.DocsViewMode.LIST);
-        new google.picker.PickerBuilder()
-          .addView(view)
-          .setOAuthToken(token.value)
-          .setDeveloperKey(cfg.apiKey)
-          .setAppId(cfg.projectNumber || '')
-          .setTitle('Escolha a planilha do Meu Cacau')
-          .setCallback(function (data) {
-            if (data.action === google.picker.Action.PICKED) resolve(data.docs[0].id);
-            else if (data.action === google.picker.Action.CANCEL) resolve('');
-          })
-          .build().setVisible(true);
+  /**
+   * Planilhas que o próprio app criou na conta da pessoa (a permissão mínima "drive.file" só enxerga essas),
+   * da mais recente para a mais antiga. É assim que quem reinstala ou troca de aparelho reencontra a planilha,
+   * sem seletor do Google e sem acesso ao resto do Drive.
+   */
+  function findSheets_() {
+    var q = "mimeType='application/vnd.google-apps.spreadsheet' and trashed=false";
+    var url = 'https://www.googleapis.com/drive/v3/files?pageSize=20&orderBy=modifiedTime%20desc&fields=files(id,name,modifiedTime)&q=' + encodeURIComponent(q);
+    return fetch(url, { headers: { Authorization: 'Bearer ' + token.value } }).then(function (resp) {
+      return resp.json().then(function (j) {
+        if (!resp.ok) throw new Error((j && j.error && j.error.message) || ('Drive HTTP ' + resp.status));
+        return (j && j.files) || [];
       });
     });
   }
@@ -6291,9 +6283,7 @@ var CacauBackend = (function () {
     var btn = 'font-size:16px;padding:12px;border-radius:10px;cursor:pointer';
     var primary = btn + ';background:var(--accent,#8a4b25);color:#fff;border:0';
     var secondary = btn + ';background:transparent;color:inherit;border:1px solid rgba(0,0,0,.25)';
-    var newPickHtml =
-      '<button id="cacau-new" style="' + primary + '">Entrar e criar minha planilha</button>' +
-      '<button id="cacau-pick" style="' + secondary + '">Entrar e escolher uma planilha que já tenho</button>';
+    var newPickHtml = '<button id="cacau-new" style="' + primary + '">Entrar com o Google</button>';
     gate.innerHTML =
       '<div style="max-width:380px;width:100%;display:flex;flex-direction:column;gap:12px;font-family:system-ui,sans-serif">' +
       '<h1 style="margin:0;font-size:30px">Meu Cacau</h1>' +
@@ -6320,19 +6310,54 @@ var CacauBackend = (function () {
 
     var go = gate.querySelector('#cacau-go');
     if (go) go.onclick = function () { enterWith_(saved); };
+    function createAndEnter_() {
+      msg.style.color = 'inherit';
+      msg.textContent = 'Criando e preparando a planilha…';
+      busy_(true);
+      return createSheet_().then(done_).catch(fail_);
+    }
+    function dateBr_(iso) { var d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString('pt-BR'); }
+    /** Várias planilhas (ou troca de planilha): a pessoa escolhe entre as do app ou cria outra. */
+    function showChoice_(files, note) {
+      var box = document.createElement('div');
+      box.setAttribute('style', 'display:flex;flex-direction:column;gap:8px');
+      var intro = document.createElement('p');
+      intro.setAttribute('style', 'margin:0;font-size:14px');
+      intro.textContent = note || (files.length ? 'Escolha a planilha que você quer usar:' : '');
+      box.appendChild(intro);
+      files.forEach(function (f) {
+        var b = document.createElement('button');
+        b.setAttribute('style', secondary + ';text-align:left');
+        b.textContent = (f.name || 'Planilha') + (f.modifiedTime ? ' · alterada em ' + dateBr_(f.modifiedTime) : '');
+        b.onclick = function () { busy_(true); useSheet_(f.id); fetchEmail_().then(done_).catch(fail_); };
+        box.appendChild(b);
+      });
+      var nb = document.createElement('button');
+      nb.setAttribute('style', primary);
+      nb.textContent = 'Criar uma planilha nova';
+      nb.onclick = createAndEnter_;
+      box.appendChild(nb);
+      var first = gate.querySelector('#cacau-new');
+      if (first) first.remove();
+      msg.textContent = '';
+      gate.firstChild.insertBefore(box, msg);
+      buttons = gate.querySelectorAll('button');
+      busy_(false);
+    }
+
     var nw = gate.querySelector('#cacau-new');
     if (nw) nw.onclick = function () {
+      var switching = false;
+      try { switching = sessionStorage.getItem('cacau-switching') === '1'; sessionStorage.removeItem('cacau-switching'); } catch (e) { /* segue */ }
       login_().then(fetchEmail_).then(function () {
-        msg.textContent = 'Criando e preparando a planilha…';
-        return createSheet_();
-      }).then(done_).catch(fail_);
-    };
-    var pk = gate.querySelector('#cacau-pick');
-    if (pk) pk.onclick = function () {
-      login_().then(function () { msg.style.color = 'inherit'; msg.textContent = 'Abrindo o seletor de planilhas do Google. Se o navegador perguntar sobre "conteúdo inserido" do google.com, pode permitir: é só para o Google mostrar a lista das suas planilhas.'; return pickSheet_(); }).then(function (id) {
-        if (!id) { busy_(false); msg.textContent = 'Nenhuma planilha escolhida.'; return null; }
-        useSheet_(id);
-        return fetchEmail_().then(done_);
+        msg.textContent = 'Procurando a sua planilha…';
+        return findSheets_().then(function (files) { return { files: files }; }, function (err) { return { error: err }; });
+      }).then(function (r) {
+        if (r.error) { showChoice_([], 'Não consegui procurar suas planilhas (' + r.error.message + '). Se você já usava o Meu Cacau, tente de novo mais tarde para não criar uma planilha duplicada.'); return null; }
+        if (!r.files.length) return createAndEnter_();
+        if (r.files.length === 1 && !switching) { useSheet_(r.files[0].id); done_(); return null; }
+        showChoice_(r.files);
+        return null;
       }).catch(fail_);
     };
   }
@@ -6575,7 +6600,7 @@ var CacauBackend = (function () {
 
   /** Esquece a planilha guardada e volta à tela de entrada (a planilha antiga não é apagada). */
   function switchSheet() {
-    try { localStorage.removeItem(SHEET_KEY); } catch (e) { /* segue */ }
+    try { localStorage.removeItem(SHEET_KEY); sessionStorage.setItem('cacau-switching', '1'); } catch (e) { /* segue */ }
     location.reload();
   }
 
