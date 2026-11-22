@@ -5548,6 +5548,13 @@ function getCreditCardBillSummary(accountId, allTransactions) {
   var currentBillMonth = billMonthForDate_(todayYmd_(), closingDay);
 
   var txs = (allTransactions || readAll_('Transactions')).filter(function (t) { return t.AccountID === accountId; });
+  // Primeiro ponto fixo do cartão (abertura ou consolidação): de lá pra trás o app não acompanhava o cartão. Fatura que
+  // FECHOU antes dele (toda compra dela é anterior) foi absorvida pelo limite informado -- não dá pra ela ficar "atrasada".
+  var firstFixed = '';
+  txs.forEach(function (t) {
+    if (!t.Date || !(isBalanceAnchorRow_(t) || t.Description === ACCOUNT_OPENING_DESCRIPTION)) return;
+    if (!firstFixed || t.Date < firstFixed) firstFixed = t.Date;
+  });
   var byMonth = {};
   txs.forEach(function (t) {
     if (!t.BillMonth) return;
@@ -5565,10 +5572,12 @@ function getCreditCardBillSummary(accountId, allTransactions) {
     var isOpen = billMonth === currentBillMonth;
     var isPaid = data.paid >= data.spent && data.spent > 0;
     // 'futura' = fatura de um mês depois do atual (ex.: parcelas que ainda vão cair): nem fechou, então não dá pra pagar.
-    var status = isOpen ? 'aberta' : (isPaid ? 'paga' : (billMonth > currentBillMonth ? 'futura' : (dueDate < today ? 'atrasada' : 'fechada')));
+    var closeYmd = billMonth + '-' + (closingDay < 10 ? '0' : '') + closingDay;
+    var before = !isOpen && !isPaid && billMonth <= currentBillMonth && firstFixed !== '' && closeYmd <= firstFixed;
+    var status = isOpen ? 'aberta' : (isPaid ? 'paga' : (billMonth > currentBillMonth ? 'futura' : (before ? 'anterior' : (dueDate < today ? 'atrasada' : 'fechada'))));
     return {
       billMonth: billMonth, spent: data.spent, paid: data.paid,
-      remaining: Math.max(0, data.spent - data.paid),
+      remaining: status === 'anterior' ? 0 : Math.max(0, data.spent - data.paid),
       dueDate: Utilities.formatDate(dueDate, Session.getScriptTimeZone(), 'yyyy-MM-dd'),
       status: status
     };

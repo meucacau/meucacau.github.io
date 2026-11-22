@@ -2288,7 +2288,7 @@
 
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=d1561c7a87"></script>
+  <script src="cacau-web.js?v=617acf16c0"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -2344,7 +2344,7 @@
     var label = escapeHtml(ACCOUNT_TYPE_LABELS[type] || '');
     return '<svg class="acc-type-ico" viewBox="0 0 24 24" role="img" aria-label="' + label + '" data-tooltip="' + label + '">' + path + '</svg>';
   }
-  var STATUS_LABELS = { aberta: 'Aberta', fechada: 'Fechada', futura: 'Futura', paga: 'Paga', atrasada: 'Atrasada' };
+  var STATUS_LABELS = { aberta: 'Aberta', fechada: 'Fechada', futura: 'Futura', paga: 'Paga', atrasada: 'Atrasada', anterior: 'Anterior ao app' };
   var TX_PAGE_SIZE = 50; // ver STATE.txVisibleCount / "Carregar mais" no Extrato
 
   // Chamadas que criam lançamento: contam como "dia com lançamento" no cacaueiro (ver treeNoteEntry_).
@@ -5907,7 +5907,7 @@
     return '<div class="bills-chart" id="bills-chart-scroll" role="img" aria-label="Faturas dos cartões">' + series.map(function (m) {
       var tip = billsChartColumnTip_(m);
       var segs = m.parts.slice().sort(function (a, b) { return b.amount - a.amount; }).map(function (p) {
-        return '<div class="bills-seg' + (p.status === 'paga' ? ' bills-seg-paid' : '') + '" style="height:' + (m.total > 0 ? (p.amount / m.total * 100).toFixed(2) : 0) + '%;' + billsChartAccountStyle_(p.accountId) + '"></div>';
+        return '<div class="bills-seg' + (p.status === 'paga' || p.status === 'anterior' ? ' bills-seg-paid' : '') + '" style="height:' + (m.total > 0 ? (p.amount / m.total * 100).toFixed(2) : 0) + '%;' + billsChartAccountStyle_(p.accountId) + '"></div>';
       }).join('');
       var h = max > 0 ? Math.max(m.total > 0 ? 3 : 0, m.total / max * 100) : 0;
       return '<div class="bills-col' + (m.current ? ' bills-col-current' : '') + (m.parts.length ? ' bills-col-clickable' : '') + '" data-bill-month="' + m.billMonth + '"' +
