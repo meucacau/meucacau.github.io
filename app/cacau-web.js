@@ -5889,6 +5889,30 @@ var CacauBackend = (function () {
   var WRITE_KEY = 'cacau-web-write';
   var CONFLICT_MESSAGE = 'A planilha foi alterada em outro lugar (outro aparelho ou aba) enquanto você editava. Nada foi gravado: recarregue e tente de novo.';
 
+  /**
+   * Troca o texto técnico de um erro conhecido (login, Google, rede) por uma frase que qualquer pessoa entende e
+   * diz o que fazer. Devolve '' quando o erro não é um desses: aí o texto original segue (ex.: regra de negócio do app).
+   */
+  function friendly_(err) {
+    var m = String((err && (err.message || err.type)) || err || '');
+    var low = m.toLowerCase();
+    if (/popup_closed|popup_failed_to_open/.test(low)) return 'A janela de login do Google foi fechada ou bloqueada. Tente de novo e, se ela não abrir, libere pop-ups para este site.';
+    if (/access_denied/.test(low)) return 'Sem a permissão do Google o Meu Cacau não consegue guardar seus dados na sua planilha. Tente de novo e aceite a permissão (ela só dá acesso às planilhas que o próprio app cria).';
+    if (/immediate_failed|interaction_required|login_required/.test(low)) return 'Sua sessão com o Google expirou. Entre de novo.';
+    if (/o app não respondeu|login recusado/.test(low)) return 'O aplicativo não respondeu ao pedido de login. Feche o Meu Cacau, abra de novo e tente outra vez.';
+    if (/accounts\.google\.com\/gsi|carregar o login do google/.test(low)) return 'Não consegui carregar o login do Google. Confira sua internet (ou se algum bloqueador de anúncios está impedindo) e recarregue a página.';
+    if (/failed to fetch|networkerror|load failed|network request failed/.test(low)) return 'Sem conexão com o Google. Confira sua internet e tente de novo.';
+    var http = /Google (?:Planilhas|Drive) \((\d{3})\)/.exec(m);
+    var code = http ? Number(http[1]) : 0;
+    if (code === 404) return 'Não achei a sua planilha. Ela pode ter sido apagada ou estar na lixeira do Google Drive.';
+    if (code === 403 && /rate|quota|limit/.test(low)) return 'O Google pediu para esperar um pouco (muitos acessos seguidos). Tente de novo em um minuto.';
+    if (code === 403) return 'O Google não deixou o Meu Cacau acessar essa planilha. Saia da conta e entre de novo, aceitando a permissão.';
+    if (code === 429) return 'O Google pediu para esperar um pouco (muitos acessos seguidos). Tente de novo em um minuto.';
+    if (code >= 500 && code < 600) return 'O Google está com instabilidade agora. Tente de novo em alguns minutos; seus dados estão seguros na sua planilha.';
+    if (code === 400 || code === 401) return 'Não consegui falar com a sua planilha. Recarregue a página; se continuar, saia da conta e entre de novo.';
+    return '';
+  }
+
   var tokenClient = null;
   var tokenClientMode = '';
   var pendingToken = null; // { resolve, reject }
@@ -6242,7 +6266,7 @@ var CacauBackend = (function () {
     var url = 'https://www.googleapis.com/drive/v3/files?pageSize=20&orderBy=modifiedTime%20desc&fields=files(id,name,modifiedTime)&q=' + encodeURIComponent(q);
     return fetch(url, { headers: { Authorization: 'Bearer ' + token.value } }).then(function (resp) {
       return resp.json().then(function (j) {
-        if (!resp.ok) throw new Error((j && j.error && j.error.message) || ('Drive HTTP ' + resp.status));
+        if (!resp.ok) throw new Error('Google Drive (' + resp.status + '): ' + ((j && j.error && j.error.message) || 'sem detalhe'));
         return (j && j.files) || [];
       });
     });
@@ -6297,7 +6321,7 @@ var CacauBackend = (function () {
     var buttons = gate.querySelectorAll('button');
     function busy_(on) { Array.prototype.forEach.call(buttons, function (b) { b.disabled = on; }); }
     function done_() { gate.remove(); onDone(); gateDone(); }
-    function fail_(err) { busy_(false); msg.textContent = 'Não deu: ' + err.message; }
+    function fail_(err) { busy_(false); event_('erro na entrada: ' + ((err && err.message) || err)); msg.style.color = '#b00'; msg.textContent = friendly_(err) || ('Não deu: ' + ((err && err.message) || err)); }
     function login_() {
       setScopeMode_('file');
       msg.textContent = 'Abrindo o login do Google…';
@@ -6558,6 +6582,14 @@ var CacauBackend = (function () {
       record.error = (err && err.message) || String(err);
       stats.calls.unshift(record); if (stats.calls.length > 20) stats.calls.length = 20;
       renderDiag_();
+      if (/Google Planilhas \(404\)/.test(record.error)) {
+        // planilha apagada/inacessível: esquece a guardada e volta à tela de entrada, que procura a do app no Drive
+        try { localStorage.removeItem(SHEET_KEY); } catch (e) { /* segue */ }
+        askUser_('Não achei a sua planilha (ela pode ter sido apagada). Entre de novo para procurarmos outra.').then(function () { location.reload(); });
+        return new Promise(function () {});
+      }
+      var nice = friendly_(err);
+      if (nice) { var wrapped = new Error(nice); wrapped.technical = record.error; throw wrapped; }
       throw err;
     });
   }
