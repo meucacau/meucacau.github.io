@@ -1219,6 +1219,21 @@
      ACIMA dele e continua rolando normal). top:0 porque não existe nenhuma barra fixa
      no topo da tela pra descontar (a barra de abas fica no rodapé). z-index maior que
      conteúdo normal pra ficar por cima da lista de lançamentos ao "grudar". */
+  /* Seleção em lote no Extrato: linhas marcadas, banner no topo (Editar / Cancelar seleção) e aviso "Desfazer" no rodapé. */
+  #tx-list .row[data-tx] { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  #tx-list .row.tx-selected { background: color-mix(in srgb, var(--primary) 12%, transparent); box-shadow: inset 3px 0 0 var(--primary); transition: background .15s, box-shadow .15s; }
+  .tx-select-banner { position: fixed; top: max(12px, env(safe-area-inset-top)); left: 50%; z-index: 30; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 16px; max-width: calc(100vw - 24px); box-sizing: border-box; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; box-shadow: 0 6px 20px rgba(0,0,0,.18); opacity: 0; pointer-events: none; transform: translate(-50%, -160%); transition: transform .28s cubic-bezier(.2,.8,.2,1), opacity .2s ease; }
+  .tx-select-banner.show { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); }
+  .tx-select-banner button { width: auto; margin: 0; flex: 0 0 auto; padding: 6px 14px; font-size: 13px; border-radius: 999px; white-space: nowrap; }
+  .tx-select-count { font-size: 14px; font-weight: 600; white-space: nowrap; display: inline-block; }
+  .tx-select-count.bump { animation: tx-count-bump .25s ease; }
+  @keyframes tx-count-bump { 0% { transform: scale(1); } 40% { transform: scale(1.18); } 100% { transform: scale(1); } }
+  .batch-hint { font-weight: 400; font-size: 12px; color: var(--text-muted); }
+  .batch-undo-toast { position: fixed; left: 50%; bottom: calc(var(--dock-bottom) + 76px); z-index: 45; display: flex; align-items: center; gap: 12px; padding: 10px 8px 12px 16px; overflow: hidden; background: var(--text); color: var(--bg); border-radius: 12px; font-size: 13px; box-shadow: 0 6px 20px rgba(0,0,0,.25); opacity: 0; transform: translate(-50%, 16px); transition: opacity .25s ease, transform .25s cubic-bezier(.2,.8,.2,1); }
+  .batch-undo-toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .batch-undo-toast button { width: auto; margin: 0; padding: 4px 12px; font-size: 13px; background: transparent; color: inherit; border: 1px solid currentColor; border-radius: 999px; }
+  .batch-undo-bar { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: currentColor; opacity: .5; transform-origin: left; animation-name: batch-undo-shrink; animation-timing-function: linear; animation-fill-mode: forwards; }
+  @keyframes batch-undo-shrink { from { transform: scaleX(1); } to { transform: scaleX(0); } }
   .tx-calendar-card { position: sticky; top: 0; z-index: 5; }
   /* Cabeçalho da aba Reembolsos (título, "Mostrar concluídos", pessoa) gruda no topo ao rolar, como o Resumo no Extrato. */
   .refunds-head-card { position: sticky; top: 0; z-index: 5; }
@@ -2297,7 +2312,7 @@
 
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=8712f5a250"></script>
+  <script src="cacau-web.js?v=3ec750c4f1"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -5404,6 +5419,7 @@
     }
     updateScrollToTopVisibility_();
     updateReviewButton_();
+    syncTxSelectionUi_();
     motionAfterRender_(sameView);
   }
 
@@ -8103,11 +8119,12 @@
     list.querySelectorAll('.amount-expense[data-tooltip], .amount-income[data-tooltip], .tx-flag-icon[data-tooltip]').forEach(wireTooltipTrigger_);
 
     list.querySelectorAll('[data-tx]').forEach(function (el) {
-      el.onclick = function () {
+      wireTxRowSelection_(el, function () {
         var t = combined.find(function (x) { return x.id === el.dataset.tx; });
         if (t) openTransactionDetailModal(t);
-      };
+      });
     });
+    syncTxSelectionUi_();
     var loadMoreBtn = document.getElementById('tx-load-more');
     if (loadMoreBtn) loadMoreBtn.onclick = function () {
       STATE.txVisibleCount += TX_PAGE_SIZE;
@@ -8953,6 +8970,323 @@
   function loadTxList() {
     renderTxList(currentFilteredTransactionsCombined_());
     renderFutureInstallmentsToggle_();
+  }
+
+  // ---------- seleção e edição em lote no Extrato ----------
+  // Entrar: toque longo numa linha (celular) ou Ctrl/Shift + clique (PC). Com a seleção ativa, tocar/clicar alterna a linha;
+  // Shift + clique seleciona o trecho desde a última marcada. Um banner no topo mostra quantas estão marcadas, com Editar e
+  // Cancelar seleção. Editar abre a janela de lote: só o que for preenchido muda (ver openBatchEditModal_).
+  var txSelect_ = { ids: [], last: null };
+  var TX_LONG_PRESS_MS_ = 450;
+  var TX_BATCH_UNDO_MS_ = 5000;
+
+  function txSelectionToggle_(id) {
+    var i = txSelect_.ids.indexOf(id);
+    if (i === -1) { txSelect_.ids.push(id); txSelect_.last = id; }
+    else { txSelect_.ids.splice(i, 1); txSelect_.last = txSelect_.ids.length ? txSelect_.ids[txSelect_.ids.length - 1] : null; }
+    syncTxSelectionUi_();
+  }
+  /** Shift + clique: marca todas as linhas visíveis entre a última marcada e a clicada (sem desmarcar nenhuma). */
+  function txSelectionRange_(id) {
+    var order = Array.prototype.map.call(document.querySelectorAll('#tx-list [data-tx]'), function (el) { return el.dataset.tx; });
+    var a = txSelect_.last ? order.indexOf(txSelect_.last) : -1, b = order.indexOf(id);
+    if (a === -1 || b === -1) { if (txSelect_.ids.indexOf(id) === -1) txSelectionToggle_(id); return; }
+    order.slice(Math.min(a, b), Math.max(a, b) + 1).forEach(function (x) { if (txSelect_.ids.indexOf(x) === -1) txSelect_.ids.push(x); });
+    txSelect_.last = id;
+    syncTxSelectionUi_();
+  }
+  function txSelectionClear_() {
+    txSelect_.ids = []; txSelect_.last = null;
+    syncTxSelectionUi_();
+  }
+  /** Lançamentos (vivos, em memória) das linhas marcadas, na ordem em que foram marcadas. */
+  function selectedTxs_() {
+    var all = STATE.pendingTransactions.concat(STATE.allTransactions);
+    return txSelect_.ids.map(function (id) {
+      var live = resolvedTempIds_[id] || id;
+      return all.find(function (x) { return x.id === live; });
+    }).filter(Boolean);
+  }
+  /** Liga uma linha do Extrato: clique normal abre a edição; Ctrl/Shift/seleção ativa/toque longo mexem na seleção. */
+  function wireTxRowSelection_(el, onOpen) {
+    var longTimer = null, longFired = false, startX = 0, startY = 0;
+    function cancelLong() { if (longTimer) { clearTimeout(longTimer); longTimer = null; } }
+    el.addEventListener('touchstart', function (e) {
+      if (e.touches.length !== 1) return;
+      longFired = false;
+      startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+      cancelLong();
+      longTimer = setTimeout(function () {
+        longTimer = null; longFired = true;
+        txSelectionToggle_(el.dataset.tx);
+        try { if (navigator.vibrate) navigator.vibrate(15); } catch (err) { /* sem vibração: tudo bem */ }
+      }, TX_LONG_PRESS_MS_);
+    }, { passive: true });
+    el.addEventListener('touchmove', function (e) {
+      var p = e.touches[0];
+      if (Math.abs(p.clientX - startX) > 8 || Math.abs(p.clientY - startY) > 8) cancelLong();
+    }, { passive: true });
+    el.addEventListener('touchend', cancelLong);
+    el.addEventListener('touchcancel', cancelLong);
+    el.addEventListener('contextmenu', function (e) { if (longFired || longTimer) e.preventDefault(); });
+    el.onclick = function (e) {
+      if (longFired) { longFired = false; return; } // o toque longo já tratou este toque
+      var id = el.dataset.tx;
+      if (e.shiftKey) txSelectionRange_(id);
+      else if (e.ctrlKey || e.metaKey || txSelect_.ids.length) txSelectionToggle_(id);
+      else onOpen();
+    };
+  }
+  /** Marca as linhas selecionadas na lista e mostra/esconde o banner (fora do #view-root: sobrevive aos render()). */
+  function syncTxSelectionUi_() {
+    var inExtrato = STATE.currentView === 'transactions';
+    if (!inExtrato) { txSelect_.ids = []; txSelect_.last = null; }
+    else if (txSelect_.ids.length) {
+      // some o que já não existe (apagado) e troca id temporário pelo real
+      var known = {};
+      STATE.pendingTransactions.concat(STATE.allTransactions).forEach(function (x) { known[x.id] = true; });
+      txSelect_.ids = txSelect_.ids.map(function (id) { return resolvedTempIds_[id] || id; }).filter(function (id) { return known[id]; });
+      if (txSelect_.last && txSelect_.ids.indexOf(txSelect_.last) === -1) txSelect_.last = txSelect_.ids[txSelect_.ids.length - 1] || null;
+    }
+    var chosen = {};
+    txSelect_.ids.forEach(function (id) { chosen[id] = true; });
+    document.querySelectorAll('#tx-list [data-tx]').forEach(function (el) { el.classList.toggle('tx-selected', !!chosen[el.dataset.tx]); });
+    var n = txSelect_.ids.length;
+    var banner = document.getElementById('tx-select-banner');
+    if (!banner) {
+      if (!n) return;
+      banner = document.createElement('div');
+      banner.id = 'tx-select-banner';
+      banner.className = 'tx-select-banner';
+      banner.innerHTML = '<span class="tx-select-count" id="tx-select-count"></span>' +
+        '<button type="button" id="tx-select-edit">Editar</button>' +
+        '<button type="button" class="secondary" id="tx-select-cancel">Cancelar seleção</button>';
+      document.body.appendChild(banner);
+      document.getElementById('tx-select-edit').onclick = function () { openBatchEditModal_(); };
+      document.getElementById('tx-select-cancel').onclick = txSelectionClear_;
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && txSelect_.ids.length && !document.querySelector('#modal-root .modal-backdrop')) txSelectionClear_();
+      });
+      void banner.offsetWidth; // fixa o estado inicial (escondido) pra a entrada animar
+    }
+    if (n) {
+      var countEl = document.getElementById('tx-select-count');
+      var text = n === 1 ? '1 selecionado' : n + ' selecionados';
+      if (countEl.textContent !== text) {
+        countEl.textContent = text;
+        countEl.classList.remove('bump'); void countEl.offsetWidth; countEl.classList.add('bump');
+      }
+    }
+    banner.classList.toggle('show', n > 0);
+  }
+
+  /**
+   * O que a edição em lote consegue fazer com cada lançamento, dado o que foi preenchido (fields: date, accountId, categoryId,
+   * counterparty, description, excludeFromAnalysis -- só as chaves preenchidas). Espelha as regras de updateTransaction no
+   * servidor (transferência não edita aqui; categoria do mesmo tipo; conta que aceita o lançamento; parcelado só em cartão).
+   * Devolve { ok: [tx], skipped: [{ tx, reason }] } -- reason é uma chave de BATCH_SKIP_LABELS_.
+   */
+  var BATCH_SKIP_LABELS_ = {
+    transfer: 'transferência(s)', category: 'categoria de outro tipo', investment: 'conta de investimento só aceita transferência',
+    cardIncome: 'receita não vai pra cartão', installment: 'parcelado só fica em cartão'
+  };
+  function batchEditPlan_(txs, fields) {
+    var cat = fields.categoryId ? STATE.categories.find(function (c) { return c.id === fields.categoryId; }) : null;
+    var acc = fields.accountId ? STATE.accounts.find(function (a) { return a.id === fields.accountId; }) : null;
+    var ok = [], skipped = [];
+    txs.forEach(function (t) {
+      var reason = null;
+      if (t.kind === 'transfer_in' || t.kind === 'transfer_out') reason = 'transfer';
+      else if (cat && cat.kind !== t.kind) reason = 'category';
+      else if (acc && acc.type === 'investment') reason = 'investment';
+      else if (acc && acc.type === 'credit_card' && t.kind === 'income') reason = 'cardIncome';
+      else if (acc && t.installmentGroupId && acc.type !== 'credit_card') reason = 'installment';
+      if (reason) skipped.push({ tx: t, reason: reason }); else ok.push(t);
+    });
+    return { ok: ok, skipped: skipped };
+  }
+  /** "3 serão alterados, 2 não (1 transferência(s); 1 categoria de outro tipo)" -- ou pedido pra preencher algo. */
+  function batchReportText_(plan, hasFields) {
+    if (!hasFields) return 'Preencha ao menos um campo.';
+    var text = plan.ok.length + (plan.ok.length === 1 ? ' será alterado' : ' serão alterados');
+    if (plan.skipped.length) {
+      var counts = {}, order = [];
+      plan.skipped.forEach(function (s) { if (!counts[s.reason]) { counts[s.reason] = 0; order.push(s.reason); } counts[s.reason]++; });
+      text += ', ' + plan.skipped.length + ' não (' + order.map(function (r) { return counts[r] + ' ' + BATCH_SKIP_LABELS_[r]; }).join('; ') + ')';
+    }
+    return text;
+  }
+
+  function openBatchEditModal_() {
+    var txs = selectedTxs_();
+    if (!txs.length) return;
+    var kinds = [];
+    txs.forEach(function (t) { if ((t.kind === 'expense' || t.kind === 'income') && kinds.indexOf(t.kind) === -1) kinds.push(t.kind); });
+    if (!kinds.length) kinds = ['expense'];
+    var counterpartyLabel = kinds.length === 2 ? 'Pago a / Recebido de' : (kinds[0] === 'income' ? 'Recebido de' : 'Pago a');
+    var hint = function (id) { return ' <span class="batch-hint" id="' + id + '">(sem alterações)</span>'; };
+    openModal(
+      '<h2>Editar ' + txs.length + (txs.length === 1 ? ' lançamento' : ' lançamentos') + '</h2>' +
+      '<div class="muted" style="margin-bottom:14px;font-size:13px">Só o que você preencher muda: o que ficar "(sem alterações)" continua como está em cada lançamento.</div>' +
+      '<div class="field"><label>Data' + hint('b-hint-date') + '</label><input type="date" id="b-date"></div>' +
+      '<div class="field"><label>Conta' + hint('b-hint-account') + '</label><div id="b-account-field" class="capsule-field"></div></div>' +
+      '<div class="field"><label>Categoria' + hint('b-hint-category') + '</label><div id="b-category-field" class="capsule-field"></div></div>' +
+      '<div class="field" style="display:flex;gap:8px">' +
+        '<div style="flex:1;min-width:0"><label>' + counterpartyLabel + '</label><input id="b-counterparty" placeholder="(sem alterações)"></div>' +
+        '<div style="flex:1;min-width:0"><label>Referente a</label><input id="b-desc" placeholder="(sem alterações)"></div>' +
+      '</div>' +
+      '<div class="field"><label>Fora das análises' + hint('b-hint-flag') + '</label><div id="b-flag-field" class="capsule-field"></div></div>' +
+      '<div class="muted batch-report" id="b-report" style="font-size:13px;margin-bottom:14px"></div>' +
+      '<button id="m-submit" style="width:100%">Salvar lote</button>'
+    );
+    var accountField, categoryField, flagField;
+    function currentFields_() {
+      var f = {};
+      var date = document.getElementById('b-date').value;
+      if (date) f.date = date;
+      if (accountField && accountField.getValue()) f.accountId = accountField.getValue();
+      if (categoryField && categoryField.getValue()) f.categoryId = categoryField.getValue();
+      var cp = capitalizeFirst_(document.getElementById('b-counterparty').value).trim();
+      if (cp) f.counterparty = cp;
+      var desc = capitalizeFirst_(document.getElementById('b-desc').value).trim();
+      if (desc) f.description = desc;
+      var flag = flagField ? flagField.getValue() : null;
+      if (flag === '1') f.excludeFromAnalysis = true;
+      else if (flag === '0') f.excludeFromAnalysis = false;
+      return f;
+    }
+    function refresh_() {
+      var f = currentFields_();
+      var has = Object.keys(f).length > 0;
+      document.getElementById('b-hint-date').style.display = f.date ? 'none' : '';
+      document.getElementById('b-hint-account').style.display = f.accountId ? 'none' : '';
+      document.getElementById('b-hint-category').style.display = f.categoryId ? 'none' : '';
+      document.getElementById('b-hint-flag').style.display = f.excludeFromAnalysis !== undefined ? 'none' : '';
+      document.getElementById('b-report').textContent = batchReportText_(batchEditPlan_(txs, f), has);
+    }
+    accountField = createCapsuleField(document.getElementById('b-account-field'), {
+      allowDeselect: true, items: rankedAccountItems(function (a) { return a.type !== 'investment'; }), selectedValue: null, onChange: refresh_
+    });
+    var catItems = [];
+    kinds.forEach(function (k) { catItems = catItems.concat(rankedCategoryItems(k)); });
+    categoryField = createCapsuleField(document.getElementById('b-category-field'), {
+      allowDeselect: true, collapseUnused: true, items: catItems, selectedValue: null, onChange: refresh_
+    });
+    flagField = createCapsuleField(document.getElementById('b-flag-field'), {
+      allowDeselect: true, selectedValue: null, onChange: refresh_,
+      items: [{ value: '1', label: 'Fora das análises' }, { value: '0', label: 'Contar nas análises' }]
+    });
+    ['b-date', 'b-counterparty', 'b-desc'].forEach(function (id) { document.getElementById(id).addEventListener('input', refresh_); });
+    setupCounterpartySuggestions_(document.getElementById('b-counterparty'));
+    refresh_();
+
+    document.getElementById('m-submit').onclick = function () {
+      var submitBtn = document.getElementById('m-submit');
+      var fields = currentFields_();
+      if (!Object.keys(fields).length) { errorPopover(submitBtn, 'Preencha ao menos um campo pra alterar.'); return; }
+      var plan = batchEditPlan_(txs, fields);
+      if (!plan.ok.length) { errorPopover(submitBtn, 'Nenhum dos selecionados aceita essas alterações.'); return; }
+      closeModal();
+      txSelectionClear_();
+      var entries = plan.ok.map(function (t) { return { tx: t, payload: Object.assign({}, fields) }; });
+      var undoEntries = plan.ok.map(function (t) {
+        var old = {};
+        Object.keys(fields).forEach(function (k) {
+          if (k === 'date') old.date = t.purchaseDate || t.date;
+          else if (k === 'excludeFromAnalysis') old.excludeFromAnalysis = !!t.excludeFromAnalysis;
+          else old[k] = t[k] == null ? '' : t[k];
+        });
+        return { tx: t, payload: old };
+      });
+      var done = applyBatchEdits_(entries, null);
+      showBatchUndoToast_(plan.ok.length === 1 ? '1 lançamento alterado' : plan.ok.length + ' lançamentos alterados', function () {
+        applyBatchEdits_(undoEntries, done);
+      });
+    };
+  }
+
+  /**
+   * Aplica uma lista de edições [{ tx, payload }] (payload = só os campos a mudar): reflete na hora em memória (mesma ideia do
+   * Salvar de um lançamento só) e manda tudo numa chamada ao servidor (updateTransactionsBatch). Compra parcelada vira UMA edição
+   * (vale pra compra inteira). `waitFor` = promessa a esperar antes de falar com o servidor (o desfazer espera a edição original
+   * terminar, pra as duas nunca correrem juntas). Devolve a promessa da chamada (nunca rejeita: o erro vira aviso + releitura).
+   */
+  function applyBatchEdits_(entries, waitFor) {
+    var flagDone = {};
+    entries.forEach(function (e) {
+      var t = e.tx, payload = e.payload, group = t.installmentGroupId;
+      if (payload.excludeFromAnalysis !== undefined) {
+        if (group) {
+          if (!flagDone[group]) {
+            flagDone[group] = true;
+            STATE.allTransactions.filter(function (x) { return x.installmentGroupId === group; })
+              .forEach(function (x) { applyOptimisticDashboardFlagChange_(x, payload.excludeFromAnalysis); });
+          }
+        } else {
+          var targets = liveTxTargets_(t.id);
+          if (targets.length) applyOptimisticDashboardFlagChange_(targets[0], payload.excludeFromAnalysis);
+        }
+      }
+      if (group) applyOptimisticInstallmentGroupEdit_(t, payload);
+      else liveTxTargets_(t.id).forEach(function (target) { applyOptimisticTxEdit_(target, payload); });
+    });
+    render();
+    var seenGroups = {};
+    var sendEntries = entries.filter(function (e) {
+      var g = e.tx.installmentGroupId;
+      if (!g) return true;
+      if (seenGroups[g]) return false;
+      seenGroups[g] = true;
+      return true;
+    });
+    var promise = Promise.resolve(waitFor).catch(function () { /* a edição original já avisou o erro dela */ }).then(function () {
+      return Promise.all(sendEntries.map(function (e) {
+        return Promise.all([resolveRealId_(e.tx.id), resolveRealId_(e.payload.accountId), resolveRealId_(e.payload.categoryId)]).then(function (r) {
+          var item = Object.assign({}, e.payload, { id: r[0] });
+          if (e.payload.accountId) item.accountId = r[1];
+          if (e.payload.categoryId) item.categoryId = r[2];
+          return item;
+        });
+      }));
+    }).then(function (items) {
+      return run('updateTransactionsBatch', { items: items }).then(function (result) {
+        items.forEach(function (it) {
+          if (it.excludeFromAnalysis !== undefined) pendingTxEdits_[it.id] = { excludeFromAnalysis: !!it.excludeFromAnalysis };
+        });
+        if (result && result.failed && result.failed.length) {
+          showToast(result.failed.length + (result.failed.length === 1 ? ' não foi alterado: ' : ' não foram alterados: ') + result.failed[0].message, true);
+          refreshAll().then(render);
+        }
+        return result;
+      });
+    }).catch(function (err) {
+      showToast(err.message, true);
+      return refreshAll().then(render);
+    });
+    afterMutation_(promise);
+    return promise;
+  }
+
+  /** "N lançamentos alterados" + Desfazer, por 5 s (com barrinha encolhendo), no rodapé. */
+  function showBatchUndoToast_(message, onUndo) {
+    var old = document.getElementById('batch-undo-toast');
+    if (old) old.remove();
+    var el = document.createElement('div');
+    el.id = 'batch-undo-toast';
+    el.className = 'batch-undo-toast';
+    el.innerHTML = '<span class="batch-undo-msg"></span><button type="button">Desfazer</button><span class="batch-undo-bar"></span>';
+    el.querySelector('.batch-undo-msg').textContent = message;
+    el.querySelector('.batch-undo-bar').style.animationDuration = TX_BATCH_UNDO_MS_ + 'ms';
+    document.body.appendChild(el);
+    void el.offsetWidth;
+    el.classList.add('show');
+    var timer = setTimeout(hide, TX_BATCH_UNDO_MS_);
+    function hide() {
+      clearTimeout(timer);
+      el.classList.remove('show');
+      setTimeout(function () { el.remove(); }, 300);
+    }
+    el.querySelector('button').onclick = function () { hide(); onUndo(); };
   }
 
   /** Rola até o card do dia clicado no calendário (ver renderTxCalendar_). Se esse dia

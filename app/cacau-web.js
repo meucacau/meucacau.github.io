@@ -5392,6 +5392,21 @@ function updateTransaction(input) {
   return updated;
 }
 
+/**
+ * Edição em lote do Extrato: aplica, a cada item de input.items ([{id, ...campos de updateTransaction}]), a MESMA edição de um
+ * lançamento só (updateTransaction, com todas as regras dela: categoria do mesmo tipo, conta que aceita o lançamento, parcelado
+ * só em cartão, fatura recalculada). Um item que falha não derruba os outros: volta em `failed` com o motivo. O "Desfazer" do
+ * cliente usa a mesma chamada, com os valores antigos de cada lançamento.
+ */
+function updateTransactionsBatch(input) {
+  var items = (input && input.items) || [];
+  var updated = 0, failed = [];
+  items.forEach(function (item) {
+    try { updateTransaction(item); updated++; } catch (e) { failed.push({ id: item && item.id, message: e && e.message ? e.message : String(e) }); }
+  });
+  return { updated: updated, failed: failed };
+}
+
 /** Tira o sufixo " (i/N)" que createTransaction põe na descrição de cada parcela. */
 function stripInstallmentSuffix_(description) {
   return String(description || '').replace(/\s*\(\d+\/\d+\)\s*$/, '');
@@ -5823,6 +5838,7 @@ return {
   updateForecast: (typeof updateForecast === 'function' ? updateForecast : function () { throw new Error('"updateForecast" não existe na versão web.'); }),
   updatePlan: (typeof updatePlan === 'function' ? updatePlan : function () { throw new Error('"updatePlan" não existe na versão web.'); }),
   updateTransaction: (typeof updateTransaction === 'function' ? updateTransaction : function () { throw new Error('"updateTransaction" não existe na versão web.'); }),
+  updateTransactionsBatch: (typeof updateTransactionsBatch === 'function' ? updateTransactionsBatch : function () { throw new Error('"updateTransactionsBatch" não existe na versão web.'); }),
   updateTransfer: (typeof updateTransfer === 'function' ? updateTransfer : function () { throw new Error('"updateTransfer" não existe na versão web.'); }),
   seedSpreadsheet_: seedSpreadsheet_,
   __SCHEMA: SCHEMA,
