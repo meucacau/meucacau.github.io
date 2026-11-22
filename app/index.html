@@ -5442,31 +5442,32 @@
   /** Dívida em aberto dos cartões em `ymd` (pela data GRAVADA -- o limite some inteiro na compra, parcelas futuras incluídas);
    *  nunca negativa por cartão. Cartão com LIMITE TOTAL informado: dívida = limite total − limite restante (o saldo do cartão
    *  naquele dia, pontos fixos incluídos -- consolidar o limite restante corrige a dívida, e compra de antes do ponto fixo é
-   *  absorvida por ele). Cartão sem limite total (antigo): compras menos pagamentos de fatura (transferências pro cartão),
-   *  sem contar ajustes de saldo. */
+   *  absorvida por ele). Isso só vale a partir do primeiro lançamento que FIXA o limite do cartão (abertura ou consolidação):
+   *  antes dele, e em cartão sem limite total (antigo), a dívida é compras menos pagamentos de fatura (transferências pro
+   *  cartão), sem contar ajustes de saldo -- senão o histórico da Projeção contaria o limite inteiro como dívida. */
   function cardDebtAsOfYmd_(ymd) {
-    var byCard = {}, limitOf = {}, remaining = {};
+    var byCard = {}, limitOf = {}, remaining = {}, firstSet = {};
     STATE.accounts.forEach(function (a) {
       if (a.type !== 'credit_card') return;
       byCard[a.id] = 0;
       if (a.limitTotal > 0) { limitOf[a.id] = a.limitTotal; remaining[a.id] = 0; }
     });
     STATE.allTransactions.forEach(function (t) {
+      if (limitOf[t.accountId] === undefined || !t.date) return;
+      if ((t.balanceAnchor || t.description === ACCOUNT_OPENING_DESCRIPTION_) && (!firstSet[t.accountId] || t.date < firstSet[t.accountId])) firstSet[t.accountId] = t.date;
+    });
+    STATE.allTransactions.forEach(function (t) {
       if (byCard[t.accountId] === undefined) return;
       var d = t.purchaseDate || t.date;
       if (!d || d > ymd) return;
-      // Cartão com limite total informado: o limite restante (saldo do cartão, já com os pontos fixos) diz a dívida.
-      if (limitOf[t.accountId] !== undefined) {
-        remaining[t.accountId] += (t.kind === 'income' || t.kind === 'transfer_in' ? 1 : -1) * t.amount;
-        return;
-      }
+      if (limitOf[t.accountId] !== undefined) remaining[t.accountId] += (t.kind === 'income' || t.kind === 'transfer_in' ? 1 : -1) * t.amount;
       if (t.balanceAnchor) return;
       if (t.kind === 'expense') byCard[t.accountId] += t.amount;
       else if (t.kind === 'transfer_in') byCard[t.accountId] -= t.amount;
     });
     return Object.keys(byCard).reduce(function (sum, id) {
-      var debt = limitOf[id] !== undefined ? limitOf[id] - remaining[id] : byCard[id];
-      return sum + Math.max(0, debt);
+      var byLimit = limitOf[id] !== undefined && firstSet[id] && ymd >= firstSet[id];
+      return sum + Math.max(0, byLimit ? limitOf[id] - remaining[id] : byCard[id]);
     }, 0);
   }
   /** Ordem das contas no card Contas do Início: não-cartões antes dos cartões de crédito; dentro de cada grupo, saldo decrescente
