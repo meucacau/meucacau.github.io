@@ -5428,17 +5428,16 @@
   }
 
   // ---------- dashboard ----------
-  /** Resumo do cabeçalho do card "Contas" do Início: Dinheiro (contas que não são cartão), Faturas (a DÍVIDA em aberto dos
-   *  cartões, de todas as faturas, parcelas futuras incluídas) e Total (Dinheiro menos Faturas). O limite restante dos
-   *  cartões NÃO é dinheiro e não entra na conta -- continua visível em cada cartão da lista. cardDebt vem de cardDebtAsOfYmd_. */
-  function accountsSummary_(accounts, cardDebt) {
+  /** Resumo do cabeçalho do card "Contas" do Início: Dinheiro (contas que não são cartão), Crédito (limite restante dos
+   *  cartões -- o saldo de um cartão é o LIMITE que ainda sobra: cada compra reduz e cada pagamento de fatura devolve) e Total
+   *  (a soma). A dívida dos cartões (cardDebtAsOfYmd_) fica só na Projeção e no gráfico de faturas, não neste cabeçalho. */
+  function accountsSummary_(accounts) {
     var cash = 0, credit = 0, cards = 0;
     accounts.forEach(function (a) {
       if (a.type === 'investment') return;
       if (a.type === 'credit_card') { credit += a.balance; cards++; } else cash += a.balance;
     });
-    var debt = Number(cardDebt) || 0;
-    return { cash: cash, credit: credit, debt: debt, total: cash - debt, hasCards: cards > 0 };
+    return { cash: cash, credit: credit, total: cash + credit, hasCards: cards > 0 };
   }
   /** Dívida em aberto dos cartões em `ymd` (pela data GRAVADA -- o limite some inteiro na compra, parcelas futuras incluídas);
    *  nunca negativa por cartão. Cartão com LIMITE TOTAL informado: dívida = limite total − limite restante (o saldo do cartão
@@ -5480,12 +5479,12 @@
       return x.i - y.i;
     }).map(function (o) { return o.a; });
   }
-  function accountsSummaryHtml_(accounts, cardDebt) {
-    var sm = accountsSummary_(accounts, cardDebt);
+  function accountsSummaryHtml_(accounts) {
+    var sm = accountsSummary_(accounts);
     function part(label, value) {
       return '<span class="accounts-sum-part"><span class="muted">' + label + '</span> <span>' + escapeHtml(fmtMoney(value)) + '</span></span>';
     }
-    return '<div class="accounts-sum">' + (sm.hasCards ? part('Dinheiro', sm.cash) + part('Faturas', -sm.debt) : '') + part('Total', sm.total) + '</div>';
+    return '<div class="accounts-sum">' + (sm.hasCards ? part('Dinheiro', sm.cash) + part('Crédito', sm.credit) : '') + part('Total', sm.total) + '</div>';
   }
 
   // ---------- mensagens do Início (saudação ao abrir o app; engajamento a cada volta à aba) ----------
@@ -6169,7 +6168,7 @@
       trend: function () { return buildBalanceTrendHtml_(); },
       budgets: function () { return budgetTimelineHtml; },
       summary: function () { return buildTxCalendarHtml_('home'); },
-      accounts: function () { return '<div class="card"><h2>Contas</h2>' + accountsSummaryHtml_(d.accounts, cardDebtAsOfYmd_('9999-12-31')) + accountsHtml + '</div>'; },
+      accounts: function () { return '<div class="card"><h2>Contas</h2>' + accountsSummaryHtml_(d.accounts) + accountsHtml + '</div>'; },
       bills: function () { return billsHtml ? '<div class="card"><h2>Faturas de cartão</h2>' + billsHtml + '</div>' : ''; },
       billsChart: function () { return billsChartCardHtml_(d.creditCardSummaries); },
       categories: function () {
