@@ -6186,6 +6186,39 @@ var CacauBackend = (function () {
       .then(function (email) { return licenseGate_().then(function () { return email; }); });
   }
 
+  // ---------- aparência das telas de entrada (mesma da página inicial meucacau.github.io) ----------
+  var GATE_CSS = '' +
+    '.cg{position:fixed;inset:0;overflow:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px 16px;box-sizing:border-box;text-align:center;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5;' +
+      'background:#FFF4DC;color:#3b2314;--cg-muted:#7a6150;--cg-link:#8a4b1f;--cg-btn:#8a4b1f;--cg-btn-text:#fff8ea;--cg-line:#e6d3ad;--cg-err:#b3261e}' +
+    '@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .cg{background:#211710;color:#f3e6d0;--cg-muted:#b9a58d;--cg-link:#e0a76b;--cg-btn:#b8672a;--cg-btn-text:#fff8ea;--cg-line:#4a3626;--cg-err:#ff9a8f}}' +
+    ':root[data-theme="dark"] .cg{background:#211710;color:#f3e6d0;--cg-muted:#b9a58d;--cg-link:#e0a76b;--cg-btn:#b8672a;--cg-btn-text:#fff8ea;--cg-line:#4a3626;--cg-err:#ff9a8f}' +
+    '.cg img{width:96px;height:96px}' +
+    '.cg h1{margin:0;font-size:2em}' +
+    '.cg p{margin:0;max-width:28em}' +
+    '.cg .cg-muted{color:var(--cg-muted);font-size:14px}' +
+    '.cg .cg-err{color:var(--cg-err);font-size:14px}' +
+    '.cg .cg-actions{display:flex;flex-direction:column;gap:10px;width:100%;max-width:340px;margin-top:8px}' +
+    '.cg button{font:inherit;font-weight:600;padding:12px 20px;border-radius:10px;cursor:pointer;border:0;background:var(--cg-btn);color:var(--cg-btn-text)}' +
+    '.cg button.cg-secondary{background:transparent;color:var(--cg-link);border:1px solid var(--cg-line)}' +
+    '.cg button:disabled{opacity:.6;cursor:default}' +
+    '.cg a{color:var(--cg-link)}';
+  function gateStyle_() {
+    if (document.getElementById('cacau-gate-style')) return;
+    var st = document.createElement('style');
+    st.id = 'cacau-gate-style';
+    st.textContent = GATE_CSS;
+    document.head.appendChild(st);
+  }
+  /** Logo do app no alto da tela (some sozinho se a imagem não carregar, como no build local). */
+  function gateLogo_(parent) {
+    var img = document.createElement('img');
+    img.src = '../img/cacau-192.png';
+    img.alt = 'Meu Cacau';
+    img.addEventListener('error', function () { img.remove(); });
+    parent.insertBefore(img, parent.firstChild);
+  }
+  var GATE_FOOTER_HTML = '<p class="cg-muted">Versão beta · <a href="../privacidade/">Privacidade</a></p>';
+
   // ---------- licença (teste grátis / bloqueio manual) ----------
   // O servidor de licenças (Apps Script do dono) responde ok / expirado / bloqueado para a conta do token. Sem resposta
   // (offline, Google fora do ar) o app abre normalmente, EXCETO se a última resposta conhecida foi um bloqueio.
@@ -6206,16 +6239,18 @@ var CacauBackend = (function () {
     if (gate) gate.remove();
     gate = document.createElement('div');
     gate.id = 'cacau-license-block';
-    gate.setAttribute('style', 'position:fixed;inset:0;z-index:200;overflow:auto;background:var(--bg,#FFF4DC);color:var(--text,#3b2314);display:flex;align-items:center;justify-content:center;padding:16px');
+    gateStyle_();
+    gate.className = 'cg';
+    gate.style.zIndex = '200';
     var title = expired ? 'Seu período de teste terminou' : 'Acesso suspenso';
     var text = expired
       ? 'O teste do Meu Cacau terminou' + (info.fim ? ' em ' + licenseFmtDate_(info.fim) : '') + '. Para continuar usando, fale com quem te convidou.'
       : 'O acesso desta conta ao Meu Cacau está suspenso. Fale com quem te convidou.';
-    gate.innerHTML = '<div style="max-width:380px;width:100%;display:flex;flex-direction:column;gap:12px;font-family:system-ui,sans-serif">' +
-      '<h1 style="margin:0;font-size:26px">' + title + '</h1>' +
-      '<p style="margin:0">' + text + '</p>' +
-      '<p style="margin:0;opacity:.8;font-size:14px">Seus dados continuam na sua planilha do Google Drive; nada foi apagado.</p>' +
-      '<button id="cacau-license-out" style="font-size:16px;padding:12px;border-radius:10px;cursor:pointer;background:transparent;color:inherit;border:1px solid rgba(0,0,0,.25)">Sair desta conta</button></div>';
+    gate.innerHTML = '<h1>' + title + '</h1>' +
+      '<p>' + text + '</p>' +
+      '<p class="cg-muted">Seus dados continuam na sua planilha do Google Drive; nada foi apagado.</p>' +
+      '<div class="cg-actions"><button id="cacau-license-out" class="cg-secondary">Sair desta conta</button></div>';
+    gateLogo_(gate);
     document.body.appendChild(gate);
     document.getElementById('cacau-license-out').onclick = signOut;
   }
@@ -6332,27 +6367,28 @@ var CacauBackend = (function () {
     if (gate) gate.remove();
     gate = document.createElement('div');
     gate.id = 'cacau-gate';
-    gate.setAttribute('style', 'position:fixed;inset:0;z-index:150;overflow:auto;background:var(--bg,#FFF4DC);color:var(--text,#3b2314);display:flex;align-items:center;justify-content:center;padding:16px');
-    var btn = 'font-size:16px;padding:12px;border-radius:10px;cursor:pointer';
-    var primary = btn + ';background:var(--accent,#8a4b25);color:#fff;border:0';
-    var secondary = btn + ';background:transparent;color:inherit;border:1px solid rgba(0,0,0,.25)';
-    var newPickHtml = '<button id="cacau-new" style="' + primary + '">Entrar com o Google</button>';
+    gateStyle_();
+    gate.className = 'cg';
+    gate.style.zIndex = '150';
     gate.innerHTML =
-      '<div style="max-width:380px;width:100%;display:flex;flex-direction:column;gap:12px;font-family:system-ui,sans-serif">' +
-      '<h1 style="margin:0;font-size:30px">Meu Cacau</h1>' +
-      '<p style="margin:0;opacity:.8">Suas finanças numa planilha só sua, no seu Google Drive.</p>' +
-      (message ? '<p style="margin:0;color:#b00">' + message + '</p>' : '') +
-      (saved ? '<button id="cacau-go" style="' + primary + '">Entrar</button>' : newPickHtml) +
-      '<p id="cacau-gate-msg" style="margin:0;color:#b00;font-size:13px"></p>' +
-      '</div>';
+      '<h1>Meu Cacau</h1>' +
+      '<p>Suas finanças numa planilha só sua, no seu Google Drive.</p>' +
+      (message ? '<p class="cg-err">' + message + '</p>' : '') +
+      '<div class="cg-actions">' +
+        (saved ? '<button id="cacau-go">Entrar</button>' : '<button id="cacau-new">Entrar com o Google</button>') +
+      '</div>' +
+      '<p id="cacau-gate-msg" class="cg-muted"></p>' +
+      GATE_FOOTER_HTML;
+    gateLogo_(gate);
     document.body.appendChild(gate);
     var msg = gate.querySelector('#cacau-gate-msg');
     var buttons = gate.querySelectorAll('button');
     function busy_(on) { Array.prototype.forEach.call(buttons, function (b) { b.disabled = on; }); }
     function done_() { gate.remove(); onDone(); gateDone(); }
-    function fail_(err) { busy_(false); event_('erro na entrada: ' + ((err && err.message) || err)); msg.style.color = '#b00'; msg.textContent = friendly_(err) || ('Não deu: ' + ((err && err.message) || err)); }
+    function fail_(err) { busy_(false); event_('erro na entrada: ' + ((err && err.message) || err)); msg.className = 'cg-err'; msg.textContent = friendly_(err) || ('Não deu: ' + ((err && err.message) || err)); }
     function login_() {
       setScopeMode_('file');
+      msg.className = 'cg-muted';
       msg.textContent = 'Abrindo o login do Google…';
       busy_(true);
       return requestToken_(everSignedIn ? '' : 'select_account');
@@ -6364,7 +6400,7 @@ var CacauBackend = (function () {
     var go = gate.querySelector('#cacau-go');
     if (go) go.onclick = function () { enterWith_(saved); };
     function createAndEnter_() {
-      msg.style.color = 'inherit';
+      msg.className = 'cg-muted';
       msg.textContent = 'Criando e preparando a planilha…';
       busy_(true);
       return createSheet_().then(done_).catch(fail_);
@@ -6373,27 +6409,26 @@ var CacauBackend = (function () {
     /** Várias planilhas (ou troca de planilha): a pessoa escolhe entre as do app ou cria outra. */
     function showChoice_(files, note) {
       var box = document.createElement('div');
-      box.setAttribute('style', 'display:flex;flex-direction:column;gap:8px');
+      box.className = 'cg-actions';
       var intro = document.createElement('p');
-      intro.setAttribute('style', 'margin:0;font-size:14px');
+      intro.className = 'cg-muted';
       intro.textContent = note || (files.length ? 'Escolha a planilha que você quer usar:' : '');
       box.appendChild(intro);
       files.forEach(function (f) {
         var b = document.createElement('button');
-        b.setAttribute('style', secondary + ';text-align:left');
+        b.className = 'cg-secondary';
         b.textContent = (f.name || 'Planilha') + (f.modifiedTime ? ' · alterada em ' + dateBr_(f.modifiedTime) : '');
         b.onclick = function () { busy_(true); useSheet_(f.id); fetchEmail_().then(done_).catch(fail_); };
         box.appendChild(b);
       });
       var nb = document.createElement('button');
-      nb.setAttribute('style', primary);
       nb.textContent = 'Criar uma planilha nova';
       nb.onclick = createAndEnter_;
       box.appendChild(nb);
       var first = gate.querySelector('#cacau-new');
-      if (first) first.remove();
+      if (first) first.parentNode.remove();
       msg.textContent = '';
-      gate.firstChild.insertBefore(box, msg);
+      msg.parentNode.insertBefore(box, msg);
       buttons = gate.querySelectorAll('button');
       busy_(false);
     }
@@ -6403,7 +6438,8 @@ var CacauBackend = (function () {
       var switching = false;
       try { switching = sessionStorage.getItem('cacau-switching') === '1'; sessionStorage.removeItem('cacau-switching'); } catch (e) { /* segue */ }
       login_().then(fetchEmail_).then(function () {
-        msg.textContent = 'Procurando a sua planilha…';
+        msg.className = 'cg-muted';
+      msg.textContent = 'Procurando a sua planilha…';
         return findSheets_().then(function (files) { return { files: files }; }, function (err) { return { error: err }; });
       }).then(function (r) {
         if (r.error) { showChoice_([], 'Não consegui procurar suas planilhas (' + r.error.message + '). Se você já usava o Meu Cacau, tente de novo mais tarde para não criar uma planilha duplicada.'); return null; }
