@@ -6168,10 +6168,18 @@ var CacauBackend = (function () {
     return userGate;
   }
 
+  var sessionEmail_ = '';
   function fetchEmail_() {
     return fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: 'Bearer ' + token.value } })
       .then(function (r) { return r.json(); })
-      .then(function (info) { CacauGAS.setEmail(info.email || ''); rememberEmail_(info.email); return info.email || ''; })
+      .then(function (info) {
+        if (info && info.email) return info.email;
+        // token só com drive.file (APK): o Drive diz quem é a pessoa
+        return fetch('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)', { headers: { Authorization: 'Bearer ' + token.value } })
+          .then(function (r) { return r.json(); })
+          .then(function (j) { return (j && j.user && j.user.emailAddress) || ''; });
+      })
+      .then(function (email) { sessionEmail_ = String(email || '').toLowerCase(); CacauGAS.setEmail(email || ''); rememberEmail_(email); return email || ''; })
       .catch(function () { return ''; })
       .then(function (email) { return licenseGate_().then(function () { return email; }); });
   }
@@ -6656,5 +6664,49 @@ var CacauBackend = (function () {
     location.reload();
   }
 
-  return { call: call, signOut: signOut, stats: stats, createSheet: createSheet_, switchSheet: switchSheet };
+  // ---------- conta de teste do dono: voltar a ser "usuário novo" ----------
+  // Só estas contas veem o botão (Configurações) e só elas são aceitas pelo servidor de licenças (TEST_EMAILS lá também).
+  var TEST_EMAILS = ['testeappluishenrique@gmail.com'];
+  function isTestAccount_() { return TEST_EMAILS.indexOf(sessionEmail_) !== -1; }
+
+  function trashSheet_(id) {
+    return fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(id), {
+      method: 'PATCH',
+      headers: { Authorization: 'Bearer ' + token.value, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trashed: true })
+    }).then(function (r) { if (!r.ok) throw new Error('Google Drive (' + r.status + ') ao apagar a planilha'); });
+  }
+
+  /**
+   * Reinicia a conta de teste como se fosse a primeira vez: apaga a linha de licença, manda para a lixeira as
+   * planilhas do app, revoga a permissão do Google e limpa tudo o que o app guardou neste aparelho.
+   * A ordem importa: tudo o que precisa do token vem antes de revogá-lo.
+   */
+  function resetTestAccount() {
+    if (!isTestAccount_()) return Promise.reject(new Error('Disponível só na conta de teste.'));
+    licenseEverChecked_ = true; licenseBlocked_ = false;
+    var licenseStep = cfg.licenseUrl
+      ? fetch(cfg.licenseUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ token: token.value, acao: 'resetar' }) })
+          .then(function (r) { return r.json(); })
+          .then(function (resp) { if (!resp || resp.status !== 'resetado') throw new Error('Não consegui reiniciar a licença (o servidor de licenças pode estar desatualizado).'); })
+      : Promise.resolve();
+    return licenseStep
+      .then(findSheets_)
+      .then(function (files) { return Promise.all(files.map(function (f) { return trashSheet_(f.id); })); })
+      .then(function () {
+        licenseEverChecked_ = false; // não deixa a reconferência periódica recriar a linha antes de sair
+        var tk = token.value;
+        try { localStorage.clear(); } catch (e) { /* segue */ }
+        try { sessionStorage.clear(); } catch (e) { /* segue */ }
+        token = { value: '', expiresAt: 0, grantedAt: 0 };
+        everSignedIn = false;
+        if (nativeLogin_() && typeof window.FinancasApp.signOut === 'function') { window.FinancasApp.signOut(); return; }
+        var done = false;
+        function finish() { if (done) return; done = true; location.reload(); }
+        try { if (tk && window.google) google.accounts.oauth2.revoke(tk, finish); } catch (e) { /* segue */ }
+        setTimeout(finish, 2500);
+      });
+  }
+
+  return { call: call, signOut: signOut, stats: stats, createSheet: createSheet_, switchSheet: switchSheet, isTestAccount: isTestAccount_, resetTestAccount: resetTestAccount };
 })();

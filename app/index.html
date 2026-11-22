@@ -2331,10 +2331,10 @@
 
   <div id="modal-root"></div>
 
-  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-22","id":"a81a9f4"};</script>
+  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-22","id":"0a0fa9f"};</script>
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=b02af4b05e"></script>
+  <script src="cacau-web.js?v=04adb3de03"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -2802,8 +2802,8 @@
   var INERTIA_MAX_PX_ = 16;         // teto do deslocamento pela rolagem (abaixo dele é proporcional à velocidade)
   var INERTIA_GAIN_ = 5;            // px de deslocamento por px/ms de velocidade de rolagem
   var INERTIA_KICK_PX_ = 26;        // deslocamento horizontal inicial ao trocar de aba
-  var INERTIA_STIFFNESS_ = 230;     // rigidez da mola (período ~0,4 s)
-  var INERTIA_DAMPING_ = 7.5;       // amortecimento (taxa 0,25 de 1: subamortecida; a cada ida o desvio cai a ~45%: passa, volta e passa de novo, visíveis)
+  var INERTIA_STIFFNESS_ = 920;     // rigidez da mola (período ~0,2 s; metade do tempo da 1ª versão)
+  var INERTIA_DAMPING_ = 15;        // amortecimento (taxa 0,25, a mesma forma em metade do tempo de 1: subamortecida; a cada ida o desvio cai a ~45%: passa, volta e passa de novo, visíveis)
   var INERTIA_JUMP_PX_ = 500;       // salto de rolagem maior que isso num quadro é programático (troca de aba): não vira velocidade
   var INERTIA_SETTLE_ = 0.04;       // abaixo disso (px e px/s) a mola é considerada parada
   /** Velocidade de rolagem (px/ms, + = descendo) -> deslocamento-alvo em px (+ = card atrasado, mais embaixo). Proporcional à
@@ -2908,7 +2908,7 @@
     }
   }
   /** Troca de aba: os cards visíveis começam deslocados para o lado de onde a aba nova "vem" (dir = +1: aba à direita da anterior,
-   *  a tela nova chega da direita) e voltam com a mola, um depois do outro (cascata de 38 ms). */
+   *  a tela nova chega da direita) e voltam com a mola, um depois do outro (cascata de 19 ms). */
   function cardInertiaKick_(dir) {
     if (!cardInertiaOn_()) return;
     var c = cardInertia_;
@@ -2916,7 +2916,7 @@
     c.cards = cardInertiaCollect_();
     for (var i = 0; i < c.cards.length; i++) {
       c.cards[i].h.x = (dir < 0 ? -1 : 1) * INERTIA_KICK_PX_ * (1 - 0.06 * Math.min(i, 6));
-      c.cards[i].delay = i * 38;
+      c.cards[i].delay = i * 19;
       c.cards[i].el.style.translate = c.cards[i].h.x.toFixed(2) + 'px 0';
     }
     c.lastY = window.pageYOffset || 0;
@@ -21311,6 +21311,15 @@
       html += '<div class="settings-section"><h3>Celular</h3><div id="st-android"></div></div>';
     }
 
+    var testApi = window.CacauBackend && typeof window.CacauBackend.resetTestAccount === 'function' && window.CacauBackend.isTestAccount() ? window.CacauBackend : null;
+    if (testApi) {
+      html += '<div class="settings-section"><h3>Conta de teste</h3>' +
+        '<div class="settings-row"><div class="grow"><div>Voltar a ser usuário novo</div>' +
+        '<div class="muted">Apaga a licença desta conta, manda para a lixeira as planilhas do Cacau, revoga a permissão do Google e limpa os dados deste aparelho. Depois você entra como quem nunca usou o app.</div></div>' +
+        '<button class="secondary" id="st-test-reset">Resetar conta</button></div>' +
+        '<div class="muted" id="st-test-reset-msg"></div></div>';
+    }
+
     html += '<div class="settings-section"><h3>Dados e ajuda</h3>' +
       (inApp ? '' : '<div class="settings-row"><div class="grow"><div>Baixar lançamentos</div><div class="muted">Arquivo CSV que abre no Excel ou Planilhas.</div></div><button class="secondary" id="st-csv">Baixar CSV</button></div>') +
       '<div class="muted" style="margin:6px 0">Seus lançamentos ficam só na planilha do seu Google Drive' +
@@ -21324,6 +21333,19 @@
     openModal(html);
 
     document.getElementById('st-close').onclick = function () { closeModal(); updateSetupBanner_(); };
+
+    var testResetBtn = document.getElementById('st-test-reset');
+    if (testResetBtn && testApi) testResetBtn.onclick = function (e) {
+      confirmPopover(e.currentTarget, 'Resetar a conta de teste? As planilhas do Cacau vão para a lixeira e a licença recomeça.', function () {
+        var msg = document.getElementById('st-test-reset-msg');
+        testResetBtn.disabled = true;
+        if (msg) msg.textContent = 'Resetando…';
+        testApi.resetTestAccount().catch(function (err) {
+          testResetBtn.disabled = false;
+          if (msg) msg.textContent = (err && err.message) || 'Não consegui resetar.';
+        });
+      });
+    };
 
     // Conta e planilha
     if (multiuser) {
@@ -21714,7 +21736,7 @@
   var CacauAnalytics = (function () {
     var COLLECTOR_URL = 'https://script.google.com/macros/s/AKfycbzx7u1F-_c0_26KzHx2Uy6k1j-IG6kHpyhybDaE_5OHnq3UQPmpXlmfOPd84SJsrOs2eA/exec';
     var SCHEMA = 'cacau1';
-    var VERSION = 'web-b02af4b05e';
+    var VERSION = 'web-04adb3de03';
     // Build web público: sem aviso nem chave para os usuários; só coleta no aparelho do dono, que liga
     // abrindo o site com ?coleta=1 (e desliga com ?coleta=0). O build web troca esta linha para true.
     var OWNER_ONLY = true;
