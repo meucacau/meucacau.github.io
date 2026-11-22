@@ -12494,10 +12494,15 @@
     var pastValues = pastMonths.map(function (ym) {
       return totalBalanceAsOfYmd_(ym + '-' + String(daysInMonth_(ym)).padStart(2, '0'));
     });
+    // Dívida dos cartões embutida em cada ponto (passado e hoje): o tooltip mostra "dinheiro − cartões" pra conta fechar.
+    var pastDebts = pastMonths.map(function (ym) {
+      return cardDebtAsOfYmd_(ym + '-' + String(daysInMonth_(ym)).padStart(2, '0'));
+    });
+    var currentDebt = cardDebtAsOfYmd_('9999-12-31');
 
     // Saldo de hoje = contas (sem cartão) menos a dívida TODA dos cartões, parcelas futuras incluídas (já comprometidas).
     var currentBalance = trendAccounts_()
-      .reduce(function (sum, a) { return sum + a.balance; }, 0) - cardDebtAsOfYmd_('9999-12-31');
+      .reduce(function (sum, a) { return sum + a.balance; }, 0) - currentDebt;
 
     var planImpactByMonth = {};
     // Quantos Planos (não a soma dos valores, isso já é planImpactByMonth) cada mês tem
@@ -12534,6 +12539,7 @@
     return {
       months: pastMonths.concat([currentYm], futureMonths),
       values: pastValues.concat([currentBalance], futureValues),
+      debts: pastDebts.concat([currentDebt]),
       splitIndex: pastMonths.length,
       goal: goal,
       goalStatus: goalStatus,
@@ -12791,6 +12797,11 @@
       var diff = trend.values[idx] - trend.values[trend.splitIndex];
       var diffColor = diff > 0 ? 'var(--income)' : (diff < 0 ? 'var(--expense)' : 'var(--text)');
       html += '<div><span style="color:' + diffColor + '">' + escapeHtml(fmtSignedMoneyNoCents_(diff)) + '</span> em relação a hoje</div>';
+    }
+    var debt = trend.debts && trend.debts[idx];
+    if (debt > 0) {
+      html += '<div style="color:var(--text-muted);font-size:11px;margin-bottom:2px">Contas ' + escapeHtml(fmtMoneyNoCents_(trend.values[idx] + debt)) +
+        ' − dívida dos cartões ' + escapeHtml(fmtMoneyNoCents_(debt)) + '</div>';
     }
     html += buildPlanLinesHtml_(ym);
     if (idx >= trend.splitIndex) {
