@@ -937,6 +937,8 @@
   /* Selo das linhas que o app lançou sozinho e aguardam confirmação (ver AutoEntries.js). */
   .auto-badge { display: inline-block; font-size: 10px; line-height: 14px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--primary); color: var(--primary); white-space: nowrap; vertical-align: 1px; }
   .settings-ok { color: var(--income); font-weight: 600; }
+  .beta-pill { display: inline-block; vertical-align: middle; margin-left: 6px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; background: #fef3c7; color: #92400e; }
+  :root[data-theme="dark"] .beta-pill { background: #422006; color: #fcd34d; }
   .settings-error { color: var(--expense); font-size: 13px; margin: 0 0 10px; }
   .settings-error[hidden] { display: none; }
   .settings-warning {
@@ -2327,6 +2329,7 @@
 
   <div id="modal-root"></div>
 
+  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-22","id":"9f2852a"};</script>
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="cacau-web.js?v=b02af4b05e"></script>
@@ -21201,7 +21204,7 @@
       sendBtn.disabled = true;
       sendBtn.textContent = 'Enviando…';
       var payload = {
-        k: FEEDBACK_TAG_, uid: feedbackUid_(), plat: window.FinancasApp ? 'android' : 'web', ver: 'app',
+        k: FEEDBACK_TAG_, uid: feedbackUid_(), plat: window.FinancasApp ? 'android' : 'web', ver: buildTag_(),
         kind: kindField.getValue(), topic: topicField.getValue(), text: text, email: accountEmail,
         images: images.map(function (img) { return { data: img.data }; })
       };
@@ -21224,6 +21227,25 @@
     renderThumbs_();
   }
 
+  /** Versão do pacote em uso (só no site/beta; no modo dono não há carimbo). */
+  function buildInfo_() {
+    var b = typeof CACAU_BUILD !== 'undefined' ? CACAU_BUILD : null;
+    if (!b || !b.id) return null;
+    var d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(b.date || '');
+    return { channel: b.channel || 'beta', id: b.id, date: d ? d[3] + '/' + d[2] + '/' + d[1] : '', dateShort: d ? d[2] + '-' + d[3] : '' };
+  }
+  /** Texto curto para mostrar ao usuário: "beta · 22/11/2026 · a1b2c3d". */
+  function buildLabel_() {
+    var b = buildInfo_();
+    if (!b) return '';
+    return [b.channel, b.date, b.id].filter(Boolean).join(' · ');
+  }
+  /** Para as sugestões enviadas (o coletor corta em 20 caracteres): "11-22 a1b2c3d". */
+  function buildTag_() {
+    var b = buildInfo_();
+    return b ? [b.dateShort, b.id].filter(Boolean).join(' ') : 'app';
+  }
+
   function openSettingsModal_() {
     var multiuser = typeof FINANCAS_MULTIUSER !== 'undefined' && FINANCAS_MULTIUSER;
     var inApp = !!androidBridge_();
@@ -21231,7 +21253,7 @@
     var theme = '';
     try { theme = localStorage.getItem('financas-theme') || ''; } catch (e) { theme = ''; }
 
-    var html = '<h2>Configurações</h2>';
+    var html = '<h2>Configurações' + (buildInfo_() ? ' <span class="beta-pill" title="Versão de teste">' + escapeHtml(buildInfo_().channel) + '</span>' : '') + '</h2>';
 
     if (multiuser) {
       html += '<div class="settings-section"><h3>Conta e planilha</h3>' +
@@ -21283,7 +21305,9 @@
       '<div class="muted" style="margin:6px 0">Seus lançamentos ficam só na planilha do seu Google Drive' +
       (analytics_().enabled() ? '; só o uso anônimo do app (telas e cliques, sem dados dos lançamentos) vai para a equipe, e você pode desligar em Preferências. ' : '. ') +
       'Para o app deixar de ter acesso à sua conta, <a href="https://myaccount.google.com/connections" target="_blank" rel="noopener">revogue o acesso na sua conta Google</a>. ' +
-      '</div></div>';
+      '</div>' +
+      (buildInfo_() ? '<div class="muted" style="margin:6px 0" id="st-build">Versão: ' + escapeHtml(buildLabel_()) + '</div>' : '') +
+      '</div>';
 
     html += '<button class="secondary" id="st-close" style="width:100%;margin-top:8px">Fechar</button>';
     openModal(html);
