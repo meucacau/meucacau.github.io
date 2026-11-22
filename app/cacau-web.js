@@ -6329,7 +6329,7 @@ var CacauBackend = (function () {
     };
     var pk = gate.querySelector('#cacau-pick');
     if (pk) pk.onclick = function () {
-      login_().then(function () { msg.textContent = 'Abrindo o seletor de planilhas…'; return pickSheet_(); }).then(function (id) {
+      login_().then(function () { msg.style.color = 'inherit'; msg.textContent = 'Abrindo o seletor de planilhas do Google. Se o navegador perguntar sobre "conteúdo inserido" do google.com, pode permitir: é só para o Google mostrar a lista das suas planilhas.'; return pickSheet_(); }).then(function (id) {
         if (!id) { busy_(false); msg.textContent = 'Nenhuma planilha escolhida.'; return null; }
         useSheet_(id);
         return fetchEmail_().then(done_);
