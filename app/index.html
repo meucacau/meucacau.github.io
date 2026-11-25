@@ -2331,7 +2331,7 @@
 
   <div id="modal-root"></div>
 
-  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-22","id":"57592ad"};</script>
+  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-25","id":"962cb82"};</script>
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="cacau-web.js?v=13d0737526"></script>
@@ -20828,11 +20828,30 @@
     return html;
   }
 
+  /**
+   * Aviso destacado ANTES de abrir o acesso às notificações do Android (exigência da Google Play para dados sensíveis):
+   * diz o que é lido, para quê e para onde vai, e só segue com o consentimento explícito. Não fecha a janela: troca o
+   * conteúdo e volta para a janela de origem (assistente ou configurações) via reopen.
+   */
+  function askNotificationDisclosure_(onAgree, reopen) {
+    openModal('<h2>Antes de dar acesso às notificações</h2>' +
+      '<div id="nd-text" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">' +
+      '<div><b>O que o app lê:</b> o título e o texto das notificações <b>somente dos aplicativos de banco e pagamento que você escolher</b> em "Apps conectados". As notificações dos outros apps não são lidas nem guardadas; só o nome do app é anotado, no aparelho, para você poder escolhê-lo na lista.</div>' +
+      '<div><b>Para que serve:</b> reconhecer compras, transferências e recebimentos e sugerir lançamentos para você confirmar.</div>' +
+      '<div><b>Para onde vai:</b> o texto é interpretado no seu aparelho e o lançamento sugerido é gravado na <b>sua</b> planilha do Google Drive. Não é enviado ao desenvolvedor, não é vendido e não é usado para anúncios.</div>' +
+      '<div><b>Você controla:</b> pode desligar o acesso a qualquer momento nas configurações do Android. <a href="../privacidade/" target="_blank" rel="noopener">Política de privacidade</a></div>' +
+      '</div>' +
+      '<button id="nd-ok" style="width:100%">Concordo e continuar</button>' +
+      '<button class="secondary" id="nd-no" style="width:100%;margin-top:8px">Agora não</button>');
+    document.getElementById('nd-ok').onclick = function () { onAgree(); if (reopen) reopen(); };
+    document.getElementById('nd-no').onclick = function () { if (reopen) reopen(); else closeModal(); };
+  }
+
   function wireAndroidSection_(s) {
     var b = androidBridge_();
     function on(id, fn) { var el = document.getElementById(id); if (el) el.onclick = fn; }
     on('st-auth', function () { b.authorizeSheets(); });
-    on('st-listen', function () { b.openNotificationSettings(); });
+    on('st-listen', function () { askNotificationDisclosure_(function () { b.openNotificationSettings(); }, openSettingsModal_); });
     on('st-battery', function () { b.openBatterySettings(); });
     on('st-alert', function () { b.setDailyAlert(!s.alertOn); });
     on('st-watched', function () { b.openWatchedApps(); });
@@ -20890,9 +20909,9 @@
         button: 'Autorizar', id: 'ob-auth', run: function (b) { b.authorizeSheets(); } },
       { ok: s.listening, title: 'Acesso às notificações',
         help: 'Ative a chave do "Meu Cacau" na tela que abrir. É assim que o app lê os avisos do banco.',
-        button: 'Dar acesso', id: 'ob-listen', run: function (b) { b.openNotificationSettings(); } },
+        button: 'Dar acesso', id: 'ob-listen', run: function (b) { askNotificationDisclosure_(function () { b.openNotificationSettings(); }, openOnboardingModal_); } },
       { ok: s.battery, optional: true, title: 'Bateria sem restrição (recomendado)',
-        help: 'Toque em "Permitir". Sem isso alguns celulares param de entregar notificações com a tela apagada.',
+        help: 'Na lista que abrir, procure o "Meu Cacau" e escolha "Sem restrição" (ou "Não otimizar"). Sem isso alguns celulares param de entregar notificações com a tela apagada.',
         button: 'Permitir', id: 'ob-battery', run: function (b) { b.openBatterySettings(); } },
       { ok: s.alertOn, optional: true, title: 'Alerta diário às 8h (opcional)',
         help: 'Uma notificação por dia, só se houver algo a revisar. O Android vai pedir permissão para mostrar avisos.',
