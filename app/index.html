@@ -2341,7 +2341,7 @@
 
   <div id="modal-root"></div>
 
-  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-26","id":"2162d11"};</script>
+  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-26","id":"e2898f3"};</script>
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="cacau-web.js?v=b8ce01684c"></script>
@@ -2647,10 +2647,10 @@
    * Confete com física simulada: cada pedaço sai de (x, y) numa direção qualquer com uma velocidade inicial e é integrado quadro a quadro
    * (gravidade + arrasto do ar + balanço lateral + giro). O arrasto freia a explosão logo no começo e a gravidade curva a trajetória:
    * o pedaço vai, faz um arco fechado e cai, chegando a uma velocidade-limite como papel de verdade. A trajetória calculada vira
-   * quadros-chave (a cada 2 quadros) que o navegador anima fora da thread principal. ~1 s no total; um contêiner só.
+   * quadros-chave (a cada 2 quadros) que o navegador anima fora da thread principal. ~0,8 s no total, sumindo antes de chegar longe; um contêiner só.
    */
   var CONFETTI_COUNT_ = 100;
-  var CONFETTI_GRAVITY_ = 2300;        // px/s² (puxa pra baixo)
+  var CONFETTI_GRAVITY_ = 1000;        // px/s² (puxa pra baixo; com o arrasto dá uma queda lenta, ~250 px/s)
   function confettiBurst_(x, y) {
     if (!motionOk_ || !document.body.animate) return;
     var box = document.createElement('div');
@@ -2660,23 +2660,23 @@
     for (var i = 0; i < CONFETTI_COUNT_; i++) {
       var p = document.createElement('span');
       var shape = i % 3; // 0 círculo, 1 quadrado, 2 tirinha
-      var w = 4 + Math.random() * 5, h = shape === 2 ? w * (1.8 + Math.random() * 0.8) : w;
+      var w = 3 + Math.random() * 3, h = shape === 2 ? w * (1.8 + Math.random() * 0.8) : w;
       p.style.cssText = 'position:absolute;left:' + x + 'px;top:' + y + 'px;width:' + w.toFixed(1) + 'px;height:' + h.toFixed(1) + 'px;border-radius:' +
         (shape === 0 ? '50%' : '1.5px') + ';background:' + CONFETTI_COLORS_[i % CONFETTI_COLORS_.length] + ';will-change:transform,opacity';
       box.appendChild(p);
       // Estado inicial: direção qualquer (360°); a raiz quadrada espalha os pedaços pelo disco todo.
       var angle = Math.random() * Math.PI * 2, speed = 250 + Math.sqrt(Math.random()) * 750;
       var px = 0, py = 0, vx = Math.cos(angle) * speed, vy = Math.sin(angle) * speed;
-      var drag = 2.8 + Math.random() * 1.6;            // 1/s: papel é freado rápido pelo ar
+      var drag = 3 + Math.random() * 1.4;              // 1/s: papel é freado rápido pelo ar (velocidade-limite = gravidade / arrasto)
       var flutterAmp = 60 + Math.random() * 160, flutterFreq = 9 + Math.random() * 9, flutterPhase = Math.random() * 6.28;
       var rot = Math.random() * 360, spin = (Math.random() < 0.5 ? -1 : 1) * (300 + Math.random() * 700);
       var flipFreq = 8 + Math.random() * 12, flipPhase = Math.random() * 6.28;
-      var life = 0.7 + Math.random() * 0.4;           // s
+      var life = 0.6 + Math.random() * 0.35;          // s
       var frames = [], n = Math.round(life / DT), maxEnd2 = life * 1000;
       for (var f = 0; f <= n; f++) {
         var t = f * DT;
         if (f % STEP === 0 || f === n) {
-          var fade = t > life * 0.7 ? Math.max(0, 1 - (t - life * 0.7) / (life * 0.3)) : 1;
+          var fade = t > life * 0.35 ? Math.max(0, 1 - (t - life * 0.35) / (life * 0.65)) : 1; // some cedo: começa a apagar com 35% da vida
           var flip = 0.3 + 0.7 * Math.abs(Math.cos(flipPhase + t * flipFreq)); // virar de lado como papel: achata e abre
           frames.push({
             transform: 'translate(' + px.toFixed(1) + 'px,' + py.toFixed(1) + 'px) rotate(' + rot.toFixed(0) + 'deg) scale(1,' + flip.toFixed(2) + ')',
@@ -2685,7 +2685,7 @@
         }
         // Integração (Euler semi-implícito): gravidade, arrasto proporcional à velocidade e balanço lateral que cresce ao cair.
         vy += CONFETTI_GRAVITY_ * DT;
-        vx += Math.sin(flutterPhase + t * flutterFreq) * flutterAmp * DT * Math.min(1, t * 2);
+        vx += Math.sin(flutterPhase + t * flutterFreq) * flutterAmp * 0.6 * DT * Math.min(1, t * 2);
         vx -= vx * drag * DT; vy -= vy * drag * DT;
         px += vx * DT; py += vy * DT;
         rot += spin * DT; spin -= spin * 2 * DT;
