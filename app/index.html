@@ -2331,10 +2331,10 @@
 
   <div id="modal-root"></div>
 
-  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-25","id":"962cb82"};</script>
+  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-26","id":"048fef3"};</script>
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=13d0737526"></script>
+  <script src="cacau-web.js?v=3f0072a3fd"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -5382,6 +5382,7 @@
     STATE.people = reapplyPendingEdits_(preserveOptimisticTempEntries_(STATE.people, data.people || []), pendingPersonEdits_);
     STATE.refundShares = preserveOptimisticTempEntries_(STATE.refundShares, data.refundShares || []);
     STATE.refundLinks = preserveOptimisticTempEntries_(STATE.refundLinks, data.refundLinks || []);
+    scheduleDailySummaryPush_(); // o envio espera 1,5 s e só segue com o app já carregado (STATE.bootstrapped)
   }
 
   // getBootstrapData é uma única chamada ao servidor — não dá pra saber em qual "etapa"
@@ -6923,10 +6924,16 @@
     list.forEach(function (t) {
       if (!t.installmentGroupId) return;
       idToGroup[t.id] = t.installmentGroupId;
-      var g = groups[t.installmentGroupId] || (groups[t.installmentGroupId] = { total: 0, anchor: t, ids: [] });
+      var g = groups[t.installmentGroupId] || (groups[t.installmentGroupId] = { total: 0, anchor: t, ids: [], planned: 0 });
       g.total += t.amount;
       g.ids.push(t.id);
+      if (Number(t.installmentTotal) > g.planned) g.planned = Number(t.installmentTotal);
       if ((t.installmentSeq || 0) < (g.anchor.installmentSeq || 0)) g.anchor = t;
+    });
+    // Compra inteira: parcelas que ainda não foram lançadas (ex.: "Subir fatura" traz uma de cada vez) contam pela média das lançadas.
+    Object.keys(groups).forEach(function (gid) {
+      var g = groups[gid];
+      if (g.planned > g.ids.length) g.total = roundCents_(g.total / g.ids.length * g.planned);
     });
     installmentIndex_.memo = { list: list, len: list.length, first: first, idToGroup: idToGroup, groups: groups };
     return installmentIndex_.memo;
@@ -20772,6 +20779,78 @@
     }).catch(function () { /* sem ponte ou sem rede: o código manual continua valendo */ });
   }
 
+  // ---------- dados do resumo diário (app Android) ----------
+  var DAILY_SUMMARY_HORIZON_DAYS_ = 35;
+  /**
+   * Retrato que o app Android guarda para montar o resumo diário na hora escolhida, com o app fechado: o web app é quem sabe
+   * calcular orçamento geral, saldo do ciclo e recorrentes (uma lógica só). { v, today, general: { spent, limit, toYmd } | null,
+   * cycle: { remaining, nextYmd } | null, recurring: [{ d: 'YYYY-MM-DD', n: nome, a: valor }] } -- só despesas recorrentes ainda
+   * não lançadas no ciclo e não ignoradas, dos próximos DAILY_SUMMARY_HORIZON_DAYS_ dias (o app escolhe as de "hoje" quando roda).
+   */
+  function buildDailySummaryData_() {
+    var today = todayYmd();
+    var out = { v: 1, today: today, general: null, cycle: null, recurring: [] };
+    var geral = (STATE.budgets || []).filter(function (b) { return b.isUnbudgetedCatchAll && !b.archived; })[0];
+    if (geral) {
+      try {
+        var p = computeBudgetCycleProgress_(geral);
+        if (p && p.limit > 0) out.general = { spent: roundCents_(p.spent), limit: roundCents_(p.limit), toYmd: p.cycle.toYmd };
+      } catch (e) { /* sem orçamento geral calculável: a linha só não aparece */ }
+    }
+    try {
+      var model = cycleBalanceModel_({
+        today: today, forecasts: STATE.forecasts, transactions: STATE.allTransactions, budgets: STATE.budgets,
+        deletingIds: STATE.deletingIds, netExpense: netAmountOfPassive_, netIncome: netContributionOfActive_
+      });
+      if (model) out.cycle = { remaining: roundCents_(model.remaining), nextYmd: addDaysYmd_(model.toYmd, 1) };
+    } catch (e) { /* sem salário cadastrado: a linha só não aparece */ }
+    var last = addDaysYmd_(today, DAILY_SUMMARY_HORIZON_DAYS_);
+    (STATE.forecasts || []).forEach(function (f) {
+      if (f.archived || f.kind !== 'expense') return;
+      var dates = [];
+      if (f.intervalUnit === 'months' && f.intervalDays === 1 && f.dayOfMonth) {
+        for (var k = 0; k <= 1; k++) {
+          var ym = shiftYm_(today.slice(0, 7), k);
+          var dim = daysInMonth_(ym);
+          var due = ym + '-' + String(Math.min(f.dayOfMonth, dim)).padStart(2, '0');
+          if (due < today || due > last) continue;
+          var cycle = { isStrictMonthly: true, fromYmd: ym + '-01', toYmd: ym + '-' + String(dim).padStart(2, '0') };
+          if (forecastCycleLinkedTransaction_(f, cycle) || isForecastCycleIgnored_(f.id, cycle.fromYmd)) continue;
+          dates.push(due);
+        }
+      } else {
+        var lastTx = forecastMostRecentLinkedTransaction_(f);
+        if (!lastTx) return;
+        var next = f.intervalUnit === 'months' ? addMonthsToYmd_(lastTx.date, f.intervalDays) : addDaysYmd_(lastTx.date, f.intervalDays);
+        var guard = 0;
+        while (next <= last && guard++ < 40) {
+          if (next >= today) dates.push(next);
+          next = f.intervalUnit === 'months' ? addMonthsToYmd_(next, f.intervalDays) : addDaysYmd_(next, f.intervalDays);
+        }
+      }
+      dates.forEach(function (d) { out.recurring.push({ d: d, n: f.label, a: roundCents_(f.expectedAmount) }); });
+    });
+    out.recurring.sort(function (a, b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : 0; });
+    return out;
+  }
+  var dailySummaryTimer_ = null;
+  var dailySummaryLastJson_ = '';
+  /** Entrega ao app Android o retrato do resumo diário, sem pressa (depois que os dados assentam) e só quando mudou. */
+  function scheduleDailySummaryPush_() {
+    var bridge = window.FinancasApp;
+    if (!bridge || typeof bridge.setDailySummaryData !== 'function') return;
+    clearTimeout(dailySummaryTimer_);
+    dailySummaryTimer_ = setTimeout(function () {
+      try {
+        if (!STATE.bootstrapped) return;
+        var json = JSON.stringify(buildDailySummaryData_());
+        if (json === dailySummaryLastJson_) return;
+        dailySummaryLastJson_ = json;
+        bridge.setDailySummaryData(json);
+      } catch (e) { /* o resumo é um extra: nunca atrapalha o app */ }
+    }, 1500);
+  }
+
   // ---------- configurações ----------
   /** Ponte do app Android (só existe dentro do WebView do app, na versão que tem getStatus). */
   function androidBridge_() {
@@ -20786,6 +20865,9 @@
   function androidAccountMismatch_(s) {
     return !!(s && s.authEmail && s.webEmail && s.authEmail !== s.webEmail);
   }
+
+  /** 8 -> "08:00" (hora cheia do resumo diário). */
+  function alertHourLabel_(h) { return String(h).padStart(2, '0') + ':00'; }
 
   function settingsRow_(ok, title, help, buttonLabel, buttonId) {
     return '<div class="settings-row">' +
@@ -20812,8 +20894,17 @@
     html += settingsRow_(s.battery, 'Bateria sem restrição',
       s.battery ? 'O Android não vai parar o app em segundo plano.' : 'Recomendado, senão alguns celulares param de entregar notificações com a tela apagada.',
       s.battery ? '' : 'Ajustar', 'st-battery');
-    html += settingsRow_(s.alertOn, 'Alerta diário às 8h',
-      'Uma notificação por dia, só se houver algo a revisar.', s.alertOn ? 'Desligar' : 'Ligar', 'st-alert');
+    if (typeof s.alertHour === 'number') {
+      var hourOn = s.alertOn && s.alertHour >= 0;
+      html += settingsRow_(hourOn, 'Resumo diário',
+        hourOn ? 'Todo dia às ' + alertHourLabel_(s.alertHour) + ': pendências, orçamento geral e quanto dá pra gastar hoje.' : 'Uma notificação por dia com o que importa. Escolha a hora.',
+        hourOn ? alertHourLabel_(s.alertHour) + ' ▾' : 'Desligado ▾', 'st-alert-hour');
+      html += settingsRow_(s.alertRecurring, 'Recorrentes do dia no resumo',
+        'Mostra no resumo as despesas recorrentes que vencem hoje e ainda não foram lançadas.', s.alertRecurring ? 'Desligar' : 'Ligar', 'st-alert-recurring');
+    } else {
+      html += settingsRow_(s.alertOn, 'Alerta diário às 8h',
+        'Uma notificação por dia, só se houver algo a revisar.', s.alertOn ? 'Desligar' : 'Ligar', 'st-alert');
+    }
     html += settingsRow_(false, 'Apps conectados (' + s.watchedCount + ')',
       'De quais apps o Meu Cacau lê as notificações.', 'Escolher', 'st-watched');
     html += '<div class="muted" style="margin-top:8px">Fila: ' + s.queue + ' item(ns) · Último envio: ' + escapeHtml(s.lastSendOk || '-') +
@@ -20854,6 +20945,16 @@
     on('st-listen', function () { askNotificationDisclosure_(function () { b.openNotificationSettings(); }, openSettingsModal_); });
     on('st-battery', function () { b.openBatterySettings(); });
     on('st-alert', function () { b.setDailyAlert(!s.alertOn); });
+    on('st-alert-recurring', function () { b.setDailyAlertRecurring(!s.alertRecurring); });
+    var hourBtn = document.getElementById('st-alert-hour');
+    if (hourBtn) {
+      hourBtn.onclick = function () {
+        var cur = s.alertOn && s.alertHour >= 0 ? s.alertHour : -1;
+        var options = [{ value: '-1', label: 'Desligado', selected: cur === -1 }];
+        for (var h = 5; h <= 23; h++) options.push({ value: String(h), label: alertHourLabel_(h), selected: h === cur });
+        openDropdownMenu_(hourBtn, options, function (value) { b.setDailyAlertHour(Number(value)); });
+      };
+    }
     on('st-watched', function () { b.openWatchedApps(); });
     on('st-send-now', function () { b.sendNow(); showToast('Envio pedido'); });
     on('st-send-test', function () { b.sendTest(); showToast('Notificação de teste colocada na fila'); });
@@ -20913,8 +21014,8 @@
       { ok: s.battery, optional: true, title: 'Bateria sem restrição (recomendado)',
         help: 'Na lista que abrir, procure o "Meu Cacau" e escolha "Sem restrição" (ou "Não otimizar"). Sem isso alguns celulares param de entregar notificações com a tela apagada.',
         button: 'Permitir', id: 'ob-battery', run: function (b) { b.openBatterySettings(); } },
-      { ok: s.alertOn, optional: true, title: 'Alerta diário às 8h (opcional)',
-        help: 'Uma notificação por dia, só se houver algo a revisar. O Android vai pedir permissão para mostrar avisos.',
+      { ok: s.alertOn, optional: true, title: 'Resumo diário às 8h (opcional)',
+        help: 'Uma notificação por dia com pendências, orçamento geral e quanto dá pra gastar hoje. A hora dá pra mudar depois, nas configurações. O Android vai pedir permissão para mostrar avisos.',
         button: 'Ligar', id: 'ob-alert', run: function (b) { b.setDailyAlert(true); } }
     ];
     var current = null;
@@ -21755,7 +21856,7 @@
   var CacauAnalytics = (function () {
     var COLLECTOR_URL = 'https://script.google.com/macros/s/AKfycbzx7u1F-_c0_26KzHx2Uy6k1j-IG6kHpyhybDaE_5OHnq3UQPmpXlmfOPd84SJsrOs2eA/exec';
     var SCHEMA = 'cacau1';
-    var VERSION = 'web-13d0737526';
+    var VERSION = 'web-3f0072a3fd';
     // Build web público: sem aviso nem chave para os usuários; só coleta no aparelho do dono, que liga
     // abrindo o site com ?coleta=1 (e desliga com ?coleta=0). O build web troca esta linha para true.
     var OWNER_ONLY = true;

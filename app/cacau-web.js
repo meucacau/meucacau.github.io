@@ -4238,9 +4238,13 @@ function installmentAnchorRow_(tx) {
   return purchaseRowsOf_(tx)[0];
 }
 
-/** Valor TOTAL da compra (soma das parcelas que ainda existem; o próprio valor numa despesa comum), em centavos. */
+/** Valor TOTAL da compra, em centavos (o próprio valor numa despesa comum). Parcelas ainda não lançadas (ex.: "Subir fatura"
+ *  traz uma de cada vez) contam pela média das lançadas, então a compra parcelada vale parcela × nº de parcelas. */
 function purchaseTotalCents_(tx) {
-  return purchaseRowsOf_(tx).reduce(function (sum, t) { return sum + Math.round(Number(t.Amount) * 100); }, 0);
+  var rows = purchaseRowsOf_(tx);
+  var sum = rows.reduce(function (s, t) { return s + Math.round(Number(t.Amount) * 100); }, 0);
+  var planned = rows.reduce(function (m, t) { return Math.max(m, Number(t.InstallmentTotal) || 0); }, 0);
+  return planned > rows.length ? Math.round(sum / rows.length * planned) : sum;
 }
 
 /** Só receita pode ser "ativo" — uma transferência é entre CONTAS SUAS, nunca dinheiro
