@@ -2339,7 +2339,7 @@
 
   <div id="modal-root"></div>
 
-  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-26","id":"f38cb37"};</script>
+  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-26","id":"7513369"};</script>
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="cacau-web.js?v=b8ce01684c"></script>
@@ -5429,6 +5429,7 @@
   var viewSwitchDir_ = 1;
   var scrollPositions_ = {};
   function render() {
+    stashCalendarWeeks_();
     var sameView = STATE.currentView === lastRenderedView_;
     if (!sameView) resetFloatingUi_(); // aba mudando de verdade -- não em re-render da mesma aba (deixaria um dropdown em uso fechar sozinho)
     var scrollX = window.scrollX, scrollY = window.scrollY;
@@ -7930,6 +7931,7 @@
 
     document.getElementById('tx-filters-header').onclick = function () {
       STATE.txFiltersExpanded = !STATE.txFiltersExpanded;
+      if (STATE.txFiltersExpanded) buildFilterFields_(); // abriu antes da montagem em segundo plano terminar: monta já
       document.getElementById('tx-filters-collapse').style.gridTemplateRows = STATE.txFiltersExpanded ? '1fr' : '0fr';
       document.getElementById('tx-filters-chevron').style.transform = 'rotate(' + (STATE.txFiltersExpanded ? '180deg' : '0deg') + ')';
       renderTxFilterChips_(); // só aparecem colapsado -- expandir já mostra o estado nos próprios campos
@@ -7943,8 +7945,20 @@
     // Várias contas de uma vez (também as que vêm do gráfico de faturas e o accountId único de outros atalhos).
     var accountIds = (f.accountIds || []).slice();
     if (f.accountId && accountIds.indexOf(f.accountId) === -1) accountIds.push(f.accountId);
-    buildAccountFilterField_(document.getElementById('f-account-field'), accountIds, applyTxFilters_);
-    buildCategoryFilterField_(document.getElementById('f-category-field'), categoryIds, applyTxFilters_, { allOption: true });
+    // As cápsulas de conta/categoria são o trecho mais caro do card (medem a posição de cada uma pra recolher as linhas de sobra) e, com o
+    // card recolhido, ninguém as vê: montam depois do primeiro quadro, em tempo ocioso -- ou na hora, se o card já está aberto ou se a
+    // pessoa abrir antes. (Os elementos são guardados: se a tela foi refeita no meio, o que sobrou desta montagem não toca na nova.)
+    var accountFieldEl = document.getElementById('f-account-field');
+    var categoryFieldEl = document.getElementById('f-category-field');
+    var filterFieldsBuilt = false;
+    function buildFilterFields_() {
+      if (filterFieldsBuilt || !accountFieldEl.isConnected) return;
+      filterFieldsBuilt = true;
+      buildAccountFilterField_(accountFieldEl, accountIds, applyTxFilters_);
+      buildCategoryFilterField_(categoryFieldEl, categoryIds, applyTxFilters_, { allOption: true });
+    }
+    if (STATE.txFiltersExpanded) buildFilterFields_();
+    else afterNextPaint_(function () { whenIdle_(buildFilterFields_); });
 
     // Filtro instantâneo: qualquer interação já refiltra, sem precisar de um botão
     // "Filtrar" — tudo já filtra em cima de STATE.allTransactions, carregado no bootstrap
@@ -10223,6 +10237,21 @@
    *  1ª vez) a posição de rolagem horizontal -- ver STATE.txCalendarScrollLeft. Religa
    *  clique/tooltip nos dias com dado a cada chamada (mesmo padrão de todo outro wiring
    *  pós-innerHTML deste app). */
+  // Cache das barras do Resumo (só o desenho dos dias, pelos MESMOS dados de entrada): no começo de cada render() as barras da tela que
+  // vai ser trocada saem do card e ficam guardadas; se a próxima montagem tiver os mesmos dados, entram de volta prontas. No máximo 3.
+  var calendarWeeksCache_ = { map: {}, order: [] };
+  function stashCalendarWeeks_() {
+    // "#view-root" de verdade: durante o deslize entre abas a tela que sai (view-root-outgoing) continua à vista e não pode ser esvaziada.
+    var wrap = document.querySelector('#view-root #tx-calendar-weeks-wrap');
+    if (!wrap || !wrap._barsSig || !wrap.firstChild) return;
+    var sig = wrap._barsSig, frag = document.createDocumentFragment();
+    while (wrap.firstChild) frag.appendChild(wrap.firstChild);
+    wrap._barsSig = null;
+    calendarWeeksCache_.map[sig] = frag;
+    calendarWeeksCache_.order = calendarWeeksCache_.order.filter(function (k) { return k !== sig; });
+    calendarWeeksCache_.order.push(sig);
+    while (calendarWeeksCache_.order.length > 3) delete calendarWeeksCache_.map[calendarWeeksCache_.order.shift()];
+  }
   function renderTxCalendarWeeks_() {
     var container = document.getElementById('tx-calendar-weeks-wrap');
     if (!container) return;
@@ -10234,10 +10263,22 @@
       var days = buildDayList_(range.minDate, range.maxDate);
       var targets = computeDayBarsTargets_(days, STATE.txCalendarMode);
       if (targets) targets.status = dayBarsTargetStatus_(days, targets, todayYmd());
-      container.innerHTML = buildDayBarsHtml_(days, totals, computeDayBarsRef_(totals, targets), STATE.txCalendarMode, computeCalendarFlaggedOnlyDays_(combined, nets), targets);
-      container.querySelectorAll('.day-bar-cell[data-date]').forEach(function (el) {
-        wireDayCell_(el, function () { calDayTap_(el.dataset.date); });
-      });
+      var barsRef = computeDayBarsRef_(totals, targets), flaggedOnly = computeCalendarFlaggedOnlyDays_(combined, nets);
+      // Mesmos dados de entrada = mesmo desenho: reaproveita as barras prontas (com os toques já ligados) da última vez que a tela
+      // foi desmontada (ver stashCalendarWeeks_), em vez de montar o HTML, interpretar e religar cada dia.
+      var barsSig = JSON.stringify([todayYmd(), days[0], days[days.length - 1], days.length, totals, barsRef, STATE.txCalendarMode, flaggedOnly, targets]);
+      var cachedBars = calendarWeeksCache_.map[barsSig];
+      container.innerHTML = '';
+      if (cachedBars) {
+        delete calendarWeeksCache_.map[barsSig];
+        container.appendChild(cachedBars);
+      } else {
+        container.innerHTML = buildDayBarsHtml_(days, totals, barsRef, STATE.txCalendarMode, flaggedOnly, targets);
+        container.querySelectorAll('.day-bar-cell[data-date]').forEach(function (el) {
+          wireDayCell_(el, function () { calDayTap_(el.dataset.date); });
+        });
+      }
+      container._barsSig = barsSig;
       positionTxCalendarScroll_(container);
       return;
     }
@@ -21622,6 +21663,11 @@
   /** Roda `fn` depois que o navegador pintou o quadro atual (rAF + tarefa seguinte); se o rAF for estrangulado (aba em segundo
    *  plano), um timer de 80 ms garante que roda mesmo assim. Roda uma vez só. */
   var deferHeavyRender_ = false; // true só durante o render() de uma troca de aba pela barra (ver goTo_ em setupSidebar_)
+  /** Roda `fn` quando o navegador está ocioso (até 500 ms de espera no máximo); sem requestIdleCallback, 50 ms depois. */
+  function whenIdle_(fn) {
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(fn, { timeout: 500 });
+    else setTimeout(fn, 50);
+  }
   function afterNextPaint_(fn) {
     var done = false;
     function run() { if (done) return; done = true; fn(); }
