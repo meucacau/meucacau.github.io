@@ -156,7 +156,7 @@
   html::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
   html::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
-  html { overflow-x: clip; } /* cards balançando para o lado (inércia) não criam rolagem horizontal */
+  html { overflow-x: clip; } /* nada que passe da largura da tela cria rolagem horizontal na página */
   html, body {
     margin: 0;
     padding: 0;
@@ -1241,7 +1241,9 @@
      conteúdo normal pra ficar por cima da lista de lançamentos ao "grudar". */
   /* Seleção em lote no Extrato: linhas marcadas, banner no topo (Editar / Cancelar seleção) e aviso "Desfazer" no rodapé. */
   #tx-list .row[data-tx] { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
-  #tx-list .row.tx-selected { background: color-mix(in srgb, var(--primary) 12%, transparent); box-shadow: inset 3px 0 0 var(--primary); transition: background .15s, box-shadow .15s; }
+  /* O destaque passa alguns pixels pra fora do conteúdo (margem negativa compensada pelo padding): a faixa colorida não fica atrás do horário
+     e o fundo pega o valor da direita inteiro; o texto não se mexe ao marcar. */
+  #tx-list .row.tx-selected { background: color-mix(in srgb, var(--primary) 12%, transparent); box-shadow: inset 3px 0 0 var(--primary); border-radius: 8px; margin: -3px -10px; padding: 11px 10px 11px 14px; transition: background .15s, box-shadow .15s; }
   .tx-select-banner { position: fixed; top: max(12px, env(safe-area-inset-top)); left: 50%; z-index: 30; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 16px; max-width: calc(100vw - 24px); box-sizing: border-box; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; box-shadow: 0 6px 20px rgba(0,0,0,.18); opacity: 0; pointer-events: none; transform: translate(-50%, -160%); transition: transform .28s cubic-bezier(.2,.8,.2,1), opacity .2s ease; }
   .tx-select-banner.show { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); }
   .tx-select-banner button { width: auto; margin: 0; flex: 0 0 auto; padding: 6px 14px; font-size: 13px; border-radius: 999px; white-space: nowrap; }
@@ -2130,7 +2132,7 @@
     @keyframes dd-pop-below { from { opacity: 0; transform: translateY(-8px) scale(.94); } }
     @keyframes dd-pop-above { from { opacity: 0; transform: translateY(8px) scale(.94); } }
     /* Troca de aba D · cascata: cada bloco da tela sobe, um depois do outro. */
-    .view-enter > * { animation: view-fade .3s cubic-bezier(.2,.8,.2,1) backwards; } /* o deslocamento é horizontal e vem da mola dos cards (cardInertiaKick_) */
+    .view-enter > * { animation: view-fade .3s cubic-bezier(.2,.8,.2,1) backwards; }
     .view-enter > *:nth-child(2) { animation-delay: .04s; }
     .view-enter > *:nth-child(3) { animation-delay: .08s; }
     .view-enter > *:nth-child(4) { animation-delay: .12s; }
@@ -2331,7 +2333,7 @@
 
   <div id="modal-root"></div>
 
-  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-26","id":"048fef3"};</script>
+  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-26","id":"f4dc893"};</script>
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="cacau-web.js?v=3f0072a3fd"></script>
@@ -2353,7 +2355,7 @@
     txFilters: {},
     txFiltersExpanded: false, // card "Filtrar lançamentos" do Extrato começa fechado; fica aberto entre re-renders até o usuário fechar de novo
     showFutureInstallments: false, // Extrato/Resumo/recentes escondem parcelas com data futura; o botão do Extrato liga (ver hidesFutureInstallments_)
-    txVisibleCount: 50, // quantos lançamentos (não cards) o Extrato renderiza antes de "Carregar mais" — ver TX_PAGE_SIZE
+    txVisibleCount: 50, // quantos lançamentos (não cards) o Extrato renderiza antes de carregar mais sozinho ao chegar no fim — ver TX_PAGE_SIZE
     txCalendarExpanded: true, // card do calendário do Extrato começa aberto (diferente do de filtro) -- é o conteúdo mais visual da tela
     txCalendarMode: 'expense', // o que as barras do Resumo somam por dia: 'expense' | 'income'
     txCalendarScrollLeft: null, // posição de rolagem horizontal do Resumo -- null = ainda não rolado À MÃO (abre na data de hoje); só o usuário rolando grava (ver positionTxCalendarScroll_)
@@ -2391,7 +2393,7 @@
     return '<svg class="acc-type-ico" viewBox="0 0 24 24" role="img" aria-label="' + label + '" data-tooltip="' + label + '">' + path + '</svg>';
   }
   var STATUS_LABELS = { aberta: 'Aberta', fechada: 'Fechada', futura: 'Futura', paga: 'Paga', atrasada: 'Atrasada', anterior: 'Anterior ao app' };
-  var TX_PAGE_SIZE = 50; // ver STATE.txVisibleCount / "Carregar mais" no Extrato
+  var TX_PAGE_SIZE = 50; // ver STATE.txVisibleCount / carregamento automático no Extrato
 
   // Chamadas que criam lançamento: contam como "dia com lançamento" no cacaueiro (ver treeNoteEntry_).
   var TREE_ENTRY_FNS_ = { createTransaction: true, createTransfer: true, confirmPendingEntry: true };
@@ -2792,145 +2794,11 @@
       })(el, text, value);
     }
   }
-  // ---------- inércia dos cards (22/11/2026) ----------
-  // Ao rolar, os cards visíveis ficam um instante pra trás (como se fossem puxados), com força proporcional à velocidade da rolagem, e
-  // quando ela para voltam ao lugar com 3 movimentos (vai, volta, vai de novo; cada um menor que o anterior). Na troca de aba os cards
-  // chegam de lado (as abas ficam uma ao lado da outra), com o mesmo balanço, em cascata. Técnica: uma mola amortecida por card,
-  // movida pela propriedade CSS `translate` (não pelo `transform`: compõe com a cascata view-rise, o swipe e o zoom dos botões) e
-  // escrita só nos cards que estão na tela. Sem rolagem nem balanço, o loop de quadros PARA e o `translate` é removido (cards em
-  // repouso ficam sem camada própria). Não toca na rolagem nativa; cards sticky/fixed ficam de fora; some com "reduzir movimento".
-  var INERTIA_MAX_PX_ = 16;         // teto do deslocamento pela rolagem (abaixo dele é proporcional à velocidade)
-  var INERTIA_GAIN_ = 5;            // px de deslocamento por px/ms de velocidade de rolagem
-  var INERTIA_KICK_PX_ = 26;        // deslocamento horizontal inicial ao trocar de aba
-  var INERTIA_STIFFNESS_ = 920;     // rigidez da mola (período ~0,2 s; metade do tempo da 1ª versão)
-  var INERTIA_DAMPING_ = 15;        // amortecimento (taxa 0,25, a mesma forma em metade do tempo de 1: subamortecida; a cada ida o desvio cai a ~45%: passa, volta e passa de novo, visíveis)
-  var INERTIA_JUMP_PX_ = 500;       // salto de rolagem maior que isso num quadro é programático (troca de aba): não vira velocidade
-  var INERTIA_SETTLE_ = 0.04;       // abaixo disso (px e px/s) a mola é considerada parada
-  /** Velocidade de rolagem (px/ms, + = descendo) -> deslocamento-alvo em px (+ = card atrasado, mais embaixo). Proporcional à
-   *  velocidade; só perto do teto (rolagem muito rápida) satura suave. */
-  function cardInertiaTarget_(vel) {
-    return INERTIA_MAX_PX_ * Math.tanh(vel * INERTIA_GAIN_ / INERTIA_MAX_PX_);
-  }
-  /** Um passo da mola de um card: s = {x, v}; k = fator de rigidez do card; dt em segundos. Euler semi-implícito em subpassos. */
-  function cardInertiaStep_(s, target, k, dt) {
-    var n = Math.max(1, Math.ceil(dt / 0.008)), h = dt / n;
-    for (var i = 0; i < n; i++) {
-      var a = INERTIA_STIFFNESS_ * k * (target - s.x) - INERTIA_DAMPING_ * Math.sqrt(k) * s.v;
-      s.v += a * h;
-      s.x += s.v * h;
-    }
-    return s;
-  }
-  var cardInertia_ = { cards: [], collectedAt: 0, raf: 0, lastY: 0, lastT: 0, vel: 0, lastScrollT: 0, supported: null };
-  function cardInertiaOn_() {
-    if (cardInertia_.supported === null) {
-      cardInertia_.supported = !!(window.CSS && CSS.supports && CSS.supports('translate', '0 1px'));
-    }
-    return cardInertia_.supported && !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  }
-  /** Só os cards que aparecem na tela (com folga) e que não são sticky/fixed; lista de milhares de linhas não entra: as linhas
-   *  ficam dentro de poucos cards. Relida a cada começo de rolagem/troca de aba (o render recria todos os elementos). */
-  function cardInertiaCollect_() {
-    var list = [], vh = window.innerHeight || 800;
-    var els = document.querySelectorAll('#view-root .card');
-    for (var i = 0; i < els.length && list.length < 24; i++) {
-      var el = els[i];
-      var r = el.getBoundingClientRect();
-      if (r.bottom < -40 || r.top > vh + 40 || r.height === 0) continue;
-      var pos = getComputedStyle(el).position;
-      if (pos === 'sticky' || pos === 'fixed') continue;
-      list.push({ el: el, s: { x: 0, v: 0 }, h: { x: 0, v: 0 }, k: 1 - 0.05 * Math.min(list.length, 5), delay: 0 });
-    }
-    return list;
-  }
-  /** Relê os cards da tela mantendo o estado da mola dos que já estavam; os que saíram da tela perdem o translate. */
-  function cardInertiaRefresh_(now) {
-    var c = cardInertia_, fresh = cardInertiaCollect_(), i, j;
-    c.collectedAt = now;
-    for (i = 0; i < fresh.length; i++) {
-      for (j = 0; j < c.cards.length; j++) if (c.cards[j].el === fresh[i].el) { fresh[i].s = c.cards[j].s; fresh[i].h = c.cards[j].h; fresh[i].delay = c.cards[j].delay; break; }
-    }
-    for (j = 0; j < c.cards.length; j++) {
-      var kept = false;
-      for (i = 0; i < fresh.length; i++) if (fresh[i].el === c.cards[j].el) { kept = true; break; }
-      if (!kept) c.cards[j].el.style.translate = '';
-    }
-    c.cards = fresh;
-  }
-  function cardInertiaClear_(list) {
-    for (var i = 0; i < list.length; i++) list[i].el.style.translate = '';
-  }
-  function cardInertiaFrame_(now) {
-    var c = cardInertia_;
-    c.raf = 0;
-    var dtMs = Math.min(64, Math.max(1, now - c.lastT));
-    c.lastT = now;
-    var y = window.pageYOffset || 0, dy = y - c.lastY;
-    c.lastY = y;
-    // salto programático (troca de aba restaura outra posição): ignora; senão velocidade = deslocamento / tempo, suavizada
-    var inst = Math.abs(dy) > INERTIA_JUMP_PX_ ? 0 : dy / dtMs;
-    c.vel += (inst - c.vel) * Math.min(1, dtMs / 45);
-    if (Math.abs(c.vel) < 0.01 && now - c.lastScrollT > 90) c.vel = 0;
-    var target = cardInertiaTarget_(c.vel);
-    var moving = false;
-    // rolagem longa (arremesso): os cards que entram na tela depois do começo também participam; relê a lista de tempos em tempos
-    if (c.vel !== 0 && now - c.collectedAt > 180) cardInertiaRefresh_(now);
-    for (var i = 0; i < c.cards.length; i++) {
-      var it = c.cards[i];
-      if (it.delay > 0) { it.delay -= dtMs; moving = true; continue; }
-      cardInertiaStep_(it.s, target, it.k, dtMs / 1000);   // vertical: puxado pela rolagem
-      cardInertiaStep_(it.h, 0, it.k, dtMs / 1000);        // horizontal: balanço da troca de aba
-      var still = Math.abs(it.s.x) < INERTIA_SETTLE_ && Math.abs(it.s.v) < INERTIA_SETTLE_ * 10 &&
-        Math.abs(it.h.x) < INERTIA_SETTLE_ && Math.abs(it.h.v) < INERTIA_SETTLE_ * 10;
-      if (still && c.vel === 0) { it.s.x = 0; it.s.v = 0; it.h.x = 0; it.h.v = 0; it.el.style.translate = ''; }
-      else { moving = true; it.el.style.translate = it.h.x.toFixed(2) + 'px ' + it.s.x.toFixed(2) + 'px'; }
-    }
-    if (moving || c.vel !== 0 || now - c.lastScrollT < 100) c.raf = requestAnimationFrame(cardInertiaFrame_); // 100 ms de folga: o 1º quadro pode ler dy = 0
-    else { cardInertiaClear_(c.cards); c.cards = []; }
-  }
-  function cardInertiaWake_(now) {
-    var c = cardInertia_;
-    if (c.raf) return;
-    c.lastT = now || performance.now();
-    c.raf = requestAnimationFrame(cardInertiaFrame_);
-  }
-  function cardInertiaOnScroll_() {
-    if (!cardInertiaOn_()) return;
-    var c = cardInertia_, now = performance.now();
-    c.lastScrollT = now;
-    if (!c.raf) { // começo de um gesto: relê os cards da tela e parte da posição atual (sem contar o que rolou antes)
-      cardInertiaClear_(c.cards);
-      c.cards = cardInertiaCollect_();
-      c.collectedAt = now;
-      c.lastY = window.pageYOffset || 0;
-      c.vel = 0;
-      cardInertiaWake_(now);
-    }
-  }
-  /** Troca de aba: os cards visíveis começam deslocados para o lado de onde a aba nova "vem" (dir = +1: aba à direita da anterior,
-   *  a tela nova chega da direita) e voltam com a mola, um depois do outro (cascata de 19 ms). */
-  function cardInertiaKick_(dir) {
-    if (!cardInertiaOn_()) return;
-    var c = cardInertia_;
-    cardInertiaClear_(c.cards);
-    c.cards = cardInertiaCollect_();
-    for (var i = 0; i < c.cards.length; i++) {
-      c.cards[i].h.x = (dir < 0 ? -1 : 1) * INERTIA_KICK_PX_ * (1 - 0.06 * Math.min(i, 6));
-      c.cards[i].delay = i * 19;
-      c.cards[i].el.style.translate = c.cards[i].h.x.toFixed(2) + 'px 0';
-    }
-    c.lastY = window.pageYOffset || 0;
-    c.vel = 0;
-    if (c.cards.length) { if (c.raf) cancelAnimationFrame(c.raf); c.raf = 0; cardInertiaWake_(); }
-  }
-  window.addEventListener('scroll', cardInertiaOnScroll_, { passive: true });
-
   var swipeRendering_ = false; // true só no render() que fecha a troca de aba por deslize (finishSwipeTransition_)
   function motionAfterRender_(sameView) {
     if (!motionOk_ || swipeRendering_) return;
     var root = document.getElementById('view-root');
     if (!root) return;
-    if (!sameView) cardInertiaKick_(viewSwitchDir_);
     if (!sameView) {
       root.classList.add('view-enter');
       clearTimeout(viewEnterTimer_);
@@ -5598,6 +5466,30 @@
     btn.style.opacity = shouldShow ? '1' : '0';
     btn.style.pointerEvents = shouldShow ? 'auto' : 'none';
   }
+  /** Sobe até o topo em `ms` (0,5 s por padrão), acelerando e desacelerando no caminho (ease-in-out). Qualquer toque/roda do usuário
+   *  durante a subida a interrompe; sem "reduzir movimento" ligado. */
+  var scrollTopRaf_ = 0;
+  function scrollToTopAnimated_(ms) {
+    cancelAnimationFrame(scrollTopRaf_);
+    var from = window.scrollY;
+    if (from <= 0) return;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) { window.scrollTo(0, 0); return; }
+    var t0 = performance.now();
+    function stop() {
+      cancelAnimationFrame(scrollTopRaf_);
+      window.removeEventListener('wheel', stop); window.removeEventListener('touchstart', stop);
+    }
+    window.addEventListener('wheel', stop, { passive: true });
+    window.addEventListener('touchstart', stop, { passive: true });
+    function step(now) {
+      var k = Math.min(1, (now - t0) / ms);
+      var eased = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; // easeInOutCubic
+      window.scrollTo(0, Math.round(from * (1 - eased)));
+      if (k < 1) scrollTopRaf_ = requestAnimationFrame(step);
+      else stop();
+    }
+    scrollTopRaf_ = requestAnimationFrame(step);
+  }
   function setupScrollToTopButton_() {
     var btn = document.createElement('button');
     btn.type = 'button';
@@ -5609,7 +5501,7 @@
       'display:flex;align-items:center;justify-content:center;padding:0;box-shadow:0 4px 10px rgba(0,0,0,0.25);opacity:0;pointer-events:none;' +
       'transition:opacity .15s ease;z-index:40';
     document.body.appendChild(btn);
-    btn.onclick = function () { window.scrollTo({ top: 0, behavior: 'smooth' }); };
+    btn.onclick = function () { scrollToTopAnimated_(500); };
     window.addEventListener('scroll', updateScrollToTopVisibility_);
   }
 
@@ -8341,7 +8233,7 @@
     }).join('');
 
     list.innerHTML = (groupsHtml || '<div class="card"><div class="empty-state">Nenhum lançamento encontrado.</div></div>') +
-      (hasMore ? '<button type="button" class="secondary" id="tx-load-more" style="width:100%">Carregar mais</button>' : '');
+      (hasMore ? '<div id="tx-load-sentinel" aria-hidden="true" style="height:1px"></div>' : '');
 
     list.querySelectorAll('.amount-expense[data-tooltip], .amount-income[data-tooltip], .tx-flag-icon[data-tooltip]').forEach(wireTooltipTrigger_);
 
@@ -8352,12 +8244,21 @@
       });
     });
     syncTxSelectionUi_();
-    var loadMoreBtn = document.getElementById('tx-load-more');
-    if (loadMoreBtn) loadMoreBtn.onclick = function () {
-      STATE.txVisibleCount += TX_PAGE_SIZE;
-      loadTxList();
-    };
+    // Sem botão: ao chegar perto do fim da lista (600 px antes), mais TX_PAGE_SIZE lançamentos entram sozinhos. Cada render recria a
+    // sentinela, então o observador é refeito; se a lista ainda não encher a tela, a nova sentinela dispara de novo.
+    if (txLoadObserver_) { txLoadObserver_.disconnect(); txLoadObserver_ = null; }
+    var sentinel = document.getElementById('tx-load-sentinel');
+    if (sentinel && typeof IntersectionObserver === 'function') {
+      txLoadObserver_ = new IntersectionObserver(function (entries) {
+        if (!entries.some(function (en) { return en.isIntersecting; })) return;
+        txLoadObserver_.disconnect(); txLoadObserver_ = null;
+        STATE.txVisibleCount += TX_PAGE_SIZE;
+        loadTxList();
+      }, { rootMargin: '0px 0px 600px 0px' });
+      txLoadObserver_.observe(sentinel);
+    }
   }
+  var txLoadObserver_ = null;
 
   /** Editar data/horário/valor/categoria/conta/contraparte/referente de um lançamento existente (não transferência). */
   /** Aplica os campos editados de volta no próprio objeto (mesma referência usada por
@@ -9255,6 +9156,22 @@
     }, { passive: true });
     el.addEventListener('touchend', cancelLong);
     el.addEventListener('touchcancel', cancelLong);
+    // PC: segurar o botão esquerdo do mouse (parado) também liga a seleção, como o toque longo no celular.
+    el.addEventListener('mousedown', function (e) {
+      if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      longFired = false;
+      startX = e.clientX; startY = e.clientY;
+      cancelLong();
+      longTimer = setTimeout(function () {
+        longTimer = null; longFired = true;
+        txSelectionToggle_(el.dataset.tx);
+      }, TX_LONG_PRESS_MS_);
+    });
+    el.addEventListener('mousemove', function (e) {
+      if (longTimer && (Math.abs(e.clientX - startX) > 6 || Math.abs(e.clientY - startY) > 6)) cancelLong();
+    });
+    el.addEventListener('mouseup', cancelLong);
+    el.addEventListener('mouseleave', cancelLong);
     el.addEventListener('contextmenu', function (e) { if (longFired || longTimer) e.preventDefault(); });
     el.onclick = function (e) {
       if (longFired) { longFired = false; return; } // o toque longo já tratou este toque
@@ -20907,15 +20824,6 @@
     }
     html += settingsRow_(false, 'Apps conectados (' + s.watchedCount + ')',
       'De quais apps o Meu Cacau lê as notificações.', 'Escolher', 'st-watched');
-    html += '<div class="muted" style="margin-top:8px">Fila: ' + s.queue + ' item(ns) · Último envio: ' + escapeHtml(s.lastSendOk || '-') +
-      (s.lastSendError ? '<br>Último erro: ' + escapeHtml(s.lastSendError) : '') + '</div>' +
-      '<div class="settings-row"><div class="grow"></div><button class="secondary" id="st-send-now">Enviar fila agora</button></div>';
-    html += '<details style="margin-top:6px"><summary class="muted">Diagnóstico</summary>' +
-      '<div class="muted" style="margin:6px 0">Autorização: ' + escapeHtml(s.authState || '-') +
-      '<br>Última checagem do alerta: ' + escapeHtml(s.lastAlertCheck || '-') +
-      '<br>Versão do app: ' + escapeHtml(s.appVersion || '-') + '</div>' +
-      '<div class="settings-row"><div class="grow"></div><button class="secondary" id="st-send-test">Enviar notificação de teste</button></div>' +
-      '<pre class="settings-log" id="st-log"></pre></details>';
     return html;
   }
 
@@ -20945,25 +20853,30 @@
     on('st-listen', function () { askNotificationDisclosure_(function () { b.openNotificationSettings(); }, openSettingsModal_); });
     on('st-battery', function () { b.openBatterySettings(); });
     on('st-alert', function () { b.setDailyAlert(!s.alertOn); });
-    on('st-alert-recurring', function () { b.setDailyAlertRecurring(!s.alertRecurring); });
+    on('st-alert-recurring', function () { b.setDailyAlertRecurring(!s.alertRecurring); showAndroidChoiceNow_(s, { alertRecurring: !s.alertRecurring }); });
     var hourBtn = document.getElementById('st-alert-hour');
     if (hourBtn) {
       hourBtn.onclick = function () {
         var cur = s.alertOn && s.alertHour >= 0 ? s.alertHour : -1;
         var options = [{ value: '-1', label: 'Desligado', selected: cur === -1 }];
         for (var h = 5; h <= 23; h++) options.push({ value: String(h), label: alertHourLabel_(h), selected: h === cur });
-        openDropdownMenu_(hourBtn, options, function (value) { b.setDailyAlertHour(Number(value)); });
+        openDropdownMenu_(hourBtn, options, function (value) {
+          var h = Number(value);
+          b.setDailyAlertHour(h);
+          showAndroidChoiceNow_(s, h < 0 ? { alertOn: false } : { alertOn: true, alertHour: h });
+        });
       };
     }
     on('st-watched', function () { b.openWatchedApps(); });
-    on('st-send-now', function () { b.sendNow(); showToast('Envio pedido'); });
-    on('st-send-test', function () { b.sendTest(); showToast('Notificação de teste colocada na fila'); });
-    var logEl = document.getElementById('st-log');
-    if (logEl) {
-      try { logEl.textContent = JSON.parse(b.getLog()).reverse().join('\n'); } catch (e) { logEl.textContent = ''; }
-    }
   }
-
+  /** Mostra já o resultado de uma escolha da seção "Celular" (o Android confirma em seguida, a cada 1,5 s, e corrige se algo falhou). */
+  function showAndroidChoiceNow_(s, patch) {
+    var host = document.getElementById('st-android');
+    if (!host) return;
+    var next = Object.assign({}, s, patch);
+    host.innerHTML = androidSectionHtml_(next);
+    wireAndroidSection_(next);
+  }
   /**
    * Atualiza a seção "Celular" enquanto a janela estiver aberta: o Android muda de tela pra pedir
    * permissão e ao voltar o estado já mudou. Só redesenha se o estado mudou (não apaga um clique).
@@ -21381,8 +21294,6 @@
     var multiuser = typeof FINANCAS_MULTIUSER !== 'undefined' && FINANCAS_MULTIUSER;
     var inApp = !!androidBridge_();
     var webBackend = window.CacauBackend && typeof window.CacauBackend.switchSheet === 'function' ? window.CacauBackend : null;
-    var theme = '';
-    try { theme = localStorage.getItem('financas-theme') || ''; } catch (e) { theme = ''; }
 
     var html = '<h2>Configurações' + (buildInfo_() ? ' <span class="beta-pill" title="Versão de teste">' + escapeHtml(buildInfo_().channel) + '</span>' : '') + '</h2>';
 
@@ -21404,13 +21315,11 @@
         '</div>';
     }
 
-    html += '<div class="settings-section"><h3>Aparência</h3>' +
-      '<div class="field"><label>Tema</label>' + appSelectHtml_('st-theme', [
-        { value: '', label: 'Igual ao sistema' }, { value: 'light', label: 'Claro' }, { value: 'dark', label: 'Escuro' }], theme) + '</div>' +
-      '<div class="field" style="margin-top:10px"><label>Lado dos botões flutuantes (+)</label>' + appSelectHtml_('st-nav-side', [
-        { value: 'right', label: 'Direita' }, { value: 'left', label: 'Esquerda' }], navSide_()) + '</div></div>';
-
     html += '<div class="settings-section"><h3>Preferências</h3>' +
+      // Lado dos botões flutuantes: o interruptor é sempre laranja (não liga/desliga: só aponta esquerda ou direita).
+      '<label class="settings-switch always-on" style="align-items:center;margin-bottom:6px"><div>Lado dos botões flutuantes (+)</div>' +
+      '<span class="muted">Esq.</span><input type="checkbox" id="st-nav-side" role="switch" aria-label="Lado dos botões flutuantes: direita quando ligado"' + (navSide_() === 'right' ? ' checked' : '') + '>' +
+      '<span class="muted">Dir.</span></label>' +
       '<div class="field"><label>Como te chamo? (opcional)</label><input type="text" id="st-user-name" maxlength="30" placeholder="Seu primeiro nome" autocomplete="off" value="' + escapeHtml(userFirstName_()) + '">' +
       '<div class="muted" style="margin-top:4px">Usado nas mensagens do Início. Fica só neste aparelho.</div></div>' +
       '<div class="field" style="margin-top:10px"><label>Nome da meta (opcional)</label><input type="text" id="st-goal-name" maxlength="40" placeholder="Ex.: Reserva de emergência"></div>' +
@@ -21502,19 +21411,7 @@
     // Como te chamo? (salva ao digitar; vale a partir da próxima mensagem do Início)
     document.getElementById('st-user-name').oninput = function (e) { saveUserFirstName_(e.target.value); };
 
-    // Aparência
-    document.getElementById('st-theme').onchange = function (e) {
-      var value = e.target.value;
-      var origin = themeOriginOf_(document.querySelector('[data-app-select="st-theme"]')); // o input é escondido: o círculo parte do botão do menu
-      changeTheme_(value, function () {
-        try {
-          if (value) localStorage.setItem('financas-theme', value); else localStorage.removeItem('financas-theme');
-        } catch (err) { /* segue sem salvar */ }
-        updateThemeToggleIcon_(true);
-      }, origin, function () { render(); });
-    };
-
-    document.getElementById('st-nav-side').onchange = function (e) { setNavSide_(e.target.value); };
+    document.getElementById('st-nav-side').onchange = function (e) { setNavSide_(e.target.checked ? 'right' : 'left'); };
 
     // Preferências
     var goalInput = document.getElementById('st-goal');
