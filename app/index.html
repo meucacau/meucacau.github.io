@@ -787,7 +787,9 @@
   #boot-splash .boot-fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--primary); }
   #boot-splash .boot-fill.boot-finish { transition: height .4s ease-out; }
   /* Mensagem do Início: direto no fundo do app, acima do 1º card; branco no escuro e preto no claro (var(--text)). */
-  .home-msg { font-size: 26px; line-height: 1.25; font-weight: 700; color: var(--text); text-align: left; margin: 6px 2px 18px; }
+  .home-msg { font-size: 26px; line-height: 1.25; font-weight: 700; color: var(--text); text-align: left; margin: 6px 2px 18px; cursor: pointer; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; transition: color .7s ease; }
+  /* Depois de tocada, a mensagem escurece em fade pra uma cor discreta (a mesma dos textos secundários). */
+  .home-msg.home-msg-dim { color: var(--text-muted); }
   /* Ícone monocromático (traço da cor do texto) antes da frase; a parte iluminada da lua é preenchida. */
   svg.home-msg-ico { width: 0.9em; height: 0.9em; vertical-align: -0.1em; margin-right: 8px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
   svg.home-msg-ico .moon-lit { fill: currentColor; }
@@ -2339,7 +2341,7 @@
 
   <div id="modal-root"></div>
 
-  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-26","id":"7513369"};</script>
+  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-26","id":"b73befb"};</script>
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="cacau-web.js?v=b8ce01684c"></script>
@@ -2413,7 +2415,8 @@
         .withSuccessHandler(resolve)
         .withFailureHandler(function (err) { reject(err); })[fnName].apply(null, args);
     });
-    if (TREE_ENTRY_FNS_[fnName]) promise.then(function () { treeNoteEntry_(); celebrate_(); }, function () { /* quem chamou trata o erro */ });
+    // O confete sai NA HORA do toque em salvar (não depois da resposta do servidor); o cacaueiro só conta quando a criação dá certo.
+    if (TREE_ENTRY_FNS_[fnName]) { celebrate_(); promise.then(function () { treeNoteEntry_(); }, function () { /* quem chamou trata o erro */ }); }
     return promise;
   }
 
@@ -2638,27 +2641,49 @@
   var motionOk_ = !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   var lastPointer_ = null;
   document.addEventListener('pointerdown', function (e) { lastPointer_ = { x: e.clientX, y: e.clientY, t: Date.now() }; }, true);
-  var CONFETTI_COLORS_ = ['#7a4a2b', '#EF9F27', '#639922', '#D4537E', '#378ADD'];
+  var CONFETTI_COLORS_ = ['#7a4a2b', '#EF9F27', '#639922', '#D4537E', '#378ADD', '#E24B4A', '#9B6FD1', '#2FB5A3', '#F2C94C'];
   var lastConfettiAt_ = 0;
-  /** Sucesso B · confete: faíscas saem do último toque ao salvar/confirmar um lançamento. */
+  /**
+   * Confete grande e cheio: ~120 pedaços (círculos, quadrados, tirinhas) em vários tamanhos saem de (x, y) em leque pra cima, sobem, e
+   * caem com a gravidade balançando, por ~2 s -- cada um com a própria velocidade, giro e cor. Um contêiner só (um único remove no fim).
+   */
+  function confettiBurst_(x, y) {
+    if (!motionOk_ || !document.body.animate) return;
+    var box = document.createElement('div');
+    box.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;z-index:400;pointer-events:none;overflow:visible';
+    document.body.appendChild(box);
+    var W = window.innerWidth, H = window.innerHeight, maxEnd = 0;
+    for (var i = 0; i < 120; i++) {
+      var p = document.createElement('span');
+      var shape = i % 3; // 0 círculo, 1 quadrado, 2 tirinha
+      var w = 6 + Math.random() * 8, h = shape === 2 ? w * (1.8 + Math.random()) : w;
+      p.style.cssText = 'position:absolute;left:' + x + 'px;top:' + y + 'px;width:' + w.toFixed(1) + 'px;height:' + h.toFixed(1) + 'px;border-radius:' +
+        (shape === 0 ? '50%' : '2px') + ';background:' + CONFETTI_COLORS_[i % CONFETTI_COLORS_.length] + ';will-change:transform,opacity';
+      box.appendChild(p);
+      // Leque: pra cima (de -160° a -20°), alguns saem pros lados; força variada pra encher a tela. Perto do topo da tela (ex.: a
+      // mensagem do Início) o leque abre pra baixo e pros lados, senão o confete sairia todo da tela.
+      var fanDown = y < 260;
+      var angle = (fanDown ? Math.PI / 2 : -Math.PI / 2) + (Math.random() - 0.5) * (fanDown ? 3 : 2.5);
+      var power = 180 + Math.random() * 420;
+      var dx = Math.cos(angle) * power, rise = Math.sin(angle) * power * 0.9;     // rise < 0 = sobe
+      var fall = H * (fanDown ? 0.1 + Math.random() * 0.3 : 0.35 + Math.random() * 0.5); // quanto cai depois do pico
+      var sway = (Math.random() - 0.5) * 120;
+      var spin = (Math.random() < 0.5 ? -1 : 1) * (360 + Math.random() * 900);
+      var dur = 1500 + Math.random() * 900;
+      maxEnd = Math.max(maxEnd, dur);
+      p.animate([
+        { transform: 'translate(0px,0px) rotate(0deg) scale(.6)', opacity: 1, offset: 0 },
+        { transform: 'translate(' + (dx * 0.75).toFixed(0) + 'px,' + rise.toFixed(0) + 'px) rotate(' + (spin * 0.4).toFixed(0) + 'deg) scale(1)', opacity: 1, offset: 0.32, easing: 'cubic-bezier(.2,.6,.4,1)' },
+        { transform: 'translate(' + (dx + sway).toFixed(0) + 'px,' + (rise + fall).toFixed(0) + 'px) rotate(' + spin.toFixed(0) + 'deg) scale(.9)', opacity: 0, offset: 1 }
+      ], { duration: dur, easing: 'cubic-bezier(.45,0,.9,.6)', fill: 'forwards' });
+    }
+    setTimeout(function () { box.remove(); }, maxEnd + 100);
+  }
+  /** Sucesso B · confete: sai do último toque ao salvar/confirmar um lançamento (na hora do toque, sem esperar o servidor). */
   function celebrate_() {
     if (!motionOk_ || !document.body.animate || Date.now() - lastConfettiAt_ < 700) return;
     lastConfettiAt_ = Date.now();
-    var x = lastPointer_ ? lastPointer_.x : window.innerWidth / 2;
-    var y = lastPointer_ ? lastPointer_.y : window.innerHeight * 0.7;
-    for (var i = 0; i < 18; i++) {
-      var p = document.createElement('span');
-      var angle = Math.random() * Math.PI * 2, dist = 40 + Math.random() * 60;
-      p.style.cssText = 'position:fixed;z-index:400;pointer-events:none;width:7px;height:7px;border-radius:' + (i % 2 ? '50%' : '2px') +
-        ';background:' + CONFETTI_COLORS_[i % CONFETTI_COLORS_.length] + ';left:' + x + 'px;top:' + y + 'px';
-      document.body.appendChild(p);
-      (function (el, dx, dy) {
-        el.animate([
-          { transform: 'translate(0,0) scale(1)', opacity: 1 },
-          { transform: 'translate(' + dx + 'px,' + (dy + 24) + 'px) rotate(' + Math.round(Math.random() * 360) + 'deg) scale(.5)', opacity: 0 }
-        ], { duration: 850, easing: 'cubic-bezier(.1,.7,.3,1)' }).onfinish = function () { el.remove(); };
-      })(p, Math.cos(angle) * dist, Math.sin(angle) * dist);
-    }
+    confettiBurst_(lastPointer_ ? lastPointer_.x : window.innerWidth / 2, lastPointer_ ? lastPointer_.y : window.innerHeight * 0.7);
   }
   /** Cards e linhas D · brilho: uma faixa de luz (na cor principal) varre o card ou a linha tocada. */
   function shineElement_(el) {
@@ -2675,6 +2700,14 @@
     band.animate([{ transform: 'translateX(-130%) skewX(-20deg)' }, { transform: 'translateX(330%) skewX(-20deg)' }],
       { duration: 600, easing: 'ease-out' }).onfinish = function () { box.remove(); };
   }
+  // Tocar na mensagem do Início: ela escurece em fade pra uma cor mais discreta (e fica assim até a próxima mensagem) e solta confete.
+  document.addEventListener('click', function (e) {
+    var msg = e.target.closest && e.target.closest('.home-msg');
+    if (!msg) return;
+    homeMsg_.dim = true;
+    msg.classList.add('home-msg-dim');
+    confettiBurst_(e.clientX, e.clientY);
+  });
   document.addEventListener('click', function (e) {
     if (!motionOk_ || !e.target.closest) return;
     var cap = e.target.closest('.capsule');
@@ -5766,20 +5799,20 @@
     if (icon === 'sky') icon = hour >= 6 && hour < 18 ? 'sun' : 'moon';
     return { raw: raw, text: withoutIcon.replace(/\{nome\}/g, name), icon: icon, date: now };
   }
-  var homeMsg_ = { greeted: false, raw: '', text: '', icon: '', date: null, animate: false };
+  var homeMsg_ = { greeted: false, raw: '', text: '', icon: '', date: null, animate: false, dim: false };
   /** Chamada ao ENTRAR na aba Início: a 1ª vez do app aberto é a saudação; as seguintes, engajamento. */
   function homeMessageOnEnter_() {
     var now = new Date();
     var name = userFirstName_();
     var pool = homeMsg_.greeted ? HOME_ENGAGEMENT_ : HOME_GREETINGS_[homeGreetingBand_(now.getHours())];
     var pick = pickHomeMessage_(pool, name, now, null, homeMsg_.raw, homeMsg_.greeted ? 'engagement' : 'greeting-' + homeGreetingBand_(now.getHours()));
-    homeMsg_ = { greeted: true, raw: pick.raw, text: pick.text, icon: pick.icon, date: pick.date, animate: true };
+    homeMsg_ = { greeted: true, raw: pick.raw, text: pick.text, icon: pick.icon, date: pick.date, animate: true, dim: false };
   }
   /** HTML da mensagem acima do 1º card; o fade-in só toca na entrada (não em re-render da mesma aba). */
   function homeMessageHtml_() {
     if (!homeMsg_.text) return '';
     var ico = homeMsgIconHtml_(homeMsg_.icon, homeMsg_.date);
-    var html = '<div class="home-msg' + (homeMsg_.animate ? ' home-msg-in' : '') + '">' + ico + escapeHtml(homeMsg_.text) + '</div>';
+    var html = '<div class="home-msg' + (homeMsg_.animate ? ' home-msg-in' : '') + (homeMsg_.dim ? ' home-msg-dim' : '') + '">' + ico + escapeHtml(homeMsg_.text) + '</div>';
     homeMsg_.animate = false;
     return html;
   }
