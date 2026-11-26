@@ -1812,6 +1812,12 @@
   /* Texto dos toggles: peso normal (nas janelas o título de campo é forte, mas o toggle é só um rótulo) e esmaecido com o toggle desligado. */
   .budget-switch, .settings-switch, .modal .field label.budget-switch { font-weight: 400; padding-left: 0; color: var(--text); transition: color .15s; }
   .budget-switch:has(input:not(:checked)), .settings-switch:has(input:not(:checked)), .modal .field label.budget-switch:has(input:not(:checked)) { color: var(--text-muted); }
+  /* Lado dos botões flutuantes: NÃO liga/desliga, só aponta esquerda ou direita -- então o fundo é sempre a cor do app (nunca cinza) e o
+     texto nunca esmaece; o lado escolhido fica em destaque entre "Esq." e "Dir.". */
+  .settings-switch.always-on input, .settings-switch.always-on input:not(:checked) { background: var(--primary); }
+  .settings-switch.always-on:has(input:not(:checked)) { color: var(--text); }
+  .settings-switch.always-on .nav-side-label { font-size: 13px; color: var(--text-muted); transition: color .15s; }
+  .settings-switch.always-on .nav-side-label.on { color: var(--text); font-weight: 600; }
   /* Toggle de Configurações: o botão fica colado no texto (à esquerda dele), não solto no outro canto. */
   /* Editor de cards do Início: pontinhos pra arrastar, nome e toggle. A linha arrastada acompanha o dedo; as outras abrem espaço. */
   .home-card-row { position: relative; align-items: center; gap: 10px; touch-action: pan-y; }
@@ -2333,7 +2339,7 @@
 
   <div id="modal-root"></div>
 
-  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-26","id":"4175fa3"};</script>
+  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-26","id":"f38cb37"};</script>
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="cacau-web.js?v=b8ce01684c"></script>
@@ -2415,14 +2421,19 @@
   function capitalizeFirst_(text) {
     return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
   }
+  // Os formatadores são criados UMA vez: toLocaleString com opções monta um Intl.NumberFormat novo a cada chamada, e o calendário/gráficos
+  // chamam isso milhares de vezes por tela (era o maior custo da troca para Início e Extrato).
+  // (O formatador fica numa propriedade da própria função: cada função continua inteira sozinha, como os testes as extraem.)
   function fmtMoney(n) {
-    return (Number(n) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    var f = fmtMoney.format_ || (fmtMoney.format_ = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }));
+    return f.format(Number(n) || 0);
   }
   /** Mesmo formato de fmtMoney, mas sem centavos (arredonda, não trunca) -- usado nos
    *  orçamentos (ver computeBudgetRangeAdvisory_/buildBudgetTimelineHtml), onde precisão de
    *  centavos só polui um valor que já é uma estimativa (quanto ainda dá pra gastar). */
   function fmtMoneyNoCents_(n) {
-    return (Number(n) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    var f = fmtMoneyNoCents_.format_ || (fmtMoneyNoCents_.format_ = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 }));
+    return f.format(Number(n) || 0);
   }
   function fmtDate(ymd) {
     if (!ymd) return '';
@@ -6160,8 +6171,15 @@
     known.forEach(function (id) { if (order.indexOf(id) === -1) order.push(id); });
     var hidden = stored
       ? ((Array.isArray(stored.hidden)) ? stored.hidden : []).filter(function (id, i, arr) { return known.indexOf(id) !== -1 && arr.indexOf(id) === i; })
-      : HOME_CARDS_.filter(function (c) { return c.hiddenByDefault; }).map(function (c) { return c.id; });
+      : homeCardsDefaults_().hidden;
     return { order: order, hidden: hidden };
+  }
+  /** O padrão do app: a ordem de HOME_CARDS_ e, escondidos, os marcados hiddenByDefault. É o que "Restaurar padrão" devolve. */
+  function homeCardsDefaults_() {
+    return {
+      order: HOME_CARDS_.map(function (c) { return c.id; }),
+      hidden: HOME_CARDS_.filter(function (c) { return c.hiddenByDefault; }).map(function (c) { return c.id; })
+    };
   }
   var homeCardsSaving_ = 0;
   /** Guarda na conta (planilha). Na tela vale já; o servidor confirma em segundo plano (e enquanto salva, a releitura dos dados não desfaz). */
@@ -6292,7 +6310,7 @@
     );
     wire();
     document.getElementById('home-cards-reset').onclick = function () {
-      homeCardsPrefsSave_({ order: HOME_CARDS_.map(function (c) { return c.id; }), hidden: [] });
+      homeCardsPrefsSave_(homeCardsDefaults_());
       wire();
       renderDashboard();
     };
@@ -13150,7 +13168,8 @@
 
   /** "R$ 1.234" — mesmo estilo de fmtMoney, sem centavos (só o gráfico de projeção usa). */
   function fmtMoneyNoCents_(value) {
-    return Math.round(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+    var f = fmtMoneyNoCents_.format_ || (fmtMoneyNoCents_.format_ = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 }));
+    return f.format(Math.round(value));
   }
   /** "+R$ 500" / "-R$ 300" / "R$ 0" — fmtMoneyNoCents_ já traz o "-" de negativos; só falta o "+" de positivos. */
   function fmtSignedMoneyNoCents_(value) {
@@ -21341,8 +21360,8 @@
     html += '<div class="settings-section"><h3>Preferências</h3>' +
       // Lado dos botões flutuantes: o interruptor é sempre laranja (não liga/desliga: só aponta esquerda ou direita).
       '<label class="settings-switch always-on" style="align-items:center;margin-bottom:6px"><div>Lado dos botões flutuantes (+)</div>' +
-      '<span class="muted">Esq.</span><input type="checkbox" id="st-nav-side" role="switch" aria-label="Lado dos botões flutuantes: direita quando ligado"' + (navSide_() === 'right' ? ' checked' : '') + '>' +
-      '<span class="muted">Dir.</span></label>' +
+      '<span id="st-nav-l" class="nav-side-label' + (navSide_() === 'left' ? ' on' : '') + '">Esq.</span><input type="checkbox" id="st-nav-side" role="switch" aria-label="Lado dos botões flutuantes: direita quando ligado"' + (navSide_() === 'right' ? ' checked' : '') + '>' +
+      '<span id="st-nav-r" class="nav-side-label' + (navSide_() === 'right' ? ' on' : '') + '">Dir.</span></label>' +
       '<div class="field"><label>Como te chamo? (opcional)</label><input type="text" id="st-user-name" maxlength="30" placeholder="Seu primeiro nome" autocomplete="off" value="' + escapeHtml(userFirstName_()) + '">' +
       '<div class="muted" style="margin-top:4px">Usado nas mensagens do Início. Fica só neste aparelho.</div></div>' +
       '<div class="field" style="margin-top:10px"><label>Nome da meta (opcional)</label><input type="text" id="st-goal-name" maxlength="40" placeholder="Ex.: Reserva de emergência"></div>' +
@@ -21434,7 +21453,12 @@
     // Como te chamo? (salva ao digitar; vale a partir da próxima mensagem do Início)
     document.getElementById('st-user-name').oninput = function (e) { saveUserFirstName_(e.target.value); };
 
-    document.getElementById('st-nav-side').onchange = function (e) { setNavSide_(e.target.checked ? 'right' : 'left'); };
+    document.getElementById('st-nav-side').onchange = function (e) {
+      var right = e.target.checked;
+      setNavSide_(right ? 'right' : 'left');
+      document.getElementById('st-nav-l').classList.toggle('on', !right);
+      document.getElementById('st-nav-r').classList.toggle('on', right);
+    };
 
     // Preferências
     var goalInput = document.getElementById('st-goal');
