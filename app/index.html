@@ -2333,10 +2333,10 @@
 
   <div id="modal-root"></div>
 
-  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-26","id":"f4dc893"};</script>
+  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-26","id":"4175fa3"};</script>
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=3f0072a3fd"></script>
+  <script src="cacau-web.js?v=b8ce01684c"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -5246,6 +5246,7 @@
     STATE.balanceGoal = pendingBalanceGoal_ ? pendingBalanceGoal_.value : (data.balanceGoal || null);
     STATE.balanceGoalName = pendingBalanceGoal_ ? pendingBalanceGoal_.name : (data.balanceGoalName || '');
     STATE.autoEntriesEnabled = data.autoEntriesEnabled !== false;
+    if (!homeCardsSaving_) STATE.homeCards = migrateHomeCards_(data.homeCards || null);
     STATE.plans = reapplyPendingEdits_(preserveOptimisticTempEntries_(STATE.plans, data.plans || []), pendingPlanEdits_);
     STATE.people = reapplyPendingEdits_(preserveOptimisticTempEntries_(STATE.people, data.people || []), pendingPersonEdits_);
     STATE.refundShares = preserveOptimisticTempEntries_(STATE.refundShares, data.refundShares || []);
@@ -6132,37 +6133,59 @@
   }
 
   // ---------- cards do Início: quais aparecem e em que ordem ----------
+  // Ordem e visibilidade PADRÃO (de quem nunca mexeu em "Editar cards"; também é o que "Restaurar padrão" devolve).
   var HOME_CARDS_ = [
-    { id: 'cycle', label: 'Saldo do ciclo' },
-    { id: 'trend', label: 'Projeção do saldo' },
-    { id: 'budgets', label: 'Orçamentos' },
-    { id: 'summary', label: 'Resumo' },
     { id: 'accounts', label: 'Contas' },
-    { id: 'bills', label: 'Faturas de cartão' },
+    { id: 'budgets', label: 'Orçamentos' },
+    { id: 'cycle', label: 'Saldo do ciclo' },
+    { id: 'summary', label: 'Resumo' },
+    { id: 'trend', label: 'Projeção do saldo' },
     { id: 'billsChart', label: 'Faturas por mês' },
-    { id: 'categories', label: 'Gastos por categoria' },
-    { id: 'recent', label: 'Últimos lançamentos' }
+    { id: 'bills', label: 'Faturas de cartão', hiddenByDefault: true },
+    { id: 'categories', label: 'Gastos por categoria', hiddenByDefault: true },
+    { id: 'recent', label: 'Últimos lançamentos', hiddenByDefault: true }
   ];
-  var HOME_CARDS_KEY_ = 'financas-home-cards'; // por aparelho, como o tema e o lado da barra de abas
+  var HOME_CARDS_KEY_ = 'financas-home-cards'; // ANTIGO (por aparelho): só lido uma vez, pra subir pra conta (ver migrateHomeCards_)
   var HOME_GRIP_ICON_ = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"/></svg>';
   /** { order: [ids de todos os cards], hidden: [ids escondidos] } -- sempre completo e válido: id
-   *  desconhecido sai; card novo (que a versão guardada não conhecia) entra no fim, visível. */
+   *  desconhecido sai; card novo (que a versão guardada não conhecia) entra no fim, visível. Vem da CONTA (STATE.homeCards, guardado
+   *  na planilha: vale em todos os aparelhos); sem nada guardado, vale o padrão do app (HOME_CARDS_). */
   function homeCardsPrefs_() {
-    var stored = null;
-    try { stored = JSON.parse(localStorage.getItem(HOME_CARDS_KEY_)); } catch (e) { stored = null; }
+    var stored = STATE.homeCards || null;
     var known = HOME_CARDS_.map(function (c) { return c.id; });
     var order = [];
     ((stored && Array.isArray(stored.order)) ? stored.order : []).forEach(function (id) {
       if (known.indexOf(id) !== -1 && order.indexOf(id) === -1) order.push(id);
     });
     known.forEach(function (id) { if (order.indexOf(id) === -1) order.push(id); });
-    var hidden = ((stored && Array.isArray(stored.hidden)) ? stored.hidden : []).filter(function (id, i, arr) {
-      return known.indexOf(id) !== -1 && arr.indexOf(id) === i;
-    });
+    var hidden = stored
+      ? ((Array.isArray(stored.hidden)) ? stored.hidden : []).filter(function (id, i, arr) { return known.indexOf(id) !== -1 && arr.indexOf(id) === i; })
+      : HOME_CARDS_.filter(function (c) { return c.hiddenByDefault; }).map(function (c) { return c.id; });
     return { order: order, hidden: hidden };
   }
+  var homeCardsSaving_ = 0;
+  /** Guarda na conta (planilha). Na tela vale já; o servidor confirma em segundo plano (e enquanto salva, a releitura dos dados não desfaz). */
   function homeCardsPrefsSave_(prefs) {
-    try { localStorage.setItem(HOME_CARDS_KEY_, JSON.stringify(prefs)); } catch (e) { /* sem armazenamento: vale só até recarregar */ }
+    STATE.homeCards = { order: prefs.order.slice(), hidden: prefs.hidden.slice() };
+    homeCardsSaving_++;
+    run('setHomeCards', STATE.homeCards).catch(function (err) {
+      showToast('Não consegui guardar os cards na conta: ' + ((err && err.message) || err), true);
+    }).then(function () { homeCardsSaving_--; });
+  }
+  /** Quem ainda tem a configuração antiga (só neste aparelho) e nada na conta: sobe uma vez pra conta e apaga a cópia local. */
+  function migrateHomeCards_(fromServer) {
+    var legacy = null;
+    try { legacy = JSON.parse(localStorage.getItem(HOME_CARDS_KEY_)); } catch (e) { legacy = null; }
+    if (fromServer) {
+      try { if (legacy) localStorage.removeItem(HOME_CARDS_KEY_); } catch (e) { /* tanto faz */ }
+      return fromServer;
+    }
+    if (!legacy || !Array.isArray(legacy.order)) return null;
+    var prefs = { order: legacy.order.filter(function (x) { return typeof x === 'string'; }), hidden: (Array.isArray(legacy.hidden) ? legacy.hidden : []).filter(function (x) { return typeof x === 'string'; }) };
+    run('setHomeCards', prefs).then(function () {
+      try { localStorage.removeItem(HOME_CARDS_KEY_); } catch (e) { /* tanto faz */ }
+    }).catch(function () { /* tenta de novo na próxima abertura */ });
+    return prefs;
   }
   function openHomeCardsModal_() {
     function listHtml() {
@@ -6260,7 +6283,7 @@
     }
     openModal(
       '<h2>Cards do Início</h2>' +
-      '<div class="muted" style="margin-bottom:12px">Ligue o que aparece e arraste pelos pontinhos pra mudar a ordem. Vale só neste aparelho.</div>' +
+      '<div class="muted" style="margin-bottom:12px">Ligue o que aparece e arraste pelos pontinhos pra mudar a ordem. Vale na sua conta, em todos os aparelhos.</div>' +
       '<div id="home-cards-list"></div>' +
       '<div style="display:flex;gap:8px;margin-top:14px">' +
         '<button type="button" class="secondary" id="home-cards-reset" style="flex:1">Restaurar padrão</button>' +
@@ -21753,7 +21776,7 @@
   var CacauAnalytics = (function () {
     var COLLECTOR_URL = 'https://script.google.com/macros/s/AKfycbzx7u1F-_c0_26KzHx2Uy6k1j-IG6kHpyhybDaE_5OHnq3UQPmpXlmfOPd84SJsrOs2eA/exec';
     var SCHEMA = 'cacau1';
-    var VERSION = 'web-3f0072a3fd';
+    var VERSION = 'web-b8ce01684c';
     // Build web público: sem aviso nem chave para os usuários; só coleta no aparelho do dono, que liga
     // abrindo o site com ?coleta=1 (e desliga com ?coleta=0). O build web troca esta linha para true.
     var OWNER_ONLY = true;

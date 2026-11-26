@@ -1059,6 +1059,39 @@ function setAutoEntriesEnabled(enabled) {
   return !!enabled;
 }
 
+// Cards do Início (quais aparecem e em que ordem): valem para a CONTA (vivem na planilha, valem em todos os aparelhos).
+// Valor: JSON { order: [ids], hidden: [ids] }. Ausente = o padrão do app (HOME_CARDS_ no cliente).
+var HOME_CARDS_SETTING_KEY_ = 'homeCards';
+
+/** { order, hidden } guardado, ou null (nunca guardado ou ilegível). Só listas de textos curtos entram. */
+function getHomeCards_() {
+  var raw = getAppSetting_(HOME_CARDS_SETTING_KEY_);
+  if (!raw) return null;
+  try {
+    return sanitizeHomeCards_(JSON.parse(raw));
+  } catch (err) {
+    return null;
+  }
+}
+
+function sanitizeHomeCards_(value) {
+  if (!value || typeof value !== 'object') return null;
+  function ids(list) {
+    return (Array.isArray(list) ? list : []).filter(function (id, i, arr) {
+      return typeof id === 'string' && id.length > 0 && id.length <= 40 && arr.indexOf(id) === i;
+    }).slice(0, 40);
+  }
+  return { order: ids(value.order), hidden: ids(value.hidden) };
+}
+
+/** Chamado pelo "Editar cards" do Início. Devolve o que ficou guardado. */
+function setHomeCards(prefs) {
+  var clean = sanitizeHomeCards_(prefs);
+  if (!clean) throw new Error('Configuração de cards inválida.');
+  setAppSetting_(HOME_CARDS_SETTING_KEY_, JSON.stringify(clean));
+  return clean;
+}
+
 function splitAutoTxIds_(value) {
   return String(value || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
 }
@@ -1934,6 +1967,12 @@ function getBootstrapData() {
     autoResult = null;
     errors.push('lançamentos automáticos: ' + err.message);
   }
+  var homeCards = null;
+  try {
+    homeCards = getHomeCards_();
+  } catch (err) {
+    errors.push('cards do Início: ' + err.message);
+  }
   var allTxs = [];
   try {
     allTxs = readAll_('Transactions');
@@ -2099,7 +2138,7 @@ function getBootstrapData() {
     plans: plans, people: people, refundShares: refundShares, refundLinks: refundLinks,
     forecastCycleIgnores: forecastCycleIgnores, forecastSuggestionDismissals: forecastSuggestionDismissals,
     balanceGoal: balanceGoal, balanceGoalName: balanceGoalName,
-    autoEntriesEnabled: autoEntriesEnabled,
+    autoEntriesEnabled: autoEntriesEnabled, homeCards: homeCards,
     // Seções que falharam ao carregar. Cada try/catch acima devolve vazio pra uma falha
     // não derrubar as outras — mas devolver vazio EM SILÊNCIO já enganou de um jeito
     // caro: quando readAll_('Transactions') estourava, todo saldo de conta passava a
@@ -5832,6 +5871,7 @@ return {
   removePlan: (typeof removePlan === 'function' ? removePlan : function () { throw new Error('"removePlan" não existe na versão web.'); }),
   setAutoEntriesEnabled: (typeof setAutoEntriesEnabled === 'function' ? setAutoEntriesEnabled : function () { throw new Error('"setAutoEntriesEnabled" não existe na versão web.'); }),
   setBalanceGoal: (typeof setBalanceGoal === 'function' ? setBalanceGoal : function () { throw new Error('"setBalanceGoal" não existe na versão web.'); }),
+  setHomeCards: (typeof setHomeCards === 'function' ? setHomeCards : function () { throw new Error('"setHomeCards" não existe na versão web.'); }),
   setInvoiceItemsStatus: (typeof setInvoiceItemsStatus === 'function' ? setInvoiceItemsStatus : function () { throw new Error('"setInvoiceItemsStatus" não existe na versão web.'); }),
   setRefundLinksForActiveTransaction: (typeof setRefundLinksForActiveTransaction === 'function' ? setRefundLinksForActiveTransaction : function () { throw new Error('"setRefundLinksForActiveTransaction" não existe na versão web.'); }),
   setRefundSharesForPassiveTransaction: (typeof setRefundSharesForPassiveTransaction === 'function' ? setRefundSharesForPassiveTransaction : function () { throw new Error('"setRefundSharesForPassiveTransaction" não existe na versão web.'); }),
