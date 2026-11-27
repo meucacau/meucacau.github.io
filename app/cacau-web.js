@@ -801,7 +801,7 @@ function listAccounts(includeArchived, allTransactions) {
 
 /** Compara nomes ignorando maiúsculas/minúsculas e espaços nas pontas. */
 function namesMatch_(a, b) {
-  return (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase();
+  return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
 }
 
 function createAccount(input) {
@@ -1250,7 +1250,7 @@ function brandPage_(output) {
  */
 
 function parseCategoryIdList_(raw) {
-  return (raw || '').split(',').map(function (id) { return id.trim(); }).filter(function (id) { return id; });
+  return String(raw || '').split(',').map(function (id) { return id.trim(); }).filter(function (id) { return id; });
 }
 
 /**
@@ -1708,17 +1708,17 @@ function listCategories(includeArchived, allTransactions) {
 }
 
 function categoryNamesMatch_(a, b) {
-  return (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase();
+  return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
 }
 
 /** "airbnb,  Booking.com ,hotel" -> "airbnb, Booking.com, hotel" (trim cada uma, remove vazias). */
 function normalizeKeywordsInput_(raw) {
-  return (raw || '').split(',').map(function (k) { return k.trim(); }).filter(function (k) { return k; }).join(', ');
+  return String(raw || '').split(',').map(function (k) { return k.trim(); }).filter(function (k) { return k; }).join(', ');
 }
 
 /** "airbnb, Booking.com" -> ["airbnb", "booking.com"] (minúsculo, pronto pra comparar). */
 function parseKeywords_(raw) {
-  return (raw || '').split(',').map(function (k) { return foldText_(k); }).filter(function (k) { return k; });
+  return String(raw || '').split(',').map(function (k) { return foldText_(k); }).filter(function (k) { return k; });
 }
 
 /** minúsculo e sem acento ("Açaí" == "acai"), pra buscas/sugestões automáticas ignorarem acentuação. */
@@ -2492,7 +2492,7 @@ var CORRIDA_99_TEXT = 'corrida 99';
 var REEMBOLSO_99_TEXT = 'um valor foi adicionado';
 
 function shouldIgnorePendingText_(text) {
-  var lower = (text || '').toLowerCase();
+  var lower = String(text || '').toLowerCase();
   return IGNORED_PENDING_PHRASES.some(function (phrase) { return lower.indexOf(phrase.toLowerCase()) !== -1; });
 }
 
@@ -2535,7 +2535,7 @@ function extractAmountFromText_(text) {
 
 /** Palpite de receita/despesa com base em palavras comuns de notificação bancária. */
 function guessKindFromText_(text) {
-  var lower = (text || '').toLowerCase();
+  var lower = String(text || '').toLowerCase();
   // "te enviou"/"te transferiu" = alguém mandou PRA você (receita); precisa vir antes de
   // 'enviou' (despesa) -- por isso fica na lista de receita, checada primeiro.
   var incomeHints = ['recebeu', 'recebido', 'recebida', 'te enviou', 'te transferiu', 'depósito', 'deposito', 'creditado', 'estorno', 'estornado'];
@@ -2546,7 +2546,7 @@ function guessKindFromText_(text) {
 }
 
 function counterpartyKey_(name) {
-  return (name || '').trim().toLowerCase();
+  return String(name || '').trim().toLowerCase();
 }
 
 /**
@@ -2603,7 +2603,7 @@ function extractCounterpartyByRules_(title, text) {
   var combined = ((title || '') + ' ' + (text || '')).trim();
   for (var i = 0; i < NOTIFICATION_NAME_RULES_.length; i++) {
     var rule = NOTIFICATION_NAME_RULES_[i];
-    var m = String(rule.onlyText ? (text || '').trim() : combined).match(rule.re);
+    var m = String(rule.onlyText ? String(text || '').trim() : combined).match(rule.re);
     var name = m ? cleanCounterpartyName_(m[1]) : '';
     if (name) return name;
   }
@@ -2976,7 +2976,7 @@ function pendingEntryExists_(app, accountId, date, amount, pendingEntriesCache) 
   return pendingEntriesCache.some(function (p) {
     if (p.App !== app) return false;
     if (accountId && p.SuggestedAccountID !== accountId) return false;
-    var pDate = (p.CreatedAt || '').slice(0, 10);
+    var pDate = String(p.CreatedAt || '').slice(0, 10);
     return pDate === date && Math.abs(Number(p.SuggestedAmount) - Number(amount)) < 0.01;
   });
 }
@@ -3086,7 +3086,7 @@ function markDuplicatePendingEntries_(entries) {
   var seen = {};
   entries.forEach(function (e) {
     var minuteKey = e.capturedAt ? e.capturedAt.slice(0, 16) : ''; // yyyy-MM-ddTHH:mm
-    var key = (e.suggestedAmount || '') + '|' + (e.text || '').trim().toLowerCase() + '|' + minuteKey;
+    var key = (e.suggestedAmount || '') + '|' + String(e.text || '').trim().toLowerCase() + '|' + minuteKey;
     if (!seen[key]) seen[key] = [];
     seen[key].push(e);
   });
@@ -3169,7 +3169,12 @@ function purgeJunkPendingEntries_() {
 }
 
 function listPendingEntries() {
-  purgeJunkPendingEntries_();
+  try {
+    purgeJunkPendingEntries_();
+  } catch (err) {
+    // Limpeza é um extra: uma linha estranha nunca pode impedir a fila de aparecer.
+    console.error('purgeJunkPendingEntries_: ' + (err && err.message));
+  }
 
   var accountsById = {};
   readAll_('Accounts').forEach(function (a) { accountsById[a.ID] = a; });
@@ -3185,7 +3190,7 @@ function listPendingEntries() {
   var pendingRows = readAll_('PendingEntries');
   var notificationContext = buildNotificationContext_(pendingRows, allMappings, allAliases);
 
-  var entries = pendingRows.map(function (p) {
+  function buildEntry(p) {
     // Valor/tipo/contraparte: usa o que a fonte já gravou estruturado (email, importação
     // de documento); deriva do texto cru quando falta — sempre o caso do MacroDroid (ver
     // deriveNotificationFields_/captureRawNotification_) — recalculado a cada listagem,
@@ -3221,6 +3226,7 @@ function listPendingEntries() {
     // criação — criar/editar uma associação já vale pras pendências que já estão na fila.
     var establishmentName = findEstablishmentForCounterparty_(derived.counterparty, allAliases);
     var capturedDateObj = new Date(p.CreatedAt);
+    if (isNaN(capturedDateObj.getTime())) capturedDateObj = new Date(); // hora ilegível: usa agora (não derruba a lista)
     var tz = Session.getScriptTimeZone();
     return {
       id: p.ID,
@@ -3248,7 +3254,27 @@ function listPendingEntries() {
       categoryFromHistory: !!categoryFromHistory,
       autoTxIds: splitAutoTxIds_(p.AutoTxIDs)
     };
-  }).sort(function (a, b) { return a.capturedAt < b.capturedAt ? 1 : -1; });
+  }
+  // Uma linha que não dá para interpretar (texto fora do padrão, célula estranha) NÃO derruba a fila inteira: entra só com o que
+  // veio cru (app, título, texto, hora) para a pessoa ver e descartar, e o erro vai para o log.
+  var entries = pendingRows.map(function (p) {
+    try {
+      return buildEntry(p);
+    } catch (err) {
+      console.error('listPendingEntries: linha ' + p.ID + ' não pôde ser interpretada: ' + (err && err.message));
+      var when = new Date(p.CreatedAt);
+      if (isNaN(when.getTime())) when = new Date();
+      var tzFallback = Session.getScriptTimeZone();
+      return {
+        id: p.ID, app: String(p.App || ''), title: String(p.Title || ''), text: String(p.Text || ''), capturedAt: String(p.CreatedAt || ''),
+        date: Utilities.formatDate(when, tzFallback, 'yyyy-MM-dd'), time: Utilities.formatDate(when, tzFallback, 'HH:mm'),
+        suggestedAmount: null, suggestedKind: null, suggestedAccountId: null, suggestedAccountName: null, accountGuess: false,
+        counterparty: null, establishmentName: null, suggestedCategoryId: null, suggestedCategoryName: null,
+        suggestedToAccountId: null, suggestedToAccountName: null, suggestedInstallments: null, isDuplicate: false,
+        categoryFromHistory: false, autoTxIds: splitAutoTxIds_(p.AutoTxIDs)
+      };
+    }
+  }).sort(function (a, b) { return String(a.capturedAt) < String(b.capturedAt) ? 1 : -1; });
 
   return markDuplicatePendingEntries_(entries);
 }
@@ -4195,7 +4221,7 @@ function processRecurringRules() {
  */
 
 function personNamesMatch_(a, b) {
-  return (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase();
+  return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
 }
 
 /**
