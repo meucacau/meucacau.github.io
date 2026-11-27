@@ -3,6 +3,11 @@
 // com a origem https://luishfilho.github.io autorizada.
 window.CACAU_WEB_CONFIG = {
   clientId: '423371820715-put6v1djqjsgp42dlhnkc7ogcbns13mg.apps.googleusercontent.com',
+  // Entrar sem clique: a página vai direto para o login do Google e volta com o token (só no navegador; o app Android tem login próprio).
+  // SÓ LIGAR (true) depois de colocar redirectUri em "URIs de redirecionamento autorizados" do cliente OAuth acima
+  // (Google Cloud > APIs e serviços > Credenciais); sem isso o Google mostra "redirect_uri_mismatch".
+  redirectLogin: false,
+  redirectUri: 'https://meucacau.github.io/app/',
   // Número do projeto no Google Cloud (a planilha do app é achada pelo Drive, na permissão mínima drive.file):
   projectNumber: '423371820715', // prefixo do ID do cliente
   // Servidor de licenças (Apps Script do dono): diz se o teste/acesso de quem entrou está ok, expirado ou bloqueado.
@@ -6185,6 +6190,69 @@ var CacauBackend = (function () {
     });
   }
 
+  // ---------- login por redirecionamento (sem clique) ----------
+  // Em vez de esperar o clique em "Entrar" (o popup do Google só abre com um clique), a página vai direto para o login do Google e volta
+  // com o token no endereço (#access_token=…). Só vale no navegador (no app Android o login é do próprio app) e só quando
+  // CACAU_WEB_CONFIG.redirectLogin === true: exige que a URL de retorno esteja nos "URIs de redirecionamento autorizados" do cliente OAuth.
+  var REDIRECT_KEY = 'cacau-web-redirect'; // sessionStorage: { nonce, at } da última ida ao Google
+  var REDIRECT_RETRY_MS = 2 * 60 * 1000;   // voltou sem token há menos que isso: não redireciona de novo (evita laço), mostra o botão
+  var redirectJustReturned_ = false;       // acabamos de voltar do Google com um token novo
+  var redirectError_ = '';                 // o Google voltou com erro (ex.: access_denied)
+
+  function redirectEnabled_() { return cfg.redirectLogin === true && !nativeLogin_(); }
+  function redirectUri_() { return cfg.redirectUri || (location.origin + location.pathname.replace(/index\.html$/, '')); }
+
+  /** Endereço do login do Google (fluxo "token" por redirecionamento). Mesma permissão do login normal; com e-mail conhecido, vai direto. */
+  function buildAuthUrl_(nonce) {
+    var params = {
+      client_id: cfg.clientId,
+      redirect_uri: redirectUri_(),
+      response_type: 'token',
+      scope: SCOPES[scopeMode_()],
+      include_granted_scopes: 'false',
+      state: nonce
+    };
+    var hint = savedEmail_();
+    if (hint) params.login_hint = hint;
+    return 'https://accounts.google.com/o/oauth2/v2/auth?' + Object.keys(params).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); }).join('&');
+  }
+
+  /** Lê o retorno do Google no endereço (#access_token=… ou #error=…), confere o "state" e limpa o endereço. */
+  function consumeRedirectResult_() {
+    var raw = String(location.hash || '').replace(/^#/, '');
+    if (!/(^|&)(access_token|error)=/.test(raw)) return;
+    var params = {};
+    raw.split('&').forEach(function (kv) {
+      var i = kv.indexOf('=');
+      if (i > 0) { try { params[decodeURIComponent(kv.slice(0, i))] = decodeURIComponent(kv.slice(i + 1).replace(/\+/g, ' ')); } catch (e) { /* par ilegível: ignora */ } }
+    });
+    var saved = null;
+    try { saved = JSON.parse(sessionStorage.getItem(REDIRECT_KEY) || 'null'); } catch (e) { saved = null; }
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* segue */ }
+    if (!saved || !saved.nonce || params.state !== saved.nonce) return; // retorno que esta aba não pediu: ignora
+    try { sessionStorage.setItem(REDIRECT_KEY, JSON.stringify({ nonce: '', at: saved.at })); } catch (e) { /* segue */ }
+    if (params.error) { redirectError_ = params.error; event_('login por redirecionamento recusado: ' + params.error); return; }
+    if (!params.access_token) return;
+    token = { value: params.access_token, expiresAt: Date.now() + Number(params.expires_in || 3600) * 1000 - TOKEN_MARGIN_MS, grantedAt: Date.now(), mode: scopeMode_() };
+    everSignedIn = true;
+    redirectJustReturned_ = true;
+    saveToken_();
+    event_('token novo por redirecionamento (vale ' + Math.round(Number(params.expires_in || 3600) / 60) + ' min)');
+  }
+
+  function recentlyRedirected_() {
+    try { var s = JSON.parse(sessionStorage.getItem(REDIRECT_KEY) || 'null'); return !!(s && Date.now() - s.at < REDIRECT_RETRY_MS); } catch (e) { return false; }
+  }
+
+  /** Vai para o login do Google agora (a página some; o token volta no endereço). */
+  function startRedirectLogin_() {
+    var nonce = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    try { sessionStorage.setItem(REDIRECT_KEY, JSON.stringify({ nonce: nonce, at: Date.now() })); } catch (e) { return false; }
+    event_('indo para o login do Google (redirecionamento)');
+    location.replace(buildAuthUrl_(nonce));
+    return true;
+  }
+
   function requestToken_(prompt) {
     if (nativeLogin_()) return requestNativeToken_();
     return initClient_().then(function () {
@@ -6491,8 +6559,10 @@ var CacauBackend = (function () {
     function login_() {
       setScopeMode_('file');
       msg.className = 'cg-muted';
-      msg.textContent = 'Abrindo o login do Google…';
       busy_(true);
+      // Acabou de voltar do Google com o token: não abre outro login.
+      if (redirectJustReturned_ && tokenValid_()) { redirectJustReturned_ = false; msg.textContent = 'Entrando…'; return Promise.resolve(); }
+      msg.textContent = 'Abrindo o login do Google…';
       return requestToken_(everSignedIn ? '' : 'select_account');
     }
     function enterWith_(id) {
@@ -6551,6 +6621,20 @@ var CacauBackend = (function () {
         return null;
       }).catch(fail_);
     };
+
+    // Entrada sem clique (só no navegador, e só na abertura do app -- no meio do uso a página não pode sumir com edições na tela):
+    // acabou de voltar do Google com o token -> segue sozinho; o Google recusou -> mostra o motivo; senão vai para o login do Google.
+    if (!message && redirectEnabled_()) {
+      var primary = go || nw;
+      if (redirectJustReturned_ && tokenValid_() && primary) setTimeout(function () { primary.click(); }, 0);
+      else if (redirectError_) { msg.className = 'cg-err'; msg.textContent = friendly_(new Error(redirectError_)) || ('O Google não concluiu o login (' + redirectError_ + '). Toque para tentar de novo.'); }
+      else if (!recentlyRedirected_()) {
+        msg.className = 'cg-muted';
+        msg.textContent = 'Indo para o login do Google…';
+        busy_(true);
+        if (!startRedirectLogin_()) busy_(false);
+      }
+    }
   }
 
   // ---------- Sheets API ----------
@@ -6772,6 +6856,7 @@ var CacauBackend = (function () {
 
   function start() {
     mountDiag_();
+    consumeRedirectResult_(); // volta do login por redirecionamento: o token entra aqui, antes de tentar retomar a sessão
     var sheetId = '';
     try { sheetId = localStorage.getItem(SHEET_KEY) || ''; } catch (e) { /* segue */ }
     if (sheetId && restoreToken_()) {
