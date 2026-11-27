@@ -2341,10 +2341,10 @@
 
   <div id="modal-root"></div>
 
-  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-26","id":"e2898f3"};</script>
+  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-27","id":"43c38ca"};</script>
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=b8ce01684c"></script>
+  <script src="cacau-web.js?v=fb929adff0"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -2900,15 +2900,28 @@
     if (bd) bd.classList.add('modal-pop-bd');
   }
 
+  /** Erro de rede (sem internet, Google fora do ar para este aparelho): em vez do texto técnico ("Failed to fetch") ou de um vermelho
+   *  assustador por seção, uma frase só dizendo o que fazer. Devolve o texto original para qualquer outro erro. */
+  function networkAwareToastText_(msg) {
+    var m = String(msg || '');
+    var offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+    if (offline || /failed to fetch|networkerror|load failed|network request failed|err_internet_disconnected|sem conexão/i.test(m)) {
+      return 'Sem internet no momento. O app tenta de novo sozinho quando a conexão voltar.';
+    }
+    return m;
+  }
   function showToast(msg, isError) {
     var el = document.createElement('div');
     el.className = 'toast' + (isError ? ' error' : '');
+    msg = isError ? networkAwareToastText_(msg) : msg;
     el.textContent = msg;
     document.getElementById('toast-container').appendChild(el);
+    // Erro com texto longo fica mais tempo na tela (dá para ler e tirar print).
+    var stay = isError && String(msg).length > 40 ? 9000 : 3500;
     setTimeout(function () {
       el.classList.add('toast-fade-out');
       setTimeout(function () { el.remove(); }, 300); // bate com a duração da transição no CSS
-    }, 3500);
+    }, stay);
   }
   /** Aviso pequeno e passageiro ancorado ACIMA de um elemento específico (ex: "Cópia
    *  salva!" logo acima do botão "Salvar cópia") — diferente de showToast, que é fixo
@@ -20838,7 +20851,7 @@
    */
   function buildDailySummaryData_() {
     var today = todayYmd();
-    var out = { v: 1, today: today, general: null, cycle: null, recurring: [] };
+    var out = { v: 1, today: today, name: userFirstName_(), pending: (STATE.pendingEntries || []).length, general: null, cycle: null, recurring: [] };
     var geral = (STATE.budgets || []).filter(function (b) { return b.isUnbudgetedCatchAll && !b.archived; })[0];
     if (geral) {
       try {
@@ -20882,6 +20895,36 @@
     out.recurring.sort(function (a, b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : 0; });
     return out;
   }
+  /**
+   * Notificações capturadas pelo app Android que ainda estão na fila do aparelho (o envio em segundo plano pode ficar sem autorização por
+   * um tempo): o web app, com a própria autorização aberta, grava na planilha e avisa o app para tirar da fila. Roda ao abrir, a cada
+   * 45 s com o app à vista, ao voltar para ele e quando a internet volta.
+   */
+  var nativeDrainBusy_ = false;
+  function drainNativeQueue_() {
+    var b = window.FinancasApp;
+    if (nativeDrainBusy_ || !b || typeof b.getQueue !== 'function' || !STATE.bootstrapped) return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+    var items;
+    try { items = JSON.parse(b.getQueue()); } catch (e) { return; }
+    if (!items || !items.length) return;
+    nativeDrainBusy_ = true;
+    run('appendNativePendingEntries', items).then(function (res) {
+      try { b.ackQueue(JSON.stringify((res && res.accepted) || [])); } catch (e) { /* o app tenta de novo */ }
+      if (res && res.added) return refreshAll().then(render);
+    }).catch(function () { /* tenta de novo no próximo ciclo */ }).then(function () { nativeDrainBusy_ = false; });
+  }
+  function setupNativeQueueDrain_() {
+    if (!window.FinancasApp || typeof window.FinancasApp.getQueue !== 'function') return;
+    setTimeout(drainNativeQueue_, 4000);
+    setInterval(function () { if (!document.hidden) drainNativeQueue_(); }, 45000);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) drainNativeQueue_(); });
+  }
+  // Internet voltou: relê os dados (se a abertura falhou por falta de rede) e entrega a fila do app.
+  window.addEventListener('online', function () {
+    drainNativeQueue_();
+    if (STATE.bootstrapped) refreshAll().then(render).catch(function () { /* o próximo ciclo tenta de novo */ });
+  });
   var dailySummaryTimer_ = null;
   var dailySummaryLastJson_ = '';
   /** Entrega ao app Android o retrato do resumo diário, sem pressa (depois que os dados assentam) e só quando mudou. */
@@ -20937,8 +20980,10 @@
     html += settingsRow_(s.authOk, 'Permitir gravar na planilha',
       s.authOk ? 'Autorizado' + (s.authEmail ? ' (' + s.authEmail + ')' : '') : 'Deixa o app anexar as notificações na sua planilha.',
       s.authOk ? '' : 'Autorizar', 'st-auth');
-    html += settingsRow_(s.listening, 'Acesso às notificações',
-      s.listening ? 'O app lê as notificações dos apps conectados.' : 'Ative "Meu Cacau" na lista que abrir.',
+    var listenerDown = s.listening && s.listenerConnected === false; // acesso ligado, mas o Android ainda não conectou o leitor
+    html += settingsRow_(s.listening && !listenerDown, 'Acesso às notificações',
+      listenerDown ? 'O acesso está ligado, mas o Android ainda não conectou o leitor. O app já pediu para religar; se continuar assim, desligue e ligue de novo a chave do "Meu Cacau".'
+        : (s.listening ? 'O app lê as notificações dos apps conectados.' : 'Ative "Meu Cacau" na lista que abrir.'),
       s.listening ? '' : 'Dar acesso', 'st-listen');
     html += settingsRow_(s.battery, 'Bateria sem restrição',
       s.battery ? 'O Android não vai parar o app em segundo plano.' : 'Recomendado, senão alguns celulares param de entregar notificações com a tela apagada.',
@@ -21847,6 +21892,7 @@
     updateSetupBanner_();
     maybeStartOnboarding_();
     handOffSheetToAndroidApp_();
+    setupNativeQueueDrain_();
 
     // Com um modal aberto: Enter aciona o Salvar (de qualquer campo, ou sem foco em
     // nenhum) e Esc fecha o modal, de onde quer que o foco esteja. Sem modal nenhum
@@ -21895,7 +21941,7 @@
   var CacauAnalytics = (function () {
     var COLLECTOR_URL = 'https://script.google.com/macros/s/AKfycbzx7u1F-_c0_26KzHx2Uy6k1j-IG6kHpyhybDaE_5OHnq3UQPmpXlmfOPd84SJsrOs2eA/exec';
     var SCHEMA = 'cacau1';
-    var VERSION = 'web-b8ce01684c';
+    var VERSION = 'web-fb929adff0';
     // Build web público: sem aviso nem chave para os usuários; só coleta no aparelho do dono, que liga
     // abrindo o site com ?coleta=1 (e desliga com ?coleta=0). O build web troca esta linha para true.
     var OWNER_ONLY = true;

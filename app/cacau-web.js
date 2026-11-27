@@ -2771,6 +2771,37 @@ function captureRawNotification_(app, title, text) {
 }
 
 /**
+ * Notificações que o app Android capturou e ainda não conseguiu gravar sozinho em segundo plano (ver a fila do app): o web app, que tem
+ * a própria autorização aberta, entrega a fila aqui. Cada item { id, app, title, text, createdAt } vira uma linha de PendingEntries
+ * com o MESMO ID que o app usaria (o que já está na planilha não duplica). Devolve { accepted: [ids que o app pode tirar da fila],
+ * added: quantas linhas novas }. Texto começando com = + - @ ganha uma apóstrofo na frente (a planilha o trata como texto, não fórmula).
+ */
+function appendNativePendingEntries(items) {
+  items = (Array.isArray(items) ? items : []).slice(0, 50);
+  var existing = {};
+  readAll_('PendingEntries').forEach(function (r) { existing[r.ID] = true; });
+  function clean(v, max) {
+    var t = String(v === undefined || v === null ? '' : v).slice(0, max);
+    return /^[=+\-@]/.test(t) ? "'" + t : t;
+  }
+  var accepted = [], rows = [];
+  items.forEach(function (it) {
+    var id = String((it && it.id) || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
+    if (!id) return;
+    accepted.push(id);
+    if (existing[id]) return;
+    existing[id] = true;
+    var created = new Date(it.createdAt);
+    rows.push({
+      ID: id, App: clean(it.app, 60), Title: clean(it.title, 300), Text: clean(it.text, 2000),
+      CreatedAt: isNaN(created.getTime()) ? nowIso_() : created.toISOString()
+    });
+  });
+  if (rows.length) appendRowsBatch_('PendingEntries', rows);
+  return { accepted: accepted, added: rows.length };
+}
+
+/**
  * Deriva valor/tipo/contraparte de uma pendência a partir do texto bruto — usado quando a
  * fonte não gravou isso estruturado na criação (é sempre o caso do MacroDroid agora, ver
  * captureRawNotification_ acima). Fontes que já sabem esses valores com certeza (email,
@@ -5835,6 +5866,7 @@ function touchTree(input) {
 
 return {
   acceptInvoiceItems: (typeof acceptInvoiceItems === 'function' ? acceptInvoiceItems : function () { throw new Error('"acceptInvoiceItems" não existe na versão web.'); }),
+  appendNativePendingEntries: (typeof appendNativePendingEntries === 'function' ? appendNativePendingEntries : function () { throw new Error('"appendNativePendingEntries" não existe na versão web.'); }),
   archiveAccount: (typeof archiveAccount === 'function' ? archiveAccount : function () { throw new Error('"archiveAccount" não existe na versão web.'); }),
   archiveCategory: (typeof archiveCategory === 'function' ? archiveCategory : function () { throw new Error('"archiveCategory" não existe na versão web.'); }),
   confirmDocumentImportBatch: (typeof confirmDocumentImportBatch === 'function' ? confirmDocumentImportBatch : function () { throw new Error('"confirmDocumentImportBatch" não existe na versão web.'); }),
