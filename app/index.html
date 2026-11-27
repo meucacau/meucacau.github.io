@@ -2341,7 +2341,7 @@
 
   <div id="modal-root"></div>
 
-  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-27","id":"43c38ca"};</script>
+  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-27","id":"8664686"};</script>
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="cacau-web.js?v=fb929adff0"></script>
@@ -5324,6 +5324,7 @@
     STATE.people = reapplyPendingEdits_(preserveOptimisticTempEntries_(STATE.people, data.people || []), pendingPersonEdits_);
     STATE.refundShares = preserveOptimisticTempEntries_(STATE.refundShares, data.refundShares || []);
     STATE.refundLinks = preserveOptimisticTempEntries_(STATE.refundLinks, data.refundLinks || []);
+    lastRefreshAt_ = Date.now();
     scheduleDailySummaryPush_(); // o envio espera 1,5 s e só segue com o app já carregado (STATE.bootstrapped)
   }
 
@@ -20925,6 +20926,21 @@
     drainNativeQueue_();
     if (STATE.bootstrapped) refreshAll().then(render).catch(function () { /* o próximo ciclo tenta de novo */ });
   });
+  /**
+   * Voltar ao app (do celular em segundo plano, ou à aba do navegador) com os dados de mais de 30 s atrás: relê tudo sem esperar a
+   * próxima edição -- é assim que a notificação do banco capturada enquanto o app estava fechado aparece em "para confirmar". Não relê com
+   * janela aberta (uma releitura por baixo atrapalharia quem está digitando).
+   */
+  var lastRefreshAt_ = 0;
+  function refreshOnResume_() {
+    if (!STATE.bootstrapped || Date.now() - lastRefreshAt_ < 30000) return;
+    if (document.querySelector('#modal-root .modal-backdrop') || document.getElementById('refund-modal-root')) return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+    lastRefreshAt_ = Date.now();
+    refreshAll().then(render).catch(function () { /* o próximo retorno tenta de novo */ });
+  }
+  window.__cacauResumed = refreshOnResume_; // o app Android chama quando a tela volta a ficar à vista
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) refreshOnResume_(); });
   var dailySummaryTimer_ = null;
   var dailySummaryLastJson_ = '';
   /** Entrega ao app Android o retrato do resumo diário, sem pressa (depois que os dados assentam) e só quando mudou. */
