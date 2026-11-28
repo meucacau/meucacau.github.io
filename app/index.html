@@ -1281,6 +1281,10 @@
   .sup-stats .muted { font-size: 11px; }
   /* aba Categorias: quantidade de lançamentos + minigráfico dos últimos 12 meses embaixo do nome */
   .cat-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  /* Nome + descrição na mesma linha, centralizados na vertical; a descrição quebra em várias linhas ao lado do nome (celular). */
+  .cat-title-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .cat-name { flex: none; max-width: 60%; }
+  .cat-desc { font-size: 12px; line-height: 1.3; color: var(--text-muted); opacity: .8; min-width: 0; }
   .cat-stats { display: flex; align-items: center; gap: 10px; font-size: 12px; }
   .cat-spark { display: flex; align-items: flex-end; gap: 2px; width: 82px; height: 16px; flex: none; }
   .cat-spark-col { flex: 1; min-width: 0; height: 100%; display: flex; align-items: flex-end; }
@@ -2341,10 +2345,10 @@
 
   <div id="modal-root"></div>
 
-  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-28","id":"80dc947"};</script>
+  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-28","id":"a6822fd"};</script>
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=c9e3ba2ead"></script>
+  <script src="cacau-web.js?v=165857b440"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -11103,12 +11107,19 @@
       '<span class="cat-spark" aria-hidden="true">' + bars + '</span></span>';
   }
 
+  /** Linha do título na aba Categorias: nome (com ícone) e, ao lado, a descrição em letra menor e cor discreta (quebra de linha
+   *  permitida; fica centralizada na vertical em relação ao nome). Só esta aba mostra a descrição inline. */
+  function categoryTitleLineHtml_(c, titleClass) {
+    return '<span class="cat-title-line"><span class="cat-name' + (titleClass ? ' ' + titleClass : '') + '">' + categoryIconHtml_(c) + escapeHtml(c.name) + '</span>' +
+      (c.description ? '<span class="cat-desc">' + escapeHtml(c.description) + '</span>' : '') + '</span>';
+  }
+
   function categoryBlockHtml(c, stats, endYm) {
     var children = STATE.categories.filter(function (x) { return x.parentId === c.id; }).sort(byNamePt_);
-    return '<div class="row" data-row-cat="' + escapeHtml(c.id) + '"><span class="cat-main"><span>' + categoryIconHtml_(c) + escapeHtml(c.name) + '</span>' + categoryStatsHtml_(stats[c.id], endYm) + '</span>' +
+    return '<div class="row" data-row-cat="' + escapeHtml(c.id) + '"><span class="cat-main">' + categoryTitleLineHtml_(c) + categoryStatsHtml_(stats[c.id], endYm) + '</span>' +
       '<span class="row-actions">' + rowRemoveButtonHtml_('data-archive', c.id, 'Arquivar') + '</span></div>' +
       children.map(function (ch) {
-        return '<div class="row" style="padding-left:16px" data-row-cat="' + escapeHtml(ch.id) + '"><span class="cat-main"><span class="muted">' + categoryIconHtml_(ch) + escapeHtml(ch.name) + '</span>' + categoryStatsHtml_(stats[ch.id], endYm) + '</span>' +
+        return '<div class="row" style="padding-left:16px" data-row-cat="' + escapeHtml(ch.id) + '"><span class="cat-main">' + categoryTitleLineHtml_(ch, 'muted') + categoryStatsHtml_(stats[ch.id], endYm) + '</span>' +
           '<span class="row-actions">' + rowRemoveButtonHtml_('data-archive', ch.id, 'Arquivar') + '</span></div>';
       }).join('');
   }
@@ -21996,7 +22007,7 @@
   var CacauAnalytics = (function () {
     var COLLECTOR_URL = 'https://script.google.com/macros/s/AKfycbzx7u1F-_c0_26KzHx2Uy6k1j-IG6kHpyhybDaE_5OHnq3UQPmpXlmfOPd84SJsrOs2eA/exec';
     var SCHEMA = 'cacau1';
-    var VERSION = 'web-c9e3ba2ead';
+    var VERSION = 'web-165857b440';
     // Build web público: sem aviso nem chave para os usuários; só coleta no aparelho do dono, que liga
     // abrindo o site com ?coleta=1 (e desliga com ?coleta=0). O build web troca esta linha para true.
     var OWNER_ONLY = true;

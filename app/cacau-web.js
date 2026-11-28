@@ -4533,17 +4533,54 @@ function cascadeRefundsOnTransactionAmountChange_(transactionId, newAmount) {
  * Rode setupSpreadsheet() uma vez (menu "Finanças > Inicializar planilha") antes de usar o app.
  */
 
+/**
+ * Categorias de quem começa agora (planilha nova; quem já usa o app não muda). Poucas categorias, cada uma com uma descrição
+ * dizendo o que cabe nela -- o app mostra a descrição ao lado do nome na aba Categorias --, para cobrir todas as situações sem
+ * multiplicar categorias. A ideia: separar os tipos de gasto e deixar claro onde ainda dá para economizar (Mercado x Refeição
+ * ocasional, Assinaturas dentro de Lazer, Taxas e juros à parte). Subcategoria: { name, description } (ou só o nome).
+ */
 var DEFAULT_CATEGORIES = [
-  { name: 'Salário', kind: 'income', children: [] },
-  { name: 'Outras receitas', kind: 'income', children: ['Reembolso', 'Presente', 'Rendimento'] },
-  { name: 'Alimentação', kind: 'expense', children: ['Mercado', 'Restaurante', 'Delivery'] },
-  { name: 'Moradia', kind: 'expense', children: ['Aluguel', 'Condomínio', 'Energia', 'Água', 'Internet'] },
-  { name: 'Transporte', kind: 'expense', children: ['Combustível', 'Transporte por app', 'Transporte público'] },
-  { name: 'Saúde', kind: 'expense', children: ['Farmácia', 'Consulta', 'Plano de saúde'] },
-  { name: 'Lazer', kind: 'expense', children: ['Assinaturas', 'Passeio'] },
-  { name: 'Educação', kind: 'expense', children: [] },
-  { name: 'Compras', kind: 'expense', children: [] },
-  { name: 'Outros', kind: 'expense', children: [] }
+  { name: 'Salário', kind: 'income', description: 'Pagamento do trabalho fixo: salário, 13º, férias e benefícios.', children: [] },
+  { name: 'Renda extra', kind: 'income', description: 'Freelance, bônus, vendas e presentes em dinheiro.', children: [] },
+  { name: 'Rendimentos', kind: 'income', description: 'Juros, dividendos e ganhos de investimentos.', children: [] },
+  { name: 'Reembolso', kind: 'income', description: 'Dinheiro devolvido por algo que você pagou adiantado (reembolsos e estornos).', children: [] },
+
+  { name: 'Casa', kind: 'expense', description: 'Moradia e tudo para mantê-la funcionando.', children: [
+    { name: 'Moradia', description: 'Aluguel, financiamento, condomínio e IPTU.' },
+    { name: 'Contas', description: 'Luz, água, gás, internet e telefone.' },
+    { name: 'Manutenção', description: 'Reparos, limpeza, móveis, eletrodomésticos e utensílios.' }
+  ] },
+  { name: 'Mercado', kind: 'expense', description: 'Comida e itens de limpeza e higiene para consumir em casa: supermercado, feira, padaria e açougue.', children: [] },
+  { name: 'Refeição ocasional', kind: 'expense', description: 'Refeição ou lanche fora do habitual, o que você não cozinharia em casa.', children: [
+    { name: 'Restaurante', description: 'Almoço ou jantar em restaurante, bar ou evento.' },
+    { name: 'Delivery', description: 'Comida pedida por aplicativo ou telefone e entregue em casa.' },
+    { name: 'Lanche e café', description: 'Lanchonete, cafeteria, sorvete, doces e padaria de passagem.' }
+  ] },
+  { name: 'Transporte', kind: 'expense', description: 'Deslocamento do dia a dia e manutenção do veículo.', children: [
+    { name: 'Combustível', description: 'Gasolina, etanol, GNV e recarga elétrica.' },
+    { name: 'Carro', description: 'Manutenção, seguro, IPVA, estacionamento, pedágio e lavagem.' },
+    { name: 'Apps e táxi', description: 'Corridas de aplicativo, táxi e aluguel de patinete ou bicicleta.' },
+    { name: 'Transporte público', description: 'Ônibus, metrô, trem e bilhete único.' }
+  ] },
+  { name: 'Saúde', kind: 'expense', description: 'Cuidado com o corpo e a mente.', children: [
+    { name: 'Farmácia', description: 'Remédios, vitaminas e itens de farmácia.' },
+    { name: 'Consultas e exames', description: 'Médico, dentista, psicólogo, terapias e exames.' },
+    { name: 'Plano de saúde', description: 'Mensalidade do plano e coparticipação.' },
+    { name: 'Bem-estar e beleza', description: 'Academia, esportes, salão, barbearia e estética.' }
+  ] },
+  { name: 'Lazer', kind: 'expense', description: 'Diversão e tempo livre.', children: [
+    { name: 'Assinaturas', description: 'Tudo o que é cobrado todo mês: streaming, música, jogos, nuvem e aplicativos.' },
+    { name: 'Passeios e viagens', description: 'Cinema, shows, eventos, hospedagem e passagens de viagem.' },
+    { name: 'Hobbies', description: 'Jogos, livros, instrumentos, materiais e equipamentos de hobby.' }
+  ] },
+  { name: 'Compras', kind: 'expense', description: 'Coisas para uso pessoal que não são da casa nem do dia a dia.', children: [
+    { name: 'Roupas e calçados', description: 'Roupas, calçados e acessórios.' },
+    { name: 'Eletrônicos', description: 'Celular, computador, fones e acessórios de tecnologia.' },
+    { name: 'Presentes e doações', description: 'Presentes para outras pessoas e doações.' }
+  ] },
+  { name: 'Educação', kind: 'expense', description: 'Estudo e aprendizado: mensalidade, cursos, livros e material.', children: [] },
+  { name: 'Taxas e juros', kind: 'expense', description: 'Dinheiro que não compra nada: juros, multas, anuidade, tarifas e impostos (exceto IPTU e IPVA).', children: [] },
+  { name: 'Outros', kind: 'expense', description: 'O que não couber nas outras categorias. Se algo se repetir (filhos, pets), vale criar uma categoria própria.', children: [] }
 ];
 
 /** Cria as abas e semeia categorias/conta padrão (idempotente). Sem UI: serve ao menu e ao onboarding. */
@@ -4553,11 +4590,12 @@ function seedSpreadsheet_() {
   if (readAll_('Categories').length === 0) {
     DEFAULT_CATEGORIES.forEach(function (cat) {
       var parent = appendRow_('Categories', {
-        Name: cat.name, ParentID: '', Kind: cat.kind, Archived: false
+        Name: cat.name, ParentID: '', Kind: cat.kind, Archived: false, Description: cat.description || ''
       });
-      cat.children.forEach(function (childName) {
+      cat.children.forEach(function (child) {
+        var childDef = typeof child === 'string' ? { name: child } : child;
         appendRow_('Categories', {
-          Name: childName, ParentID: parent.ID, Kind: cat.kind, Archived: false
+          Name: childDef.name, ParentID: parent.ID, Kind: cat.kind, Archived: false, Description: childDef.description || ''
         });
       });
     });
