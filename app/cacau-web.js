@@ -6,7 +6,7 @@ window.CACAU_WEB_CONFIG = {
   // Entrar sem clique: a página vai direto para o login do Google e volta com o token (só no navegador; o app Android tem login próprio).
   // SÓ LIGAR (true) depois de colocar redirectUri em "URIs de redirecionamento autorizados" do cliente OAuth acima
   // (Google Cloud > APIs e serviços > Credenciais); sem isso o Google mostra "redirect_uri_mismatch".
-  redirectLogin: false,
+  redirectLogin: true,
   redirectUri: 'https://meucacau.github.io/app/',
   // Número do projeto no Google Cloud (a planilha do app é achada pelo Drive, na permissão mínima drive.file):
   projectNumber: '423371820715', // prefixo do ID do cliente
