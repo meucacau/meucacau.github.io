@@ -1283,7 +1283,7 @@ function effectiveCategoryIdsForBudgetRow_(b, allCategories) {
  *    categoria; uma subcategoria nova criada depois passa a contar sozinha).
  *  - "só a categoria, sem subs": só a categoria de topo está selecionada, sem nenhuma
  *    subcategoria (porque ela não tem, ou porque não foram escolhidas) -> soloParentId
- *    (nome ganha o sufixo " (sem subcategorias)").
+ *    (nome ganha um asterisco quando a categoria tem subcategorias ativas, ex.: "Saídas*").
  * Qualquer outra combinação (múltiplas categorias de topo, seleção parcial de
  * subcategorias, subcategoria sem a categoria-mãe) não bate com nenhum caso — nome
  * continua sendo a junção alfabética de sempre.
@@ -1390,7 +1390,10 @@ function listBudgets(includeArchived) {
           return c ? c.Name : 'Categoria removida';
         }).sort(function (a, b2) { return a.localeCompare(b2, 'pt-BR'); });
         var isSoloTopLevel = categoryIds.length === 1 && categoriesById[categoryIds[0]] && !categoriesById[categoryIds[0]].ParentID;
-        categoryName = isSoloTopLevel ? names[0] + ' (sem subcategorias)' : names.join(' / ');
+        // Só a categoria-mãe, deixando subcategorias de fora: nome com asterisco ("Saídas*"); o app explica no hover. Categoria sem
+        // nenhuma subcategoria ativa não tem o que deixar de fora, então fica sem asterisco.
+        var soloHasSubs = isSoloTopLevel && allCategories.some(function (c) { return c.ParentID === categoryIds[0] && !isArchived_(c.Archived); });
+        categoryName = soloHasSubs ? names[0] + '*' : names.join(' / ');
       }
       var isCatchAll = parseBoolCell_(b.IsUnbudgetedCatchAll);
       var cycle = budgetCycleOfRow_(b);

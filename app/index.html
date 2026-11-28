@@ -2341,10 +2341,10 @@
 
   <div id="modal-root"></div>
 
-  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-28","id":"8411379"};</script>
+  <script>var CACAU_BUILD = {"channel":"beta","date":"2026-11-28","id":"80dc947"};</script>
   <script>var FINANCAS_MULTIUSER = true;</script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="cacau-web.js?v=696a5248e5"></script>
+  <script src="cacau-web.js?v=c9e3ba2ead"></script>
 <script>
   var STATE = {
     accounts: [],
@@ -10731,13 +10731,15 @@
   /** Total do cabeçalho de cada card da aba Contas (mesmo padrão do "Receitas / Despesas" dos recorrentes): neutro; cartões mostram
    *  o limite restante somado e a dívida somada, o resto mostra o saldo somado. */
   function accountsGroupTotalHtml_(type, accounts) {
-    var style = 'font-size:13px;line-height:16px;color:var(--text-muted)';
+    // Os totais ficam no CABEÇALHO do card, encostados à direita na mesma linha do título (nunca numa linha própria):
+    // cartões empilham "Limite restante" e "Dívida" em 2 linhas curtas pra caberem ao lado do título no celular.
+    var style = 'font-size:13px;line-height:16px;color:var(--text-muted);text-align:right;flex-shrink:0;margin-left:auto';
     var sum = accounts.reduce(function (t, a) { return t + (Number(a.balance) || 0); }, 0);
     var strong = function (v) { return '<span style="color:var(--text)">' + escapeHtml(fmtMoney(v)) + '</span>'; };
     if (type !== 'credit_card') return '<div style="' + style + '">Total ' + strong(sum) + '</div>';
     var withLimit = accounts.filter(function (a) { return a.limitTotal > 0; });
     var debt = withLimit.reduce(function (t, a) { return t + Math.max(0, a.limitTotal - a.balance); }, 0);
-    return '<div style="' + style + '">Limite restante ' + strong(sum) + (withLimit.length ? '<span style="margin:0 6px">·</span>Dívida ' + strong(debt) : '') + '</div>';
+    return '<div style="' + style + '">Limite restante ' + strong(sum) + (withLimit.length ? '<br>Dívida ' + strong(debt) : '') + '</div>';
   }
 
   function renderAccounts() {
@@ -10747,7 +10749,7 @@
     }).filter(function (g) { return g.accounts.length > 0; });
 
     var html = groups.map(function (g) {
-      return '<div class="card"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px"><h2 style="margin:0">' + g.label + '</h2>' + accountsGroupTotalHtml_(g.type, g.accounts) + '</div>' + g.accounts.map(accountRowHtml).join('') + '</div>';
+      return '<div class="card"><div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;margin-bottom:10px"><h2 style="margin:0">' + g.label + '</h2>' + accountsGroupTotalHtml_(g.type, g.accounts) + '</div>' + g.accounts.map(accountRowHtml).join('') + '</div>';
     }).join('') || '<div class="card"><div class="empty-state">Nenhuma conta cadastrada.</div></div>';
 
     root.innerHTML = html + '<div style="text-align:left;margin-bottom:16px"><button id="add-account">Nova conta</button></div>';
@@ -11106,7 +11108,7 @@
     return '<div class="row" data-row-cat="' + escapeHtml(c.id) + '"><span class="cat-main"><span>' + categoryIconHtml_(c) + escapeHtml(c.name) + '</span>' + categoryStatsHtml_(stats[c.id], endYm) + '</span>' +
       '<span class="row-actions">' + rowRemoveButtonHtml_('data-archive', c.id, 'Arquivar') + '</span></div>' +
       children.map(function (ch) {
-        return '<div class="row" style="padding-left:16px" data-row-cat="' + escapeHtml(ch.id) + '"><span class="cat-main"><span class="muted">↳ ' + categoryIconHtml_(ch) + escapeHtml(ch.name) + '</span>' + categoryStatsHtml_(stats[ch.id], endYm) + '</span>' +
+        return '<div class="row" style="padding-left:16px" data-row-cat="' + escapeHtml(ch.id) + '"><span class="cat-main"><span class="muted">' + categoryIconHtml_(ch) + escapeHtml(ch.name) + '</span>' + categoryStatsHtml_(stats[ch.id], endYm) + '</span>' +
           '<span class="row-actions">' + rowRemoveButtonHtml_('data-archive', ch.id, 'Arquivar') + '</span></div>';
       }).join('');
   }
@@ -15418,7 +15420,7 @@
           '</span>'
         : '';
       var rowSeries = rowBase !== null ? budgetCircleSeries_(b, { amount: rowBase }) : null;
-      return '<div class="row budget-plan-row" data-row-budget="' + escapeHtml(b.id) + '"><span class="budget-plan-info">' + budgetIconHtml_(b) + escapeHtml(b.categoryName) + '<br><span class="muted">' + subtitle + '</span>' + modeSwitchHtml + '</span>' +
+      return '<div class="row budget-plan-row" data-row-budget="' + escapeHtml(b.id) + '"><span class="budget-plan-info">' + budgetIconHtml_(b) + budgetNameHtml_(b) + '<br><span class="muted">' + subtitle + '</span>' + modeSwitchHtml + '</span>' +
         '<span class="forecast-row-right">' + budgetCirclesTrackHtml_(rowSeries) +
           '<span class="row-actions">' + rowRemoveButtonHtml_('data-remove', b.id, 'Remover') + '</span></span></div>';
     }).join('');
@@ -15526,6 +15528,13 @@
 
     renderBalanceTrendChart_();
 
+    // Hover no nome do orçamento: subcategorias incluídas (ou as que ficaram de fora, no caso do asterisco). Só com mouse -- no
+    // celular o toque continua abrindo a edição, onde a seleção de categorias aparece inteira.
+    if (HOVER_CAPABLE_) root.querySelectorAll('.budget-name[data-budget-tip]').forEach(function (el) {
+      var tipTimer = null;
+      el.addEventListener('mouseenter', function () { tipTimer = setTimeout(function () { tipTimer = null; showTooltip_(el, el.getAttribute('data-budget-tip'), { html: '' }); }, 200); });
+      el.addEventListener('mouseleave', function () { if (tipTimer) { clearTimeout(tipTimer); tipTimer = null; } hideTooltip_(); });
+    });
     root.querySelectorAll('[data-row-budget]').forEach(function (rowEl) {
       wireRowTooltip_(rowEl, 'orçamento', function () {
         var b = STATE.budgets.find(function (x) { return x.id === rowEl.dataset.rowBudget; });
@@ -15672,6 +15681,33 @@
     });
   }
 
+  /**
+   * Texto do hover no nome do orçamento (lista de Orçamentos): "família completa" lista as subcategorias incluídas separadas por
+   * " • "; "só a categoria" (nome com asterisco) avisa que as subcategorias ficaram de fora e quais são. Outros casos: sem dica.
+   */
+  function budgetNameTip_(b) {
+    if (!b || b.isUnbudgetedCatchAll) return '';
+    var cats = STATE.categories || [];
+    function nameOf(id) { var c = cats.find(function (x) { return x.id === id; }); return c ? c.name : ''; }
+    function sortedNames(ids) { return ids.map(nameOf).filter(function (n) { return n; }).sort(function (a, c) { return a.localeCompare(c, 'pt-BR'); }); }
+    var ids = b.categoryIds || [];
+    if (b.autoIncludeParentId) {
+      return sortedNames(ids.filter(function (id) { return id !== b.autoIncludeParentId; })).join(' • ');
+    }
+    var only = ids.length === 1 ? cats.find(function (x) { return x.id === ids[0]; }) : null;
+    if (only && !only.parentId) {
+      var left = sortedNames(cats.filter(function (c) { return c.parentId === only.id && !c.archived; }).map(function (c) { return c.id; }));
+      if (left.length) return 'Subcategorias não incluídas: ' + left.join(' • ');
+    }
+    return '';
+  }
+
+  /** Nome do orçamento na lista; com dica (hover) quando há subcategorias a mostrar (ver budgetNameTip_). */
+  function budgetNameHtml_(b) {
+    var tip = budgetNameTip_(b);
+    return '<span class="budget-name"' + (tip ? ' data-budget-tip="' + escapeHtml(tip) + '"' : '') + '>' + escapeHtml(b.categoryName) + '</span>';
+  }
+
   /** "Alimentação, Padaria" -> "Alimentação / Padaria", alfabético — mesma regra do servidor (ver listBudgets, Budgets.js). */
   /**
    * "Alimentação, Padaria" -> "Alimentação / Padaria" (regra de sempre), ou os 2 casos
@@ -15687,7 +15723,10 @@
     if (topLevelSelected.length === 1) {
       var parent = STATE.categories.find(function (c) { return c.id === topLevelSelected[0]; });
       var otherSelectedIds = categoryIds.filter(function (id) { return id !== parent.id; });
-      if (otherSelectedIds.length === 0) return parent.name + ' (sem subcategorias)';
+      if (otherSelectedIds.length === 0) {
+        var hasActiveSubs_ = STATE.categories.some(function (c) { return c.parentId === parent.id && !c.archived; });
+        return hasActiveSubs_ ? parent.name + '*' : parent.name; // asterisco = subcategorias de fora (ver budgetNameTip_)
+      }
       var currentChildrenIds = STATE.categories.filter(function (c) { return c.parentId === parent.id && !c.archived; }).map(function (c) { return c.id; });
       var otherSelectedSet = {};
       otherSelectedIds.forEach(function (id) { otherSelectedSet[id] = true; });
@@ -21957,7 +21996,7 @@
   var CacauAnalytics = (function () {
     var COLLECTOR_URL = 'https://script.google.com/macros/s/AKfycbzx7u1F-_c0_26KzHx2Uy6k1j-IG6kHpyhybDaE_5OHnq3UQPmpXlmfOPd84SJsrOs2eA/exec';
     var SCHEMA = 'cacau1';
-    var VERSION = 'web-696a5248e5';
+    var VERSION = 'web-c9e3ba2ead';
     // Build web público: sem aviso nem chave para os usuários; só coleta no aparelho do dono, que liga
     // abrindo o site com ?coleta=1 (e desliga com ?coleta=0). O build web troca esta linha para true.
     var OWNER_ONLY = true;
